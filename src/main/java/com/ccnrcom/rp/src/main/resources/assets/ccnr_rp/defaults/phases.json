@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "phases": [
+    {"id": "prep", "order": 0, "durationMinutes": 30},
+    {"id": "danger", "order": 1, "durationMinutes": 45},
+    {"id": "ending", "order": 2, "durationMinutes": 15}
+  ]
+}

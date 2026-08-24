@@ -73,5 +73,16 @@
   "ccnr_rp.xp.info": "%s | 经验 %s | 等级 %s",
   "ccnr_rp.xp.level.info": "%s | 等级 %s",
   "ccnr_rp.xp.error.method": "无效疏散方式: %s（SAFE_RESCUE/DIED/OBSERVING_END/STAY_BEHIND）",
-  "ccnr_rp.xp.evac.set": "已设置 %s 的疏散方式: %s"
+  "ccnr_rp.xp.evac.set": "已设置 %s 的疏散方式: %s",
+  "ccnr_rp.event.started": "事件已开始: %s",
+  "ccnr_rp.event.ended": "事件已结束: %s",
+  "ccnr_rp.event.list.item": "%s | 启用=%s | 状态=%s | 触发器=%s | 任务=%s",
+  "ccnr_rp.event.triggered": "已强制触发事件: %s",
+  "ccnr_rp.event.not_runnable": "事件不可触发（未启用或已在运行）: %s",
+  "ccnr_rp.event.enabled": "事件已设置: %s → %s",
+  "ccnr_rp.event.not_found": "未找到事件: %s",
+  "ccnr_rp.event.phase.item": "阶段 %s（%s 分钟，当前=%s）",
+  "ccnr_rp.event.phase.set": "阶段已切换: %s",
+  "ccnr_rp.event.phase.not_found": "未找到阶段: %s",
+  "ccnr_rp.event.gameover": "游戏结束流程已触发（疏散裁定+全员结算）"
 }
