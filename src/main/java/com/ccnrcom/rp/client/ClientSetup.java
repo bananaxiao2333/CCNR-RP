@@ -37,6 +37,9 @@ public final class ClientSetup {
     @SubscribeEvent
     public static void registerOverlays(RegisterGuiOverlaysEvent event) {
         event.registerAboveAll("ccnr_rp_fade", (gui, gfx, partial, w, h) -> FadeOverlay.render(gfx, w, h));
+        event.registerAboveAll(
+                "ccnr_rp_recruit",
+                (gui, gfx, partial, w, h) -> com.ccnrcom.rp.client.RecruitOverlayHud.render(gfx, w, h));
     }
 
     @SubscribeEvent
@@ -45,6 +48,11 @@ public final class ClientSetup {
             return;
         }
         ClientAnimationPlayer.tick();
+        if (!RecruitOverlayHud.isEmpty()
+                && Minecraft.getInstance().screen == null
+                && Minecraft.getInstance().player != null) {
+            Minecraft.getInstance().setScreen(new RecruitPopupScreen());
+        }
         CameraEffect.tick();
         while (OPEN_CHARACTERS.consumeClick()) {
             Minecraft.getInstance().setScreen(new CharacterManagementScreen());

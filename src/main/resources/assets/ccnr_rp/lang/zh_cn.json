@@ -84,5 +84,17 @@
   "ccnr_rp.event.phase.item": "阶段 %s（%s 分钟，当前=%s）",
   "ccnr_rp.event.phase.set": "阶段已切换: %s",
   "ccnr_rp.event.phase.not_found": "未找到阶段: %s",
-  "ccnr_rp.event.gameover": "游戏结束流程已触发（疏散裁定+全员结算）"
+  "ccnr_rp.event.gameover": "游戏结束流程已触发（疏散裁定+全员结算）",
+  "ccnr_rp.gui.character.deploy": "部署",
+  "ccnr_rp.spawn.deployed": "角色 %s 已部署",
+  "ccnr_rp.spawn.error.self_deploy": "无法自刷新部署 %s（需观察状态且职业允许自部署）",
+  "ccnr_rp.spawn.recruit.you": "招募邀请：%s（复活波 %s）——请在时限内接受",
+  "ccnr_rp.spawn.recruit.title": "招募请求",
+  "ccnr_rp.spawn.recruit.accept": "接受",
+  "ccnr_rp.spawn.recruit.decline": "拒绝",
+  "ccnr_rp.spawn.recruit.failed": "复活波 %s 招募失败",
+  "ccnr_rp.spawn.list.item": "%s | 模式=%s | 启用=%s | 数量=%s | 队伍=%s",
+  "ccnr_rp.spawn.triggered": "已触发刷新波: %s",
+  "ccnr_rp.spawn.enabled": "刷新波已设置: %s → %s",
+  "ccnr_rp.spawn.not_found": "未找到刷新波: %s"
 }

@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "waves": [
+    {"id": "qdf_reinforce", "mode": "BOTH", "enabled": true,
+     "teamIds": ["qdf_team"], "professionIds": ["qdf_guard", "qdf_special"],
+     "factionIds": ["qdf"], "count": 4, "minLevel": 0,
+     "deployAt": {"type": "WORLD_SPAWN"},
+     "recruitTimeoutSeconds": 60}
+  ]
+}

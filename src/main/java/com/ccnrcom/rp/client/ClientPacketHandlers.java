@@ -4,6 +4,7 @@
  */
 package com.ccnrcom.rp.client;
 
+import com.ccnrcom.rp.network.RpPackets;
 import com.google.gson.JsonObject;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
@@ -31,6 +32,16 @@ public final class ClientPacketHandlers {
     public static void onSkinSync(String charId, byte[] data, String hash) {
         SkinCache.store(charId, data, hash);
         CharacterManagementScreen.refreshIfOpen();
+    }
+
+    public static void onRecruitOffer(RpPackets.RecruitOfferS2C msg) {
+        RecruitOverlayHud.add(msg.offerId, msg.charId, msg.charName, msg.professionId, msg.initialTicks, msg.waveId);
+        if (net.minecraft.client.Minecraft.getInstance().screen == null
+                && net.minecraft.client.Minecraft.getInstance().player != null) {
+            net.minecraft.client.Minecraft.getInstance().setScreen(new RecruitPopupScreen());
+        } else {
+            RecruitPopupScreen.refreshIfOpen();
+        }
     }
 
     public static void onAnimation(String payload) {

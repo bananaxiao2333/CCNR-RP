@@ -111,6 +111,18 @@ public final class CharacterService {
         RpChannels.sendTo(player, new RpPackets.CharacterRemoveS2C(charId));
     }
 
+    /** 自刷新部署入口（GUI/命令）。 */
+    public static void onDeploy(ServerPlayer player, String charId) {
+        if (player == null) {
+            return;
+        }
+        if (CCNRRPMod.spawnFramework == null || !CCNRRPMod.spawnFramework.deploySelf(player, charId)) {
+            service().sendError(player, "ccnr_rp.spawn.error.self_deploy", charId);
+            return;
+        }
+        service().sendError(player, "ccnr_rp.spawn.deployed", charId);
+    }
+
     public static void onObserve(ServerPlayer player, String charId) {
         CharacterService svc = service();
         Optional<CharacterData> c = svc.store.find(charId);

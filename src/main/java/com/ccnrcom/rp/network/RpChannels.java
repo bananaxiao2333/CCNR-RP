@@ -97,6 +97,21 @@ public final class RpChannels {
                 .decoder(RpPackets.XpUpdateS2C::new)
                 .consumerNetworkThread(RpPackets.XpUpdateS2C::handle)
                 .add();
+        CHANNEL.messageBuilder(RpPackets.RecruitOfferS2C.class, id++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(RpPackets.RecruitOfferS2C::encode)
+                .decoder(RpPackets.RecruitOfferS2C::new)
+                .consumerNetworkThread(RpPackets.RecruitOfferS2C::handle)
+                .add();
+        CHANNEL.messageBuilder(RpPackets.RecruitAnswerC2S.class, id++, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(RpPackets.RecruitAnswerC2S::encode)
+                .decoder(RpPackets.RecruitAnswerC2S::new)
+                .consumerNetworkThread(RpPackets.RecruitAnswerC2S::handle)
+                .add();
+        CHANNEL.messageBuilder(RpPackets.CharacterDeployC2S.class, id++, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(RpPackets.CharacterDeployC2S::encode)
+                .decoder(RpPackets.CharacterDeployC2S::new)
+                .consumerNetworkThread(RpPackets.CharacterDeployC2S::handle)
+                .add();
         CHANNEL.messageBuilder(RpPackets.ErrorS2C.class, id++, NetworkDirection.PLAY_TO_CLIENT)
                 .encoder(RpPackets.ErrorS2C::encode)
                 .decoder(RpPackets.ErrorS2C::new)

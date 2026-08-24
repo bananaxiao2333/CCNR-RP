@@ -383,6 +383,98 @@ public final class RpPackets {
         }
     }
 
+    /** 招募 offer（S2C）。 */
+    public static final class RecruitOfferS2C {
+        public final String offerId;
+        public final String charId;
+        public final String charName;
+        public final String professionId;
+        public final int initialTicks;
+        public final String waveId;
+
+        public RecruitOfferS2C(
+                String offerId, String charId, String charName, String professionId, int initialTicks, String waveId) {
+            this.offerId = offerId;
+            this.charId = charId;
+            this.charName = charName;
+            this.professionId = professionId;
+            this.initialTicks = initialTicks;
+            this.waveId = waveId;
+        }
+
+        public RecruitOfferS2C(FriendlyByteBuf buf) {
+            this(buf.readUtf(64), buf.readUtf(256), buf.readUtf(64), buf.readUtf(64), buf.readInt(), buf.readUtf(64));
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(offerId, 64);
+            buf.writeUtf(charId, 256);
+            buf.writeUtf(charName, 64);
+            buf.writeUtf(professionId, 64);
+            buf.writeInt(initialTicks);
+            buf.writeUtf(waveId, 64);
+        }
+
+        public static void handle(RecruitOfferS2C msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(
+                            net.minecraftforge.api.distmarker.Dist.CLIENT,
+                            () -> () -> com.ccnrcom.rp.client.ClientPacketHandlers.onRecruitOffer(msg)));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    /** 招募接受/拒绝（C2S）。 */
+    public static final class RecruitAnswerC2S {
+        public final String offerId;
+        public final boolean accept;
+
+        public RecruitAnswerC2S(String offerId, boolean accept) {
+            this.offerId = offerId;
+            this.accept = accept;
+        }
+
+        public RecruitAnswerC2S(FriendlyByteBuf buf) {
+            this(buf.readUtf(64), buf.readBoolean());
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(offerId, 64);
+            buf.writeBoolean(accept);
+        }
+
+        public static void handle(RecruitAnswerC2S msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> com.ccnrcom.rp.spawn.SpawnFramework.onRecruitAnswer(
+                            ctx.get().getSender(), msg.offerId, msg.accept));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    /** 自刷新部署（C2S）。 */
+    public static final class CharacterDeployC2S {
+        public final String charId;
+
+        public CharacterDeployC2S(String charId) {
+            this.charId = charId;
+        }
+
+        public CharacterDeployC2S(FriendlyByteBuf buf) {
+            this(buf.readUtf(256));
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(charId, 256);
+        }
+
+        public static void handle(CharacterDeployC2S msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> com.ccnrcom.rp.character.CharacterService.onDeploy(
+                            ctx.get().getSender(), msg.charId));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
     public static final class ErrorS2C {
         public final String messageKey;
         public final String[] args;

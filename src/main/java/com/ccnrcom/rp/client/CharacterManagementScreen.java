@@ -128,6 +128,12 @@ public class CharacterManagementScreen extends Screen {
                     })
                     .bounds(x + 180, ry, 56, 20)
                     .build());
+            addRenderableWidget(Button.builder(Component.translatable("ccnr_rp.gui.character.deploy"), b -> {
+                        RpChannels.sendToServer(new RpPackets.CharacterDeployC2S(selectedId));
+                        notice();
+                    })
+                    .bounds(x + 60, ry + 24, 110, 20)
+                    .build());
             ry += 26;
             // 皮肤上传
             skinPathBox = new EditBox(
