@@ -32,12 +32,14 @@ public final class ExperienceService {
 
     private final MinecraftServer server;
     private final LedgerStore ledger;
+    private final PendingNoticeStore pending;
     private long tickCounter = 0;
 
     public ExperienceService(MinecraftServer server) {
         this.server = server;
-        this.ledger =
-                new LedgerStore(server.getWorldPath(new net.minecraft.world.level.storage.LevelResource("ccnr_rp")));
+        var worldDir = server.getWorldPath(new net.minecraft.world.level.storage.LevelResource("ccnr_rp"));
+        this.ledger = new LedgerStore(worldDir);
+        this.pending = new PendingNoticeStore(worldDir);
     }
 
     public LedgerStore ledger() {
@@ -203,6 +205,27 @@ public final class ExperienceService {
                 String.valueOf(r.dutyXp()),
                 String.valueOf(r.taskXp()),
                 String.valueOf(r.evacXp()));
+    }
+
+    /** 死亡/断联/退役落定：结算该角色并把明细发给拥有者（离线则挂起，上线补发）。 */
+    public void settleForDown(CharacterData c, ServerPlayer ownerOrNull, String resultKey) {
+        List<String> v = settleCharacter(c.id(), true);
+        if (v.isEmpty()) {
+            return;
+        }
+        String[] args = {c.name(), v.get(1), v.get(4), v.get(5), v.get(6), v.get(2), v.get(3)};
+        if (ownerOrNull != null) {
+            RpChannels.sendTo(ownerOrNull, new RpPackets.ErrorS2C(resultKey, args));
+        } else {
+            pending.store(c.playerUuid(), resultKey, args);
+        }
+    }
+
+    /** 上线补发离线期间的结算通知（发送即删除）。 */
+    public void flushPending(ServerPlayer player) {
+        for (Object[] n : pending.drain(player.getUUID().toString())) {
+            RpChannels.sendTo(player, new RpPackets.ErrorS2C((String) n[0], (String[]) n[1]));
+        }
     }
 
     /** 结算全部（all）或单个玩家。 */

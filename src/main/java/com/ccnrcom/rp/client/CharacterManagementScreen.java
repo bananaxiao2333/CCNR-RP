@@ -43,6 +43,8 @@ public class CharacterManagementScreen extends Screen {
     private EditBox skinPathBox;
     private String notice = "";
     private long noticeUntil = 0;
+    private int nameLabelX, nameLabelY;
+    private int skinLabelX, skinLabelY;
 
     // 布局几何
     private int px1, py1, px2, py2;
@@ -209,7 +211,9 @@ public class CharacterManagementScreen extends Screen {
                         b -> RpChannels.sendToServer(new RpPackets.CharacterRetireC2S(selectedId))));
             }
             // 皮肤上传行
-            int sy = ay + 26;
+            int sy = ay + 34;
+            skinLabelX = x;
+            skinLabelY = sy - 11;
             skinPathBox = new EditBox(
                     font, x, sy, Math.max(90, w - 126), 18, Component.translatable("ccnr_rp.gui.character.skin.path"));
             skinPathBox.setMaxLength(512);
@@ -226,6 +230,8 @@ public class CharacterManagementScreen extends Screen {
         // 创建表单卡（底部）：仅名称输入（只允许文字与空格）
         int createY1 = Math.max(bodyY2 - 74, pvY2 + 62);
         int fy = createY1 + 8;
+        nameLabelX = x;
+        nameLabelY = fy - 11;
         int bw2 = (w - 4) / 2;
         addW(RpButton.primary(
                 x, fy + 44, w, 20, Component.translatable("ccnr_rp.gui.character.create"), b -> createSubmit()));
@@ -451,6 +457,21 @@ public class CharacterManagementScreen extends Screen {
         renderList(g, mouseX, mouseY);
         renderProfile(g);
         renderPreview(g, mouseX, mouseY);
+        // 输入框用途标签
+        g.drawString(
+                font,
+                Component.translatable("ccnr_rp.gui.character.name.field").getString(),
+                nameLabelX,
+                nameLabelY,
+                RpTheme.TEXT_DIM,
+                false);
+        g.drawString(
+                font,
+                Component.translatable("ccnr_rp.gui.character.skin.field").getString(),
+                skinLabelX,
+                skinLabelY,
+                RpTheme.TEXT_DIM,
+                false);
         renderNotice(g);
         super.render(g, mouseX, mouseY, partialTick);
     }

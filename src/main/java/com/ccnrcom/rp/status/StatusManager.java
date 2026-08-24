@@ -181,6 +181,12 @@ public final class StatusManager {
         if (spawnCorpse && player != null && CorpseBridge.available()) {
             CorpseBridge.spawnCorpse(player);
         }
+        // 服务器侧结算 + 玩家侧显示经验明细（离线挂起，上线补发）
+        if (CCNRRPMod.experience != null && !"retire".equals(reason)) {
+            boolean offline = reason.startsWith("offline");
+            String resultKey = offline ? "ccnr_rp.xp.settle.offline" : "ccnr_rp.xp.settle.death";
+            CCNRRPMod.experience.settleForDown(dead, offline ? null : player, resultKey);
+        }
         LOGGER.info(
                 "[CCNR-RP] 判死 [{}] {} 角色 {}（原因={}，冷却 {} 分钟）",
                 reason,

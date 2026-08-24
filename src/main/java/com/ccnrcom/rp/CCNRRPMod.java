@@ -109,6 +109,10 @@ public class CCNRRPMod {
             characters.store().save();
             characters.sendList(player);
         }
+        // 补发离线期间的结算通知（死亡/断联结算结果）
+        if (experience != null && event.getEntity() instanceof net.minecraft.server.level.ServerPlayer p2) {
+            experience.flushPending(p2);
+        }
     }
 
     @SubscribeEvent
