@@ -34,6 +34,8 @@ public class CCNRRPMod {
     public static FactionManager factions;
     /** 角色服务（P3）。 */
     public static CharacterService characters;
+    /** 状态管理（P4，注册到 Forge 总线；ServerStopping 注销）。 */
+    public static com.ccnrcom.rp.status.StatusManager statusManager;
 
     public CCNRRPMod() {
         ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, CCNRRPConfig.SPEC);
@@ -59,6 +61,8 @@ public class CCNRRPMod {
         factions = new FactionManager();
         factions.load();
         characters = new CharacterService(event.getServer());
+        statusManager = new com.ccnrcom.rp.status.StatusManager(event.getServer());
+        MinecraftForge.EVENT_BUS.register(statusManager);
         LOGGER.info(
                 "[CCNR-RP] 服务端运行时就绪：阵营 {} 个 / 组 {} 个 / 角色 {} 个",
                 factions.graph().factions().size(),
@@ -78,6 +82,10 @@ public class CCNRRPMod {
         if (characters != null) {
             characters.store().save();
         }
+        if (statusManager != null) {
+            MinecraftForge.EVENT_BUS.unregister(statusManager);
+        }
+        statusManager = null;
         characters = null;
         factions = null;
         LOGGER.info("[CCNR-RP] 服务端运行时清理完成");

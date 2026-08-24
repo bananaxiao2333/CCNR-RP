@@ -25,6 +25,7 @@ public final class RpCommand {
         FactionCommand.register(rp);
         ProfessionCommand.register(rp);
         CharacterCommand.register(rp);
+        StateCommand.register(rp);
         rpNode = rp;
     }
 

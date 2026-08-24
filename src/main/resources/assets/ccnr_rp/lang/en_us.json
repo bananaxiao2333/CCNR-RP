@@ -62,5 +62,10 @@
   "ccnr_rp.gui.character.skin.read_fail": "Cannot read file",
   "ccnr_rp.gui.character.skin.too_big": "File exceeds 256KB",
   "key.ccnr_rp.character_menu": "Character Management",
-  "key.categories.ccnr_rp": "CCNR-RP"
+  "key.categories.ccnr_rp": "CCNR-RP",
+  "ccnr_rp.status.killed.command": "%s has been executed",
+  "ccnr_rp.status.killed.offline": "%s disconnected and was declared dead",
+  "ccnr_rp.status.error.no_alive": "You have no alive character to kill",
+  "ccnr_rp.command.kill.ok": "%s killed (corpse + cooldown applied)",
+  "ccnr_rp.command.state.header": "Character states of %s:"
 }

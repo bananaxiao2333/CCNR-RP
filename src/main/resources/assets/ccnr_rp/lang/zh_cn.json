@@ -62,5 +62,10 @@
   "ccnr_rp.gui.character.skin.read_fail": "无法读取文件",
   "ccnr_rp.gui.character.skin.too_big": "文件超过 256KB",
   "key.ccnr_rp.character_menu": "角色管理界面",
-  "key.categories.ccnr_rp": "CCNR-RP"
+  "key.categories.ccnr_rp": "CCNR-RP",
+  "ccnr_rp.status.killed.command": "%s 已被处决",
+  "ccnr_rp.status.killed.offline": "%s 掉线已被判定死亡",
+  "ccnr_rp.status.error.no_alive": "你没有存活角色可判死",
+  "ccnr_rp.command.kill.ok": "%s 已判死（含遗体与冷却）",
+  "ccnr_rp.command.state.header": "%s 的角色状态："
 }

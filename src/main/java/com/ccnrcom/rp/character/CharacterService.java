@@ -266,9 +266,16 @@ public final class CharacterService {
     }
 
     private void updateCharacter(CharacterData updated, ServerPlayer owner) {
-        store.update(updated);
-        store.save();
-        RpChannels.sendTo(owner, new RpPackets.CharacterUpdateS2C(updated.toJson()));
+        updateAndBroadcast(updated, owner);
+    }
+
+    /** 更新角色并广播（公共入口：状态机/经验/刷新框架等复用）。 */
+    public static void updateAndBroadcast(CharacterData updated, ServerPlayer ownerOrNull) {
+        service().store().update(updated);
+        service().store().save();
+        if (ownerOrNull != null) {
+            RpChannels.sendTo(ownerOrNull, new RpPackets.CharacterUpdateS2C(updated.toJson()));
+        }
     }
 
     public void sendList(ServerPlayer player) {
