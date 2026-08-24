@@ -94,9 +94,6 @@ public class CharacterManagementScreen extends Screen {
         pvX2 = rlX2;
         pvY1 = bodyY1 + profileH + 8;
         pvY2 = createY1 - 62;
-        if (pvY2 - pvY1 > 170) {
-            pvY2 = pvY1 + 170;
-        }
         if (pvY2 - pvY1 < 84) {
             pvY2 = pvY1 + 84;
         }
@@ -654,7 +651,7 @@ public class CharacterManagementScreen extends Screen {
     private void renderPreview(GuiGraphics g, int mouseX, int mouseY) {
         int x = pvX1;
         int w = pvX2 - pvX1;
-        RpRoundRect.outlined(g, x, pvY1, x + w, pvY2, 8f, RpTheme.PANEL_BORDER, 0xEE10161B);
+        RpRoundRect.outlined(g, x, pvY1, x + w, pvY2, 8f, RpTheme.PANEL_BORDER, 0xA010161B);
         RpTheme.scanlines(g, x + 2, pvY1 + 2, x + w - 2, pvY2 - 2);
         g.drawString(
                 font,
@@ -668,8 +665,10 @@ public class CharacterManagementScreen extends Screen {
         JsonObject c = ClientCharacterState.find(selectedId);
         // 3D 模型（裁剪在框内，跟随鼠标）
         if (c != null) {
+            int pvH = pvY2 - pvY1;
+            int scale = Math.max(34, Math.min(110, (pvH - 70) / 2));
             g.enableScissor(x + 2, pvY1 + 14, x + w - 2, pvY2 - 24);
-            CharacterPreview.render(g, x + w / 2, pvY2 - 30, 26, mouseX, mouseY, c);
+            CharacterPreview.render(g, x + w / 2, pvY2 - 30, scale, mouseX, mouseY, c);
             g.disableScissor();
         } else {
             g.drawCenteredString(
