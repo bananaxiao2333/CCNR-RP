@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "sequences": {
+    "spawn_intro": {"steps": [
+      {"type": "FADE", "color": "#000000", "from": 1, "to": 0, "durationTicks": 30},
+      {"type": "TITLE", "title": "CCNR-RP", "subtitle": "角色已部署: ${name}", "durationTicks": 40},
+      {"type": "SOUND", "sound": "minecraft:entity.experience_orb.pickup", "volume": 100, "pitch": 100},
+      {"type": "PARTICLE", "particle": "minecraft:campfire_cosy_smoke", "count": 40, "spread": 2, "durationTicks": 20},
+      {"type": "ACTIONBAR", "text": "已部署: ${name}", "durationTicks": 60}
+    ]},
+    "player_death": {"steps": [
+      {"type": "FADE", "color": "#7F0000", "from": 0, "to": 60, "durationTicks": 40}
+    ]},
+    "game_end": {"steps": [
+      {"type": "TITLE", "title": "游戏结束", "subtitle": "疏散裁定与结算完成", "durationTicks": 80}
+    ]},
+    "event_start_alarm": {"steps": [
+      {"type": "SOUND", "sound": "minecraft:block.note_block.alarm", "volume": 100, "pitch": 80},
+      {"type": "TITLE", "title": "警报", "subtitle": "事件: ${event}", "durationTicks": 60}
+    ]},
+    "level_up": {"steps": [
+      {"type": "TITLE", "title": "升级!", "subtitle": "等级 ${level}", "durationTicks": 60},
+      {"type": "ACTIONBAR", "text": "等级 ${level}", "durationTicks": 40}
+    ]}
+  },
+  "hooks": {
+    "player_spawn": "spawn_intro",
+    "player_death": "player_death",
+    "game_end": "game_end",
+    "event_start": "event_start_alarm",
+    "level_up": "level_up"
+  }
+}
