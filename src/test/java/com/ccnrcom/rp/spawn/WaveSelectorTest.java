@@ -44,8 +44,8 @@ class WaveSelectorTest {
         long now = 1000;
         List<Candidate> pool = List.of(
                 cand("a", "dead", 0, 2, false, true),
-                cand("b", "dead", 500, 5, false, true),
-                cand("c", "dead", 100, 5, false, true));
+                cand("b", "observing", 500, 5, false, true),
+                cand("c", "observing", 100, 5, false, true));
         Selection sel = WaveSelector.select(pool, WAVE, now, new Random(7));
         assertEquals(3, sel.deploy().size());
         assertEquals("c", sel.deploy().get(0).charId());
@@ -54,13 +54,13 @@ class WaveSelectorTest {
     }
 
     @Test
-    void cooldownNotOverFiltered() {
+    void waveIgnoresCooldown() {
         long now = 1000;
+        // 复活波强制抽取：无视冷却（hot 冷却未过也复活）
         List<Candidate> pool =
-                List.of(cand("hot", "dead", 5000, 9, false, true), cand("cool", "dead", 100, 1, false, true));
+                List.of(cand("hot", "observing", 5000, 9, false, true), cand("cool", "observing", 100, 1, false, true));
         Selection sel = WaveSelector.select(pool, WAVE, now, new Random(1));
-        assertEquals(1, sel.deploy().size());
-        assertEquals("cool", sel.deploy().get(0).charId());
+        assertEquals(2, sel.deploy().size());
     }
 
     @Test

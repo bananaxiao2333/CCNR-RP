@@ -84,6 +84,7 @@ public final class EventBanner {
                     w / 2,
                     y + bh + 2,
                     RpTheme.TEXT_DIM);
+            RpScrollbar.drawH(g, 40, w - 40, y + bh + 9, total, areaW, offsetPx);
         } else {
             g.drawCenteredString(
                     font,

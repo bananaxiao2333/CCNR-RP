@@ -517,6 +517,9 @@ public class CharacterManagementScreen extends Screen {
                 g.drawString(font, name, b[0] + 25, b[1] + 7, sel ? 0xFFFFFFFF : RpTheme.TEXT_SECONDARY, true);
             }
         }
+        // 滚动条（机构导航）
+        int navCount = Math.max(1, (bodyY2 - bodyY1 - 2) / 26);
+        RpScrollbar.draw(g, nlX2 - 7, bodyY1, bodyY2, navBounds.size(), navCount, 0);
     }
 
     private void renderList(GuiGraphics g, int mouseX, int mouseY) {
@@ -586,6 +589,10 @@ public class CharacterManagementScreen extends Screen {
                 g.drawString(font, "CD " + cooldown, sx2 - pillW - 44, b[1] + 16, RpTheme.COOLDOWN, true);
             }
         }
+        // 滚动条（角色列表）
+        int gap = 4;
+        int maxVisible = Math.max(1, (bodyY2 - bodyY1 - 2) / (rowH + gap));
+        RpScrollbar.draw(g, mlX2 - 7, bodyY1, bodyY2, filteredChars().size(), maxVisible, offset);
     }
 
     private void renderProfile(GuiGraphics g) {

@@ -672,6 +672,12 @@ public final class CharacterService {
                     player, "ccnr_rp.character.error.alive_exists", alive.get().name());
             return;
         }
+        // 自己职业激活=自部署：复活冷却中拒绝（复活波/强制抽取无视冷却）
+        if (data.cooldownUntil() > System.currentTimeMillis()) {
+            long mins = (data.cooldownUntil() - System.currentTimeMillis()) / 60000L;
+            svc.sendError(player, "ccnr_rp.character.error.cooldown", data.name(), String.valueOf(Math.max(1, mins)));
+            return;
+        }
         svc.updateCharacter(data.withStatus(CharacterStatus.ALIVE), player);
         svc.sendError(player, "ccnr_rp.character.activate.ok", data.name());
     }

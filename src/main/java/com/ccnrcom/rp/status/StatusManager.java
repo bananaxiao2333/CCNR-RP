@@ -97,7 +97,7 @@ public final class StatusManager {
         }
     }
 
-    /** 阴间循环检测（每 5 秒）：DEAD 且冷却结束 → 自动回观察者，等待被重新部署，绝不自动复活。 */
+    /** 阴间循环检测（每 5 秒）：兼容旧存档 DEAD → 观察者池（保留冷却标记：死神阶段标记是 cooldownUntil>0）。 */
     private long deadCheckCounter = 0;
 
     @SubscribeEvent
@@ -109,23 +109,18 @@ public final class StatusManager {
             return;
         }
         deadCheckCounter = 0;
-        long now = System.currentTimeMillis();
         for (CharacterData c : CCNRRPMod.characters.store().all()) {
             if (c.status() != CharacterStatus.DEAD) {
                 continue;
             }
-            if (c.cooldownUntil() > now) {
-                continue; // 冷却中继续“阴间”
-            }
-            CharacterData obs = c.withStatus(CharacterStatus.OBSERVING).withCooldown(0);
-            CCNRRPMod.characters.store().update(obs);
+            // 死亡/判死现在直接写 OBSERVING + 复活冷却；仅旧存档残留 DEAD 在此归一化
+            CCNRRPMod.characters.store().update(c.withStatus(CharacterStatus.OBSERVING));
             CCNRRPMod.characters.store().save();
-            CharacterService.updateAndBroadcast(obs, null);
             var owner = server.getPlayerList().getPlayer(java.util.UUID.fromString(c.playerUuid()));
             if (owner != null) {
-                CCNRRPMod.characters.sendList(owner); // 在线拥有者：同步回观察者 + 面板锁
+                CCNRRPMod.characters.sendList(owner);
             }
-            LOGGER.info("[CCNR-RP] 阴间循环：{} 已回观察者池（冷却结束）", c.name());
+            LOGGER.info("[CCNR-RP] 阴间循环：{} 旧 DEAD 已归一化为观察者池（冷却标记保留）", c.name());
         }
     }
 
@@ -157,9 +152,9 @@ public final class StatusManager {
         }
         long cooldownMs = CCNRRPConfig.DEATH_COOLDOWN_MINUTES.get() * 60000L;
         CharacterData dead =
-                data.withStatus(CharacterStatus.DEAD).withCooldown(System.currentTimeMillis() + cooldownMs);
+                data.withStatus(CharacterStatus.OBSERVING).withCooldown(System.currentTimeMillis() + cooldownMs);
         CharacterService.updateAndBroadcast(dead, playerOrNull);
-        LOGGER.info("[CCNR-RP] 退役 [retire] {} 角色 {}（非存活，仅状态）", data.playerUuid(), data.name());
+        LOGGER.info("[CCNR-RP] 退役 [retire] {} 角色 {}（观察者池 + 复活冷却）", data.playerUuid(), data.name());
     }
 
     /** 掉线判死：状态 + 冷却 + 遗体 + 同步（幂等：仅 ALIVE 生效）。 */
@@ -168,12 +163,13 @@ public final class StatusManager {
     }
 
     private static void markDead(CharacterData data, ServerPlayer player, boolean spawnCorpse, String reason) {
-        if (data.status() != CharacterStatus.ALIVE) {
-            return; // 幂等
+        if (data.status() != CharacterStatus.ALIVE && data.status() != CharacterStatus.DEAD) {
+            return; // 幂等；DEAD 兼容旧存档（再判死 = 回观察者）
         }
         long cooldownMs = CCNRRPConfig.DEATH_COOLDOWN_MINUTES.get() * 60000L;
+        // 死亡/判死 → 立刻回观察者池（状态显示“观察中”）；cooldownUntil = 复活冷却锁
         CharacterData dead =
-                data.withStatus(CharacterStatus.DEAD).withCooldown(System.currentTimeMillis() + cooldownMs);
+                data.withStatus(CharacterStatus.OBSERVING).withCooldown(System.currentTimeMillis() + cooldownMs);
         CharacterService.updateAndBroadcast(dead, player);
         if (player != null) {
             CCNRRPMod.characters.sendList(player); // 立即刷新面板锁（死亡即解锁）
@@ -188,7 +184,7 @@ public final class StatusManager {
             CCNRRPMod.experience.settleForDown(dead, offline ? null : player, resultKey);
         }
         LOGGER.info(
-                "[CCNR-RP] 判死 [{}] {} 角色 {}（原因={}，冷却 {} 分钟）",
+                "[CCNR-RP] 判死 [{}] {} 角色 {}（原因={} → 观察者池，复活冷却 {} 分钟）",
                 reason,
                 data.playerUuid(),
                 data.name(),

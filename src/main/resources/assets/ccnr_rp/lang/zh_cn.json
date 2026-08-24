@@ -53,6 +53,7 @@
   "ccnr_rp.character.error.ownership": "该角色不属于你",
   "ccnr_rp.character.error.status": "当前状态不允许: %s → %s",
   "ccnr_rp.character.error.alive_exists": "你已有存活角色（%s）",
+  "ccnr_rp.character.error.cooldown": "%s 复活冷却中（约 %s 分钟）——只能等待自动复活波强制抽取，冷却后自己职业才可自部署",
   "ccnr_rp.character.error.not_found": "角色不存在: %s",
   "ccnr_rp.character.error.skin": "皮肤上传失败: %s",
   "ccnr_rp.character.info": "%s | 阵营 %s | 职业 %s | 状态 %s | 剩余冷却 %d 分钟",
