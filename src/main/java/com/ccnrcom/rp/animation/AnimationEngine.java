@@ -184,11 +184,12 @@ public final class AnimationEngine {
         return o;
     }
 
-    /** ${name} 参数注入（缺失保留原样并 WARN 由客户端兜底显示）。 */
+    /** ${name}/{name} 参数注入（缺失保留原样，由客户端兜底显示，便于排查）。 */
     static String inject(String text, Map<String, String> params) {
         String out = text;
         for (Map.Entry<String, String> e : params.entrySet()) {
-            out = out.replace(" + e.getKey() + ", e.getValue());
+            out = out.replace("${" + e.getKey() + "}", e.getValue());
+            out = out.replace("{" + e.getKey() + "}", e.getValue());
         }
         return out;
     }
