@@ -1,0 +1,116 @@
+/*
+ * Copyright (c) 2026 CCNR
+ * SPDX-License-Identifier: MIT
+ */
+package com.ccnrcom.rp.faction;
+
+import com.ccnrcom.rp.profession.ProfessionJson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+
+/** factions.json 中"professions"段的读写（P2）。 */
+public final class FactionProfessions {
+
+    private FactionProfessions() {}
+
+    /** 找职业定义。 */
+    public static Optional<JsonObject> find(JsonObject root, String id) {
+        for (JsonObject o : all(root)) {
+            if (str(o, "id", "").equals(id)) {
+                return Optional.of(o);
+            }
+        }
+        return Optional.empty();
+    }
+
+    public static List<String> ids(JsonObject root) {
+        List<String> out = new ArrayList<>();
+        for (JsonObject o : all(root)) {
+            out.add(str(o, "id", "?"));
+        }
+        return out;
+    }
+
+    /** 校验并写入（upsert），返回错误列表（空=成功）。 */
+    public static List<String> upsert(
+            JsonObject root,
+            String id,
+            String name,
+            String factionId,
+            boolean selfDeploy,
+            JsonObject loadout,
+            java.util.function.Predicate<String> factionExists) {
+        List<String> errors = new ArrayList<>();
+        if (id == null || id.isBlank()) {
+            errors.add("职业 id 不能为空");
+        }
+        if (!factionExists.test(factionId)) {
+            errors.add("未知阵营: " + factionId);
+        }
+        if (loadout != null) {
+            errors.addAll(ProfessionJson.validate(loadout));
+        }
+        if (!errors.isEmpty()) {
+            return errors;
+        }
+        JsonArray profs = root.has("professions") ? root.getAsJsonArray("professions") : new JsonArray();
+        root.add("professions", profs);
+        for (int i = 0; i < profs.size(); i++) {
+            JsonObject o = profs.get(i).getAsJsonObject();
+            if (str(o, "id", "").equals(id)) {
+                o.addProperty("name", name == null || name.isBlank() ? id : name);
+                o.addProperty("factionId", factionId);
+                o.addProperty("selfDeploy", selfDeploy);
+                o.add("loadout", loadout == null ? ProfessionJson.emptyLoadout() : loadout);
+                return List.of();
+            }
+        }
+        JsonObject def = new JsonObject();
+        def.addProperty("id", id);
+        def.addProperty("name", name == null || name.isBlank() ? id : name);
+        def.addProperty("factionId", factionId);
+        def.addProperty("selfDeploy", selfDeploy);
+        def.add("loadout", loadout == null ? ProfessionJson.emptyLoadout() : loadout);
+        profs.add(def);
+        return List.of();
+    }
+
+    /** 常见于命令回显的稳定名称。 */
+    public static String idsSafeName(JsonObject def) {
+        return str(def, "name", str(def, "id", "?"));
+    }
+
+    public static boolean selfDeploy(JsonObject def) {
+        return def.has("selfDeploy") && def.get("selfDeploy").getAsBoolean();
+    }
+
+    public static String factionId(JsonObject def) {
+        return str(def, "factionId", "");
+    }
+
+    public static JsonObject loadout(JsonObject def) {
+        return def.has("loadout") && def.get("loadout").isJsonObject()
+                ? def.getAsJsonObject("loadout")
+                : ProfessionJson.emptyLoadout();
+    }
+
+    public static List<JsonObject> all(JsonObject root) {
+        List<JsonObject> out = new ArrayList<>();
+        if (root.has("professions")) {
+            JsonArray a = root.getAsJsonArray("professions");
+            for (int i = 0; i < a.size(); i++) {
+                if (a.get(i).isJsonObject()) {
+                    out.add(a.get(i).getAsJsonObject());
+                }
+            }
+        }
+        return out;
+    }
+
+    private static String str(JsonObject o, String key, String def) {
+        return o.has(key) && !o.get(key).isJsonNull() ? o.get(key).getAsString() : def;
+    }
+}

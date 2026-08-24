@@ -19,5 +19,12 @@
   "ccnr_rp.faction.error.not_found": "Faction or group not found: %s",
   "ccnr_rp.faction.error.exists": "Faction or group already exists: %s",
   "ccnr_rp.faction.error.config": "Config error: %s",
-  "ccnr_rp.faction.group.created": "Group created: %s = [%s]"
+  "ccnr_rp.faction.group.created": "Group created: %s = [%s]",
+  "ccnr_rp.profession.list.header": "Professions:",
+  "ccnr_rp.profession.list.item": "%s (faction %s, selfDeploy=%s)",
+  "ccnr_rp.profession.created": "Profession created: %s (faction %s)",
+  "ccnr_rp.profession.saved": "Loadout saved to profession %s (%d items, %s)",
+  "ccnr_rp.profession.loaded": "Profession loadout applied: %s",
+  "ccnr_rp.profession.error.not_found": "Profession not found: %s",
+  "ccnr_rp.profession.error.config": "Config error: %s"
 }

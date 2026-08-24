@@ -23,6 +23,7 @@ public final class RpCommand {
         LiteralCommandNode<CommandSourceStack> rp =
                 dispatcher.register(Commands.literal("rp").executes(ctx -> help(ctx.getSource())));
         FactionCommand.register(rp);
+        ProfessionCommand.register(rp);
         rpNode = rp;
     }
 

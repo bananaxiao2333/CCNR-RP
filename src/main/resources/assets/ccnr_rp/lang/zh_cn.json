@@ -19,5 +19,12 @@
   "ccnr_rp.faction.error.not_found": "未找到阵营或组: %s",
   "ccnr_rp.faction.error.exists": "阵营或组已存在: %s",
   "ccnr_rp.faction.error.config": "配置失败: %s",
-  "ccnr_rp.faction.group.created": "阵营组已创建: %s = [%s]"
+  "ccnr_rp.faction.group.created": "阵营组已创建: %s = [%s]",
+  "ccnr_rp.profession.list.header": "职业列表：",
+  "ccnr_rp.profession.list.item": "%s（阵营 %s，自部署=%s）",
+  "ccnr_rp.profession.created": "职业已创建: %s（阵营 %s）",
+  "ccnr_rp.profession.saved": "装备已保存到职业 %s（共 %d 件，%s）",
+  "ccnr_rp.profession.loaded": "已套用职业装备: %s",
+  "ccnr_rp.profession.error.not_found": "未找到职业: %s",
+  "ccnr_rp.profession.error.config": "配置失败: %s"
 }
