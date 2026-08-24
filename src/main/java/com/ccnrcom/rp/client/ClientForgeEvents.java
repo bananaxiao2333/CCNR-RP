@@ -38,6 +38,14 @@ public final class ClientForgeEvents {
             Minecraft.getInstance().setScreen(new CharacterManagementScreen());
         }
         while (ClientSetup.OPEN_CHARACTERS.consumeClick()) {
+            if (ClientCharacterState.panelLocked()) {
+                Minecraft.getInstance()
+                        .player
+                        .displayClientMessage(
+                                net.minecraft.network.chat.Component.translatable("ccnr_rp.gui.character.panel_locked"),
+                                true);
+                continue;
+            }
             Minecraft.getInstance().setScreen(new CharacterManagementScreen());
         }
     }

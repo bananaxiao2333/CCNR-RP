@@ -115,6 +115,12 @@ public final class CharacterService {
         if (player == null) {
             return;
         }
+        var c = service().store.find(charId).orElse(null);
+        if (c != null && c.status() == com.ccnrcom.rp.status.CharacterStatus.ALIVE) {
+            // 存活角色禁止自刷新部署（防自杀逃逸，服务端硬校验）
+            service().sendError(player, "ccnr_rp.spawn.error.self_deploy", charId);
+            return;
+        }
         if (CCNRRPMod.spawnFramework == null || !CCNRRPMod.spawnFramework.deploySelf(player, charId)) {
             service().sendError(player, "ccnr_rp.spawn.error.self_deploy", charId);
             return;
@@ -653,6 +659,9 @@ public final class CharacterService {
         root.addProperty(
                 "admin",
                 com.ccnrcom.rp.util.Permissions.canAdmin(player, com.ccnrcom.rp.util.Permissions.ADMIN_FACTION));
+        // 面板锁：有存活（非观察者）角色时禁止打开 K 面板（防自爆逃逸，服务端判定）
+        root.addProperty(
+                "panelLocked", store.findAlive(player.getUUID().toString()).isPresent());
         RpChannels.sendTo(player, new RpPackets.CharacterListS2C(root.toString()));
     }
 

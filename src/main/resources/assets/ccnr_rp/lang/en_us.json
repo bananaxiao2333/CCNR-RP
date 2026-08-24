@@ -158,6 +158,7 @@
   "ccnr_rp.gui.admin.setting.hud_health.desc": "ON=percent text; OFF=percent bar (green/yellow/red)",
   "ccnr_rp.gui.character.manage": "MANAGE",
   "ccnr_rp.gui.character.retire": "Reincarnate",
+  "ccnr_rp.gui.character.panel_locked": "Panel locked while ALIVE (observers only; die first, then return via respawn wave)",
   "ccnr_rp.character.retire.ok": "Character %s retired (judged dead, corpse kept)",
   "ccnr_rp.spawn.deployed": "Character %s deployed",
   "ccnr_rp.relation.hostile": "HOSTILE",

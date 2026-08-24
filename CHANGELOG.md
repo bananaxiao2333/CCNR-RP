@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.1（存活角色面板/自部署封锁）
+- 服务端：存活（非观察者）角色 → CharacterListS2C 下发 panelLocked=true；K 面板拒绝打开（客户端提示）；自部署服务端硬校验拒绝（防自杀逃逸——碰到人不能自爆回城重置）。
+- 入服自动开面板同样跳过锁定状态；死亡后经复活波/判死回观察者状态即可恢复。
+
 ## 1.4.0（序列编辑器 + 事件栏横向滚动）
 - 新：序列系统（sequences.json + 管理器「序列」页签）——步骤编排：WAIT（等待秒数）/ WAVE（触发刷新波）/ COMMAND（执行控制台命令，支持 {{event}} {{phase}} {{seq}} 变量）/ FORCE_PICK（强制抽取观察者：≤N 名在线、随机附职业、随机 UID 名字、可选刷新生效）。
 - 事件 hooks 新增 startSequence：事件开始自动运行序列（默认示例 qdf_support：等 10s → 抽 5 名 QDF → 触发 qdf_reinforce 波）。

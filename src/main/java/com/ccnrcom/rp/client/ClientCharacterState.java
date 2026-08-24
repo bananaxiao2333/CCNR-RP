@@ -20,6 +20,7 @@ public final class ClientCharacterState {
     private static JsonObject settings = new JsonObject();
     private static boolean isAdmin = false;
     private static boolean autoOpenPending = false;
+    private static boolean panelLocked = false;
     private static final List<JsonObject> managerEvents = new ArrayList<>();
     private static final List<JsonObject> managerPhases = new ArrayList<>();
     private static final List<JsonObject> managerWaves = new ArrayList<>();
@@ -56,7 +57,13 @@ public final class ClientCharacterState {
             settings = root.getAsJsonObject("settings");
         }
         isAdmin = root.has("admin") && root.get("admin").getAsBoolean();
-        autoOpenPending = bool("openPanelOnJoin", true);
+        panelLocked = root.has("panelLocked") && root.get("panelLocked").getAsBoolean();
+        autoOpenPending = bool("openPanelOnJoin", true) && !panelLocked;
+    }
+
+    /** 面板锁：有存活角色时禁止打开 K 面板。 */
+    public static synchronized boolean panelLocked() {
+        return panelLocked;
     }
 
     private static boolean bool(String key, boolean def) {
