@@ -24,6 +24,7 @@ public final class RpCommand {
                 dispatcher.register(Commands.literal("rp").executes(ctx -> help(ctx.getSource())));
         FactionCommand.register(rp);
         ProfessionCommand.register(rp);
+        CharacterCommand.register(rp);
         rpNode = rp;
     }
 

@@ -4,9 +4,11 @@
  */
 package com.ccnrcom.rp;
 
+import com.ccnrcom.rp.character.CharacterService;
 import com.ccnrcom.rp.command.RpCommand;
 import com.ccnrcom.rp.config.CCNRRPConfig;
 import com.ccnrcom.rp.faction.FactionManager;
+import com.ccnrcom.rp.network.RpChannels;
 import com.ccnrcom.rp.util.Permissions;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegisterCommandsEvent;
@@ -30,11 +32,14 @@ public class CCNRRPMod {
 
     /** 阵营配置管理器（仅服务端/服务器线程访问；ServerStopping 清空）。 */
     public static FactionManager factions;
+    /** 角色服务（P3）。 */
+    public static CharacterService characters;
 
     public CCNRRPMod() {
         ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, CCNRRPConfig.SPEC);
         IEventBus modBus = FMLJavaModLoadingContext.get().getModEventBus();
         modBus.addListener(this::commonSetup);
+        RpChannels.register();
         MinecraftForge.EVENT_BUS.register(this);
         MinecraftForge.EVENT_BUS.register(Permissions.class);
         LOGGER.info("[CCNR-RP] 模组初始化完成");
@@ -53,14 +58,27 @@ public class CCNRRPMod {
     public void onServerAboutToStart(ServerAboutToStartEvent event) {
         factions = new FactionManager();
         factions.load();
+        characters = new CharacterService(event.getServer());
         LOGGER.info(
-                "[CCNR-RP] 服务端运行时就绪：阵营 {} 个 / 组 {} 个",
+                "[CCNR-RP] 服务端运行时就绪：阵营 {} 个 / 组 {} 个 / 角色 {} 个",
                 factions.graph().factions().size(),
-                factions.graph().groups().size());
+                factions.graph().groups().size(),
+                characters.store().all().size());
+    }
+
+    @SubscribeEvent
+    public void onPlayerLoggedIn(net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent event) {
+        if (characters != null && event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
+            characters.sendList(player);
+        }
     }
 
     @SubscribeEvent
     public void onServerStopping(ServerStoppingEvent event) {
+        if (characters != null) {
+            characters.store().save();
+        }
+        characters = null;
         factions = null;
         LOGGER.info("[CCNR-RP] 服务端运行时清理完成");
     }

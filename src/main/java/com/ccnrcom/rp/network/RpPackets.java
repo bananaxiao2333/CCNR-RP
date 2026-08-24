@@ -1,0 +1,367 @@
+/*
+ * Copyright (c) 2026 CCNR
+ * SPDX-License-Identifier: MIT
+ */
+package com.ccnrcom.rp.network;
+
+import com.google.gson.JsonObject;
+import java.util.function.Supplier;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraftforge.network.NetworkEvent;
+
+/** ccnr_rp:main 通道的全部消息（P3 起追加；编码使用 JSON 字符串与字节数组，字段以 JsonObject 起名）。 */
+public final class RpPackets {
+
+    private RpPackets() {}
+
+    // ---------- C2S ----------
+
+    public static final class RequestCharacterListC2S {
+        public RequestCharacterListC2S() {}
+
+        public static void encode(RequestCharacterListC2S msg, FriendlyByteBuf buf) {}
+
+        public static RequestCharacterListC2S decode(FriendlyByteBuf buf) {
+            return new RequestCharacterListC2S();
+        }
+
+        public static void handle(RequestCharacterListC2S msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> com.ccnrcom.rp.character.CharacterService.onRequestList(
+                            ctx.get().getSender()));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    /** 创建角色。 */
+    public static final class CharacterCreateC2S {
+        public final String name;
+        public final String factionId;
+        public final String professionId;
+        public final String background;
+
+        public CharacterCreateC2S(String name, String factionId, String professionId, String background) {
+            this.name = name;
+            this.factionId = factionId;
+            this.professionId = professionId;
+            this.background = background;
+        }
+
+        public CharacterCreateC2S(FriendlyByteBuf buf) {
+            this(buf.readUtf(64), buf.readUtf(64), buf.readUtf(64), buf.readUtf(512));
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(name, 64);
+            buf.writeUtf(factionId, 64);
+            buf.writeUtf(professionId, 64);
+            buf.writeUtf(background, 512);
+        }
+
+        public static void handle(CharacterCreateC2S msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> com.ccnrcom.rp.character.CharacterService.onCreate(
+                            ctx.get().getSender(), msg.name, msg.factionId, msg.professionId, msg.background));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    public static final class CharacterSelectC2S {
+        public final String charId;
+
+        public CharacterSelectC2S(String charId) {
+            this.charId = charId;
+        }
+
+        public CharacterSelectC2S(FriendlyByteBuf buf) {
+            this(buf.readUtf(256));
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(charId, 256);
+        }
+
+        public static void handle(CharacterSelectC2S msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> com.ccnrcom.rp.character.CharacterService.onSelect(
+                            ctx.get().getSender(), msg.charId));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    public static final class CharacterDeleteC2S {
+        public final String charId;
+
+        public CharacterDeleteC2S(String charId) {
+            this.charId = charId;
+        }
+
+        public CharacterDeleteC2S(FriendlyByteBuf buf) {
+            this(buf.readUtf(256));
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(charId, 256);
+        }
+
+        public static void handle(CharacterDeleteC2S msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> com.ccnrcom.rp.character.CharacterService.onDelete(
+                            ctx.get().getSender(), msg.charId));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    public static final class CharacterObserveC2S {
+        public final String charId;
+
+        public CharacterObserveC2S(String charId) {
+            this.charId = charId;
+        }
+
+        public CharacterObserveC2S(FriendlyByteBuf buf) {
+            this(buf.readUtf(256));
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(charId, 256);
+        }
+
+        public static void handle(CharacterObserveC2S msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> com.ccnrcom.rp.character.CharacterService.onObserve(
+                            ctx.get().getSender(), msg.charId));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    public static final class CharacterActivateC2S {
+        public final String charId;
+
+        public CharacterActivateC2S(String charId) {
+            this.charId = charId;
+        }
+
+        public CharacterActivateC2S(FriendlyByteBuf buf) {
+            this(buf.readUtf(256));
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(charId, 256);
+        }
+
+        public static void handle(CharacterActivateC2S msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> com.ccnrcom.rp.character.CharacterService.onActivate(
+                            ctx.get().getSender(), msg.charId));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    /** 皮肤上传分包。 */
+    public static final class SkinUploadPartC2S {
+        public final String charId;
+        public final int index;
+        public final int total;
+        public final byte[] data;
+
+        public SkinUploadPartC2S(String charId, int index, int total, byte[] data) {
+            this.charId = charId;
+            this.index = index;
+            this.total = total;
+            this.data = data;
+        }
+
+        public SkinUploadPartC2S(FriendlyByteBuf buf) {
+            this(buf.readUtf(256), buf.readInt(), buf.readInt(), buf.readByteArray());
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(charId, 256);
+            buf.writeInt(index);
+            buf.writeInt(total);
+            buf.writeByteArray(data);
+        }
+
+        public static void handle(SkinUploadPartC2S msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> com.ccnrcom.rp.character.CharacterService.onSkinPart(
+                            ctx.get().getSender(), msg));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    public static final class SkinUploadCommitC2S {
+        public final String charId;
+        public final int expectedSize;
+        public final int total;
+
+        public SkinUploadCommitC2S(String charId, int expectedSize, int total) {
+            this.charId = charId;
+            this.expectedSize = expectedSize;
+            this.total = total;
+        }
+
+        public SkinUploadCommitC2S(FriendlyByteBuf buf) {
+            this(buf.readUtf(256), buf.readInt(), buf.readInt());
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(charId, 256);
+            buf.writeInt(expectedSize);
+            buf.writeInt(total);
+        }
+
+        public static void handle(SkinUploadCommitC2S msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> com.ccnrcom.rp.character.CharacterService.onSkinCommit(
+                            ctx.get().getSender(), msg));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    // ---------- S2C ----------
+
+    /** 全量角色列表（JSON 数组字符串，client 端轻量重组）。 */
+    public static final class CharacterListS2C {
+        public final String payload;
+
+        public CharacterListS2C(String payload) {
+            this.payload = payload;
+        }
+
+        public CharacterListS2C(FriendlyByteBuf buf) {
+            this(buf.readUtf(262144));
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(payload, 262144);
+        }
+
+        public static void handle(CharacterListS2C msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(
+                            net.minecraftforge.api.distmarker.Dist.CLIENT,
+                            () -> () -> com.ccnrcom.rp.client.ClientPacketHandlers.onCharacterList(msg.payload)));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    public static final class CharacterUpdateS2C {
+        public final JsonObject data;
+
+        public CharacterUpdateS2C(JsonObject data) {
+            this.data = data;
+        }
+
+        public CharacterUpdateS2C(FriendlyByteBuf buf) {
+            this(com.ccnrcom.rp.util.JsonUtil.GSON.fromJson(buf.readUtf(262144), JsonObject.class));
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(data.toString(), 262144);
+        }
+
+        public static void handle(CharacterUpdateS2C msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(
+                            net.minecraftforge.api.distmarker.Dist.CLIENT,
+                            () -> () -> com.ccnrcom.rp.client.ClientPacketHandlers.onCharacterUpdate(msg.data)));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    public static final class CharacterRemoveS2C {
+        public final String charId;
+
+        public CharacterRemoveS2C(String charId) {
+            this.charId = charId;
+        }
+
+        public CharacterRemoveS2C(FriendlyByteBuf buf) {
+            this(buf.readUtf(256));
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(charId, 256);
+        }
+
+        public static void handle(CharacterRemoveS2C msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(
+                            net.minecraftforge.api.distmarker.Dist.CLIENT,
+                            () -> () -> com.ccnrcom.rp.client.ClientPacketHandlers.onCharacterRemove(msg.charId)));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    public static final class SkinSyncS2C {
+        public final String charId;
+        public final byte[] data;
+        public final String hash;
+
+        public SkinSyncS2C(String charId, byte[] data, String hash) {
+            this.charId = charId;
+            this.data = data;
+            this.hash = hash;
+        }
+
+        public SkinSyncS2C(FriendlyByteBuf buf) {
+            this(buf.readUtf(256), buf.readByteArray(), buf.readUtf(128));
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(charId, 256);
+            buf.writeByteArray(data);
+            buf.writeUtf(hash, 128);
+        }
+
+        public static void handle(SkinSyncS2C msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(
+                            net.minecraftforge.api.distmarker.Dist.CLIENT,
+                            () -> () -> com.ccnrcom.rp.client.ClientPacketHandlers.onSkinSync(
+                                    msg.charId, msg.data, msg.hash)));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    public static final class ErrorS2C {
+        public final String messageKey;
+        public final String[] args;
+
+        public ErrorS2C(String messageKey, String... args) {
+            this.messageKey = messageKey;
+            this.args = args;
+        }
+
+        public ErrorS2C(FriendlyByteBuf buf) {
+            this(buf.readUtf(128), readArgs(buf));
+        }
+
+        private static String[] readArgs(FriendlyByteBuf buf) {
+            int n = buf.readVarInt();
+            String[] out = new String[Math.min(n, 16)];
+            for (int i = 0; i < out.length; i++) {
+                out[i] = buf.readUtf(512);
+            }
+            return out;
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(messageKey, 128);
+            buf.writeVarInt(args.length);
+            for (String a : args) {
+                buf.writeUtf(a, 512);
+            }
+        }
+
+        public static void handle(ErrorS2C msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(
+                            net.minecraftforge.api.distmarker.Dist.CLIENT,
+                            () -> () -> com.ccnrcom.rp.client.ClientPacketHandlers.onError(msg.messageKey, msg.args)));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+}
