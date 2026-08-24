@@ -327,6 +327,31 @@ public final class RpPackets {
     }
 
     /** 经验/等级更新（owner 定向）。 */
+    /** 动画播放（客户端执行序列）。 */
+    public static final class AnimationPlayS2C {
+        public final String payload;
+
+        public AnimationPlayS2C(String payload) {
+            this.payload = payload;
+        }
+
+        public AnimationPlayS2C(FriendlyByteBuf buf) {
+            this(buf.readUtf(65536));
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(payload, 65536);
+        }
+
+        public static void handle(AnimationPlayS2C msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(
+                            net.minecraftforge.api.distmarker.Dist.CLIENT,
+                            () -> () -> com.ccnrcom.rp.client.ClientPacketHandlers.onAnimation(msg.payload)));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
     public static final class XpUpdateS2C {
         public final String charId;
         public final long xp;

@@ -42,6 +42,8 @@ public class CCNRRPMod {
     public static com.ccnrcom.rp.event.EventManager eventManager;
     /** 刷新框架（P8 完整实现；P6 起为占位）。 */
     public static com.ccnrcom.rp.spawn.SpawnFramework spawnFramework;
+    /** 动画引擎（P7）。 */
+    public static com.ccnrcom.rp.animation.AnimationEngine animationEngine;
 
     public CCNRRPMod() {
         ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, CCNRRPConfig.SPEC);
@@ -72,6 +74,7 @@ public class CCNRRPMod {
         experience = new com.ccnrcom.rp.experience.ExperienceService(event.getServer());
         MinecraftForge.EVENT_BUS.register(experience);
         spawnFramework = new com.ccnrcom.rp.spawn.SpawnFramework(event.getServer());
+        animationEngine = new com.ccnrcom.rp.animation.AnimationEngine();
         eventManager = new com.ccnrcom.rp.event.EventManager(event.getServer());
         MinecraftForge.EVENT_BUS.register(eventManager);
         LOGGER.info(
@@ -103,6 +106,7 @@ public class CCNRRPMod {
             MinecraftForge.EVENT_BUS.unregister(eventManager);
         }
         eventManager = null;
+        animationEngine = null;
         spawnFramework = null;
         experience = null;
         statusManager = null;

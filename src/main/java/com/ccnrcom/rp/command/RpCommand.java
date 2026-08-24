@@ -28,6 +28,7 @@ public final class RpCommand {
         StateCommand.register(rp);
         XpCommand.register(rp);
         EventCommand.register(rp);
+        AnimationCommand.register(rp);
         rpNode = rp;
     }
 

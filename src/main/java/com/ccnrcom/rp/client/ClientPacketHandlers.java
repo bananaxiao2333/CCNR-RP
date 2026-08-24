@@ -33,6 +33,10 @@ public final class ClientPacketHandlers {
         CharacterManagementScreen.refreshIfOpen();
     }
 
+    public static void onAnimation(String payload) {
+        ClientAnimationPlayer.play(payload);
+    }
+
     public static void onXp(String charId, long xp, int level) {
         ClientCharacterState.setXp(charId, xp, level);
         CharacterManagementScreen.refreshIfOpen();
