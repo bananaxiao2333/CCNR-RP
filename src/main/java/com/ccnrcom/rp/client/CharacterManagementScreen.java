@@ -66,6 +66,13 @@ public class CharacterManagementScreen extends Screen {
         }
     }
 
+    /** 动画/部署开场时关闭角色面板（主线程调用）。 */
+    public static void closeIfOpen() {
+        if (open != null) {
+            open.onClose();
+        }
+    }
+
     // ---------- 容器 ----------
 
     @Override
@@ -102,9 +109,11 @@ public class CharacterManagementScreen extends Screen {
         closeY1 = hdrY1 - 1;
         closeX2 = px2 - 10;
         closeY2 = hdrY1 + 17;
-        mgrX1 = px2 - 76;
+        // 管理按钮置于 CCNR:NET 页眉左侧，避免重叠
+        String net = Component.translatable("ccnr_rp.gui.character.net_header").getString();
+        mgrX2 = px2 - 8 - font.width(net) - 26;
+        mgrX1 = mgrX2 - 46;
         mgrY1 = hdrY1 - 1;
-        mgrX2 = px2 - 36;
         mgrY2 = hdrY1 + 17;
         rebuild();
     }

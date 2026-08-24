@@ -45,6 +45,7 @@ public final class ClientPacketHandlers {
     }
 
     public static void onAnimation(String payload) {
+        CharacterManagementScreen.closeIfOpen();
         ClientAnimationPlayer.play(payload);
     }
 
@@ -58,6 +59,7 @@ public final class ClientPacketHandlers {
     }
 
     public static void onCinematic(String payload) {
+        CharacterManagementScreen.closeIfOpen();
         try {
             CinematicController.start(com.ccnrcom.rp.util.JsonUtil.GSON.fromJson(payload, JsonObject.class));
         } catch (Exception ignored) {
