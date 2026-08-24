@@ -59,6 +59,9 @@ public class RpAdminScreen extends Screen {
     private EditBox fld2Box;
     private EditBox fld3Box;
     private EditBox fld4Box;
+    /** 输入框上方用途标签（x, y, key/raw text），rebuild 时清空重填。 */
+    private final List<Object[]> fieldLabels = new ArrayList<>();
+
     private boolean evState = true;
     private boolean endSettle = true;
     private int modeIdx = 0;
@@ -116,6 +119,7 @@ public class RpAdminScreen extends Screen {
     private void rebuild() {
         clearWidgets();
         rowBounds.clear();
+        fieldLabels.clear();
         int tabW = Math.min(88, (px2 - px1 - 30) / 7);
         int tx = px1 + 12;
         for (int i = 0; i < 7; i++) {
@@ -183,7 +187,7 @@ public class RpAdminScreen extends Screen {
         String id = ev == null ? "" : str(ev, "id");
         boolean edit = !id.isBlank();
         idBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.id", id, !edit);
-        y += 22;
+        y += 30;
         boolean enabled = ev == null || !ev.has("enabled") || ev.get("enabled").getAsBoolean();
         addRenderableWidget(
                 RpButton.secondary(x, y, (w - 4) / 2, 18, Component.literal("启用: " + (enabled ? "是" : "否")), b -> {
@@ -198,7 +202,7 @@ public class RpAdminScreen extends Screen {
                     endSettle = !endSettle;
                     rebuild();
                 }));
-        y += 22;
+        y += 30;
         fld3Box = mkBox(x, y, w, "时长(秒,0=事件持续时间)", ev == null ? "0" : num(ev, "durationSeconds", 0), false);
         y += 30;
         actionRow(x, y, w, edit);
@@ -212,9 +216,9 @@ public class RpAdminScreen extends Screen {
         String id = ph == null ? "" : str(ph, "id");
         boolean edit = !id.isBlank();
         idBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.id", id, !edit);
-        y += 22;
+        y += 30;
         fld2Box = mkBox(x, y, w, "顺序 order", ph == null ? "0" : num(ph, "order", 0), false);
-        y += 22;
+        y += 30;
         fld3Box = mkBox(x, y, w, "时长(分钟)", ph == null ? "30" : num(ph, "durationMinutes", 30), false);
         y += 30;
         actionRow(x, y, w, edit);
@@ -228,7 +232,7 @@ public class RpAdminScreen extends Screen {
         String id = seq == null ? "" : str(seq, "id");
         boolean edit = !id.isBlank();
         idBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.id", id, !edit);
-        y += 22;
+        y += 30;
         // 步骤操作行
         int bw4 = Math.max(56, (w - 12) / 4);
         addRenderableWidget(RpButton.secondary(x, y, bw4, 18, Component.literal("+ 步骤"), b -> {
@@ -281,24 +285,24 @@ public class RpAdminScreen extends Screen {
                         stepRandom = !stepRandom;
                         rebuild();
                     }));
-            y += 22;
+            y += 30;
             fld2Box = mkBox(x, y, bw2, "数量", valueOr(seqStep(), "count", "5"), false);
             fld3Box = mkBox(x + bw2 + 4, y, bw2, "职业ID(逗号)", valueOr(seqStep(), "professions", ""), false);
-            y += 22;
+            y += 30;
             fld4Box = mkBox(x, y, w, "阵营ID", valueOr(seqStep(), "faction", ""), false);
-            y += 22;
+            y += 30;
             addRenderableWidget(
                     RpButton.primary(x, y, w, 18, Component.literal("刷新: " + (stepSpawn ? "是" : "否")), b -> {
                         stepSpawn = !stepSpawn;
                         rebuild();
                     }));
         } else if ("WAIT".equals(type)) {
-            fld2Box = mkBox(x, y + 22, w, "等待秒数", valueOr(seqStep(), "seconds", "10"), false);
+            fld2Box = mkBox(x, y + 30, w, "等待秒数", valueOr(seqStep(), "seconds", "10"), false);
         } else if ("WAVE".equals(type)) {
-            fld2Box = mkBox(x, y + 22, w, "刷新波ID", valueOr(seqStep(), "wave", ""), false);
+            fld2Box = mkBox(x, y + 30, w, "刷新波ID", valueOr(seqStep(), "wave", ""), false);
         } else {
             fld2Box = mkBox(
-                    x, y + 22, w, "命令文本（可用 {{event}} {{phase}} {{seq}} 变量）", valueOr(seqStep(), "command", ""), false);
+                    x, y + 30, w, "命令文本（可用 {{event}} {{phase}} {{seq}} 变量）", valueOr(seqStep(), "command", ""), false);
         }
         y += 50;
         actionRow(x, y, w, edit);
@@ -371,7 +375,7 @@ public class RpAdminScreen extends Screen {
         String id = wv == null ? "" : str(wv, "id");
         boolean edit = !id.isBlank();
         idBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.id", id, !edit);
-        y += 22;
+        y += 30;
         int bw2 = (w - 4) / 2;
         addRenderableWidget(RpButton.secondary(x, y, bw2, 18, Component.literal("模式: " + Modes[modeIdx]), b -> {
             modeIdx = (modeIdx + 1) % Modes.length;
@@ -382,18 +386,18 @@ public class RpAdminScreen extends Screen {
                     deployIdx = (deployIdx + 1) % DeployTypes.length;
                     rebuild();
                 }));
-        y += 22;
+        y += 30;
         fld2Box = mkBox(x, y, bw2, "数量", wv == null ? "1" : num(wv, "count", 1), false);
         fld3Box = mkBox(x + bw2 + 4, y, bw2, "最低等级", wv == null ? "0" : num(wv, "minLevel", 0), false);
-        y += 22;
+        y += 30;
         fld4Box = mkBox(x, y, w, "招募时限(秒)", wv == null ? "60" : num(wv, "recruitTimeoutSeconds", 60), false);
-        y += 22;
+        y += 30;
         profileBox = mkBox(x, y, w, "坐标 x y z（POS 时用）", wv == null ? "" : posStr(wv), false);
-        y += 22;
+        y += 30;
         nameBox =
                 mkBox(x, y, bw2, "维度(minecraft:overworld)", wv == null ? "minecraft:overworld" : str(wv, "dim"), false);
         colorBox = mkBox(x + bw2 + 4, y, bw2, "队伍ID(逗号)", csv(wv, "teamIds"), false);
-        y += 22;
+        y += 30;
         descBox = mkBox(x, y, bw2, "职业ID(逗号)", csv(wv, "professionIds"), false);
         musicBox = mkBox(x + bw2 + 4, y, bw2, "阵营ID(逗号)", csv(wv, "factionIds"), false);
         y += 30;
@@ -640,9 +644,9 @@ public class RpAdminScreen extends Screen {
         String id = prof == null ? "" : str(prof, "id");
         boolean edit = !id.isBlank();
         idBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.id", id, !edit);
-        y += 22;
+        y += 30;
         nameBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.name", prof == null ? "" : str(prof, "name"), false);
-        y += 22;
+        y += 30;
         int bw2 = (w - 4) / 2;
         addRenderableWidget(RpButton.secondary(x, y, bw2, 18, Component.literal(factionCycleLabel()), b -> {
             factionIdx = (factionIdx + 1)
@@ -661,9 +665,9 @@ public class RpAdminScreen extends Screen {
                     selfDeploy = !selfDeploy;
                     rebuild();
                 }));
-        y += 22;
+        y += 30;
         musicBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.music", prof == null ? "" : str(prof, "music"), false);
-        y += 22;
+        y += 30;
         profileBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.profile", prof == null ? "" : str(prof, "profile"), false);
         y += 30;
         int bw3 = Math.max(60, w / 4);
@@ -736,11 +740,11 @@ public class RpAdminScreen extends Screen {
         String id = fac == null ? "" : str(fac, "id");
         boolean edit = !id.isBlank();
         idBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.id", id, !edit);
-        y += 22;
+        y += 30;
         nameBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.name", fac == null ? "" : str(fac, "name"), false);
-        y += 22;
+        y += 30;
         colorBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.color", fac == null ? "#FFFFFF" : str(fac, "color"), false);
-        y += 22;
+        y += 30;
         int bw2 = (w - 4) / 2;
         addRenderableWidget(RpButton.secondary(x, y, bw2, 18, Component.literal("图标: " + ICONS[iconIdx]), b -> {
             iconIdx = (iconIdx + 1) % ICONS.length;
@@ -751,7 +755,7 @@ public class RpAdminScreen extends Screen {
                     tierIdx = (tierIdx + 1) % 3;
                     rebuild();
                 }));
-        y += 22;
+        y += 30;
         descBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.desc", fac == null ? "" : str(fac, "description"), false);
         y += 30;
         int bw3 = Math.max(60, w / 4);
@@ -806,7 +810,18 @@ public class RpAdminScreen extends Screen {
         box.setTextColor(RpTheme.CYAN);
         box.setEditable(!locked);
         addRenderableWidget(box);
+        fieldLabels.add(new Object[] {x, y - 10, key});
         return box;
+    }
+
+    /** 绘制所有输入框上方的用途标签（lang key 直接翻译；其余为原始文本）。 */
+    private void renderFieldLabels(GuiGraphics g) {
+        for (Object[] l : fieldLabels) {
+            String key = (String) l[2];
+            String text =
+                    key.startsWith("ccnr_rp.") ? Component.translatable(key).getString() : key;
+            g.drawString(font, text, (Integer) l[0], (Integer) l[1], RpTheme.TEXT_DIM, false);
+        }
     }
 
     private static JsonObject payload() {
@@ -1072,6 +1087,7 @@ public class RpAdminScreen extends Screen {
         if (tab == TAB_SEQUENCE) {
             renderSequenceSteps(g, mouseX, mouseY);
         }
+        renderFieldLabels(g);
         if (!notice.isBlank()) {
             g.drawCenteredString(font, "[ 系统 ] " + notice, (px1 + px2) / 2, py2 - 46, RpTheme.RED_LINE);
         }
