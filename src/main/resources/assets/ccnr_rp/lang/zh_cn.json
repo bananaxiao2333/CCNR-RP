@@ -158,6 +158,7 @@
   "ccnr_rp.gui.admin.setting.hud_health.desc": "开=文字百分比；关=百分比进度条（绿/黄/红）",
   "ccnr_rp.gui.character.manage": "管理",
   "ccnr_rp.gui.character.retire": "转生/退役",
+  "ccnr_rp.gui.character.panel_locked": "存活角色无法打开角色面板（仅观察者可用；需死亡后经复活波返回）",
   "ccnr_rp.character.retire.ok": "角色 %s 已退役（判定死亡，遗体保留）",
   "ccnr_rp.spawn.deployed": "角色 %s 已部署",
   "ccnr_rp.relation.hostile": "敌对",
