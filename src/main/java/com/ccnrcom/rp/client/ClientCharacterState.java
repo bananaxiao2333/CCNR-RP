@@ -95,6 +95,14 @@ public final class ClientCharacterState {
         selected = charId;
     }
 
+    public static synchronized void setXp(String charId, long xp, int level) {
+        JsonObject c = find(charId);
+        if (c != null) {
+            c.addProperty("xp", xp);
+            c.addProperty("level", level);
+        }
+    }
+
     public static synchronized void clear() {
         characters.clear();
         selected = "";

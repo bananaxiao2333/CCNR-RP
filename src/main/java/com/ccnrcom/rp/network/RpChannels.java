@@ -87,6 +87,11 @@ public final class RpChannels {
                 .decoder(RpPackets.SkinSyncS2C::new)
                 .consumerNetworkThread(RpPackets.SkinSyncS2C::handle)
                 .add();
+        CHANNEL.messageBuilder(RpPackets.XpUpdateS2C.class, id++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(RpPackets.XpUpdateS2C::encode)
+                .decoder(RpPackets.XpUpdateS2C::new)
+                .consumerNetworkThread(RpPackets.XpUpdateS2C::handle)
+                .add();
         CHANNEL.messageBuilder(RpPackets.ErrorS2C.class, id++, NetworkDirection.PLAY_TO_CLIENT)
                 .encoder(RpPackets.ErrorS2C::encode)
                 .decoder(RpPackets.ErrorS2C::new)

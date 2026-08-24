@@ -67,5 +67,11 @@
   "ccnr_rp.status.killed.offline": "%s 掉线已被判定死亡",
   "ccnr_rp.status.error.no_alive": "你没有存活角色可判死",
   "ccnr_rp.command.kill.ok": "%s 已判死（含遗体与冷却）",
-  "ccnr_rp.command.state.header": "%s 的角色状态："
+  "ccnr_rp.command.state.header": "%s 的角色状态：",
+  "ccnr_rp.xp.settle.result": "%s 结算：+%s XP（值班 %s / 任务 %s / 疏散 %s）→ 总 %s，等级 %s",
+  "ccnr_rp.xp.settle.all": "已完成 %s 个角色的结算",
+  "ccnr_rp.xp.info": "%s | 经验 %s | 等级 %s",
+  "ccnr_rp.xp.level.info": "%s | 等级 %s",
+  "ccnr_rp.xp.error.method": "无效疏散方式: %s（SAFE_RESCUE/DIED/OBSERVING_END/STAY_BEHIND）",
+  "ccnr_rp.xp.evac.set": "已设置 %s 的疏散方式: %s"
 }
