@@ -8,7 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.client.gui.GuiGraphics;
 
-/** 屏幕右侧招募列表（HUD 覆盖层）：条目 + 倒计时条 + 皮肤头像。点击操作由 RecruitPopupScreen 承担。 */
+/** 屏幕右侧招募列表（HUD 覆盖层 v2）：圆角卡片 + 进度条。点击操作由 RecruitPopupScreen 承担。 */
 public final class RecruitOverlayHud {
     public static final List<OfferEntry> OFFERS = new ArrayList<>();
 
@@ -17,7 +17,8 @@ public final class RecruitOverlayHud {
     public static void add(
             String offerId, String charId, String charName, String professionId, int initialTicks, String waveId) {
         OFFERS.removeIf(o -> o.offerId().equals(offerId));
-        OFFERS.add(new OfferEntry(offerId, charId, charName, professionId, initialTicks, waveId));
+        OFFERS.add(new OfferEntry(
+                offerId, charId, charName, professionId, initialTicks, waveId, System.currentTimeMillis()));
     }
 
     public static void remove(String offerId) {
@@ -33,29 +34,44 @@ public final class RecruitOverlayHud {
     }
 
     public record OfferEntry(
-            String offerId, String charId, String charName, String professionId, int initialTicks, String waveId) {}
+            String offerId,
+            String charId,
+            String charName,
+            String professionId,
+            int initialTicks,
+            String waveId,
+            long receivedAt) {}
 
-    /** 渲染（每 tick 由 overlay 调用；剩余比例近似用时间戳——由入口记录）。 */
     public static void render(GuiGraphics gfx, int width, int height) {
         if (OFFERS.isEmpty()) {
             return;
         }
-        int x = width - 130;
-        int y = height / 2 - 80;
+        int x = width - 128;
+        int y = height / 2 - 90;
         for (OfferEntry o : OFFERS) {
-            int w = 122;
-            int h = 36;
-            gfx.fill(x, y, x + w, y + h, 0xAA202020);
-            if (o.charId != null && net.minecraft.client.Minecraft.getInstance().getConnection() != null) {
-                var tex = SkinCache.textureOrNull(o.charId);
-                if (tex != null) {
-                    gfx.blit(tex, x + 3, y + 3, 30, 30, 0, 0, 32, 32, 32, 32);
-                }
+            int w = 120;
+            int h = 44;
+            RpRoundRect.fill(gfx, x, y, x + w, y + h, 8f, 0xEE1E1E22);
+            RpRoundRect.fill(gfx, x, y, x + 3, y + h, 8f, RpTheme.ACCENT);
+            var tex = SkinCache.textureOrNull(o.charId());
+            if (tex != null) {
+                gfx.blit(tex, x + 7, y + 6, 32, 32, 0, 0, 32, 32, 32, 32);
             }
-            gfx.drawString(net.minecraft.client.Minecraft.getInstance().font, o.charName, x + 38, y + 4, 0xFFFFFF);
-            gfx.drawString(net.minecraft.client.Minecraft.getInstance().font, o.professionId, x + 38, y + 16, 0xCCCCCC);
-            // 倒计时条（简化：固定显示 offer 剩余轮廓）
-            gfx.fill(x, y + h - 4, x + w, y + h, 0xFF2F6BFF);
+            gfx.drawString(
+                    net.minecraft.client.Minecraft.getInstance().font,
+                    o.charName(),
+                    x + 44,
+                    y + 8,
+                    RpTheme.TEXT_PRIMARY);
+            gfx.drawString(
+                    net.minecraft.client.Minecraft.getInstance().font,
+                    o.professionId(),
+                    x + 44,
+                    y + 21,
+                    RpTheme.TEXT_SECONDARY);
+            long remain = Math.max(0, o.initialTicks() - (System.currentTimeMillis() - o.receivedAt()) / 50);
+            int fill = (int) (w * (float) Math.min(o.initialTicks(), remain) / Math.max(1, o.initialTicks()));
+            gfx.fill(x, y + h - 3, x + fill, y + h, RpTheme.ACCENT);
             y += h + 6;
         }
     }

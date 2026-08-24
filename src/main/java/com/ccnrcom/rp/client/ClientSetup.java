@@ -31,6 +31,11 @@ public final class ClientSetup {
     private ClientSetup() {}
 
     @SubscribeEvent
+    public static void registerShaders(net.minecraftforge.client.event.RegisterShadersEvent event) {
+        RpRoundRect.registerShaders(event);
+    }
+
+    @SubscribeEvent
     public static void registerKeys(RegisterKeyMappingsEvent event) {
         event.register(OPEN_CHARACTERS);
     }
