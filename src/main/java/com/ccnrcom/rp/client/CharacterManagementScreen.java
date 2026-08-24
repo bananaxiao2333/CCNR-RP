@@ -164,10 +164,13 @@ public class CharacterManagementScreen extends Screen {
         addW(backgroundBox);
         addW(RpButton.secondary(x + w / 2, fy + 34, w / 2, 18, Component.literal(professionLabel()), b -> {
             List<String> list = matchingProfessions();
-            if (!list.isEmpty()) {
-                professionIndex = (professionIndex + 1) % list.size();
+            if (list.isEmpty()) {
+                notice("ccnr_rp.gui.character.profession.empty");
                 rebuild();
+                return;
             }
+            professionIndex = (professionIndex + 1) % list.size();
+            rebuild();
         }));
         addW(RpButton.secondary(x, fy + 34, w / 2, 18, Component.literal(factionLabel()), b -> {
             if (!factionIds.isEmpty()) {
@@ -243,7 +246,7 @@ public class CharacterManagementScreen extends Screen {
 
     private String professionLabel() {
         List<String> list = matchingProfessions();
-        return list.isEmpty() ? "?" : "职业: " + list.get(Math.min(professionIndex, list.size() - 1));
+        return list.isEmpty() ? "职业: (暂无配置)" : "职业: " + list.get(Math.min(professionIndex, list.size() - 1));
     }
 
     @Override

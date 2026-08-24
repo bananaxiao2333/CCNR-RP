@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "events": [
+    {"id": "evac_alert", "enabled": true,
+     "triggers": [{"type": "ON_PHASE_START", "phase": "danger"}],
+     "tasks": [{"id": "evacuate_zone", "xp": 50}],
+     "hooks": {"startAnimation": "event_start_alarm", "spawnWave": "wave_qdf_reinforce"},
+     "durationSeconds": 0,
+     "settleOnEnd": true}
+  ]
+}
