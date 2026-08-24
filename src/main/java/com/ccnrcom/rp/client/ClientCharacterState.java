@@ -20,6 +20,9 @@ public final class ClientCharacterState {
     private static JsonObject settings = new JsonObject();
     private static boolean isAdmin = false;
     private static boolean autoOpenPending = false;
+    private static final List<JsonObject> managerEvents = new ArrayList<>();
+    private static final List<JsonObject> managerPhases = new ArrayList<>();
+    private static final List<JsonObject> managerWaves = new ArrayList<>();
 
     private ClientCharacterState() {}
 
@@ -140,7 +143,36 @@ public final class ClientCharacterState {
             settings = root.getAsJsonObject("settings");
         }
         isAdmin = root.has("admin") && root.get("admin").getAsBoolean();
+        managerEvents.clear();
+        managerPhases.clear();
+        managerWaves.clear();
+        copyArray(root, "events", managerEvents);
+        copyArray(root, "phases", managerPhases);
+        copyArray(root, "waves", managerWaves);
         CharacterManagementScreen.refreshIfOpen();
+        RpAdminScreen.refreshIfOpen();
+    }
+
+    private static void copyArray(JsonObject root, String key, List<JsonObject> out) {
+        if (root.has(key) && root.get(key).isJsonArray()) {
+            for (JsonElement e : root.getAsJsonArray(key)) {
+                if (e.isJsonObject()) {
+                    out.add(e.getAsJsonObject());
+                }
+            }
+        }
+    }
+
+    public static synchronized List<JsonObject> managerEvents() {
+        return List.copyOf(managerEvents);
+    }
+
+    public static synchronized List<JsonObject> managerPhases() {
+        return List.copyOf(managerPhases);
+    }
+
+    public static synchronized List<JsonObject> managerWaves() {
+        return List.copyOf(managerWaves);
     }
 
     /** 消耗入服自动打开面板标记（仅一次）。 */
