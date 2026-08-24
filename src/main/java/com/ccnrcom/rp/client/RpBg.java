@@ -15,7 +15,7 @@ import net.minecraft.resources.ResourceLocation;
 public final class RpBg {
 
     private static final ResourceLocation LOGO = new ResourceLocation("ccnr_rp", "textures/gui/bg_logo.png");
-    private static final float ALPHA = 0.28f;
+    private static final float ALPHA = 0.38f;
 
     private RpBg() {}
 
@@ -26,8 +26,8 @@ public final class RpBg {
         if (pw <= 0 || ph <= 0) {
             return;
         }
-        // 等比：按高度铺满，居中
-        int size = Math.min(Math.min(pw, ph), 520);
+        // 等比：铺满面板高度，居中
+        int size = Math.min(Math.min(pw, ph) - 24, 620);
         if (size < 40) {
             return;
         }

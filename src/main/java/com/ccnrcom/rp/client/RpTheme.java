@@ -18,11 +18,11 @@ public final class RpTheme {
     public static final int PAD = 8;
 
     // ---- 金属暗底（军事指挥中心 / 机密终端屏幕）----
-    public static final int OVERLAY = 0xF20A0E13;
-    public static final int BG_DEEP = 0xFF070A0E;
-    public static final int PANEL_BG = 0xEE141C22;
-    public static final int PANEL_BG_ALT = 0xFF202C34;
-    public static final int PANEL_BG_EVEN = 0xFF171F25;
+    public static final int OVERLAY = 0xB40A0E13;
+    public static final int BG_DEEP = 0xCC070A0E;
+    public static final int PANEL_BG = 0x99141C22;
+    public static final int PANEL_BG_ALT = 0xB3202C34;
+    public static final int PANEL_BG_EVEN = 0x9B171F25;
     public static final int PANEL_BORDER = 0xFF1A5A66;
     public static final int PANEL_BORDER_BRIGHT = 0xFF2E8FA0;
     public static final int SCANLINE = 0x20000000;
