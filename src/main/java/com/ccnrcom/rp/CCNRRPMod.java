@@ -32,6 +32,8 @@ public class CCNRRPMod {
 
     /** 阵营配置管理器（仅服务端/服务器线程访问；ServerStopping 清空）。 */
     public static FactionManager factions;
+    /** 管理器设置（settings.json：入服规则/强制保留；仅服务端）。 */
+    public static com.ccnrcom.rp.config.ManagerSettings managerSettings;
     /** 角色服务（P3）。 */
     public static CharacterService characters;
     /** 状态管理（P4，注册到 Forge 总线；ServerStopping 注销）。 */
@@ -66,6 +68,7 @@ public class CCNRRPMod {
 
     @SubscribeEvent
     public void onServerAboutToStart(ServerAboutToStartEvent event) {
+        managerSettings = new com.ccnrcom.rp.config.ManagerSettings();
         factions = new FactionManager();
         factions.load();
         characters = new CharacterService(event.getServer());
@@ -116,6 +119,7 @@ public class CCNRRPMod {
         statusManager = null;
         characters = null;
         factions = null;
+        managerSettings = null;
         LOGGER.info("[CCNR-RP] 服务端运行时清理完成");
     }
 }

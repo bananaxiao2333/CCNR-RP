@@ -117,6 +117,26 @@ public final class RpChannels {
                 .decoder(RpPackets.CharacterDeployC2S::new)
                 .consumerNetworkThread(RpPackets.CharacterDeployC2S::handle)
                 .add();
+        CHANNEL.messageBuilder(RpPackets.CharacterRetireC2S.class, id++, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(RpPackets.CharacterRetireC2S::encode)
+                .decoder(RpPackets.CharacterRetireC2S::new)
+                .consumerNetworkThread(RpPackets.CharacterRetireC2S::handle)
+                .add();
+        CHANNEL.messageBuilder(RpPackets.ManagerRequestC2S.class, id++, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(RpPackets.ManagerRequestC2S::encode)
+                .decoder(RpPackets.ManagerRequestC2S::new)
+                .consumerNetworkThread(RpPackets.ManagerRequestC2S::handle)
+                .add();
+        CHANNEL.messageBuilder(RpPackets.ManagerSetC2S.class, id++, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(RpPackets.ManagerSetC2S::encode)
+                .decoder(RpPackets.ManagerSetC2S::new)
+                .consumerNetworkThread(RpPackets.ManagerSetC2S::handle)
+                .add();
+        CHANNEL.messageBuilder(RpPackets.ManagerStateS2C.class, id++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(RpPackets.ManagerStateS2C::encode)
+                .decoder(RpPackets.ManagerStateS2C::new)
+                .consumerNetworkThread(RpPackets.ManagerStateS2C::handle)
+                .add();
         CHANNEL.messageBuilder(RpPackets.ErrorS2C.class, id++, NetworkDirection.PLAY_TO_CLIENT)
                 .encoder(RpPackets.ErrorS2C::encode)
                 .decoder(RpPackets.ErrorS2C::new)

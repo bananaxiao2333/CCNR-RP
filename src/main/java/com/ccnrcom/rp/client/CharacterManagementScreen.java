@@ -54,6 +54,7 @@ public class CharacterManagementScreen extends Screen {
     private int rlX1, rlX2;
     private int pvY1, pvY2, pvX1, pvX2;
     private int closeX1, closeY1, closeX2, closeY2;
+    private int mgrX1, mgrY1, mgrX2, mgrY2;
 
     public CharacterManagementScreen() {
         super(Component.translatable("ccnr_rp.gui.character.title"));
@@ -101,6 +102,10 @@ public class CharacterManagementScreen extends Screen {
         closeY1 = hdrY1 - 1;
         closeX2 = px2 - 10;
         closeY2 = hdrY1 + 17;
+        mgrX1 = px2 - 76;
+        mgrY1 = hdrY1 - 1;
+        mgrX2 = px2 - 36;
+        mgrY2 = hdrY1 + 17;
         rebuild();
     }
 
@@ -159,7 +164,9 @@ public class CharacterManagementScreen extends Screen {
         // 操作行
         int ay = pvY2 + 6;
         if (c != null) {
-            int bw = Math.max(44, (w - 4 * 4) / 5);
+            boolean retain = ClientCharacterState.settingBool("forceRetain", true);
+            int n = retain ? 6 : 5;
+            int bw = Math.max(40, (w - (n - 1) * 4) / n);
             addW(RpButton.primary(x, ay, bw, 20, Component.translatable("ccnr_rp.gui.character.activate"), b -> {
                 RpChannels.sendToServer(new RpPackets.CharacterActivateC2S(selectedId));
                 notice("");
@@ -184,6 +191,15 @@ public class CharacterManagementScreen extends Screen {
                         RpChannels.sendToServer(new RpPackets.CharacterDeleteC2S(selectedId));
                         notice("");
                     }));
+            if (retain) {
+                addW(RpButton.danger(
+                        x + (bw + 4) * 5,
+                        ay,
+                        bw,
+                        20,
+                        Component.translatable("ccnr_rp.gui.character.retire"),
+                        b -> RpChannels.sendToServer(new RpPackets.CharacterRetireC2S(selectedId))));
+            }
             // 皮肤上传行
             int sy = ay + 26;
             skinPathBox = new EditBox(
@@ -357,6 +373,10 @@ public class CharacterManagementScreen extends Screen {
             onClose();
             return true;
         }
+        if (mx >= mgrX1 && mx <= mgrX2 && my >= mgrY1 && my <= mgrY2) {
+            net.minecraft.client.Minecraft.getInstance().setScreen(new RpAdminScreen());
+            return true;
+        }
         for (int i = 0; i < navBounds.size(); i++) {
             int[] b = navBounds.get(i);
             if (mx >= b[0] && mx <= b[2] && my >= b[1] && my <= b[3]) {
@@ -449,6 +469,18 @@ public class CharacterManagementScreen extends Screen {
         int nx = px2 - 8 - font.width(net) - 20;
         g.drawString(font, net, nx, y, RpTheme.CYAN, true);
         RpTheme.cornerBrackets(g, nx - 6, hdrY1 + 1, nx + font.width(net) + 6, hdrY2 - 1, 4, RpTheme.CYAN_DIM);
+        // 管理（管理员跳转）
+        boolean mgrHover = mouseIn(mouseX, mouseY, mgrX1, mgrY1, mgrX2, mgrY2);
+        if (mgrHover) {
+            g.fill(mgrX1 - 2, mgrY1 - 1, mgrX2 + 2, mgrY2 + 1, 0x60144A5A);
+        }
+        g.drawString(
+                font,
+                Component.translatable("ccnr_rp.gui.character.manage").getString(),
+                mgrX1 + 2,
+                hdrY1 + 6,
+                ClientCharacterState.isAdmin() ? RpTheme.CYAN : RpTheme.TEXT_DIM,
+                true);
         // 关闭
         boolean hover = mouseIn(mouseX, mouseY, closeX1, closeY1, closeX2, closeY2);
         if (hover) {

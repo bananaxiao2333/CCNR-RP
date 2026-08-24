@@ -500,6 +500,99 @@ public final class RpPackets {
         }
     }
 
+    /** 转生/退役（C2S，强制保留角色）。 */
+    public static final class CharacterRetireC2S {
+        public final String charId;
+
+        public CharacterRetireC2S(String charId) {
+            this.charId = charId;
+        }
+
+        public CharacterRetireC2S(FriendlyByteBuf buf) {
+            this(buf.readUtf(256));
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(charId, 256);
+        }
+
+        public static void handle(CharacterRetireC2S msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> com.ccnrcom.rp.character.CharacterService.onRetire(
+                            ctx.get().getSender(), msg.charId));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    /** 管理器状态请求（C2S，管理员）。 */
+    public static final class ManagerRequestC2S {
+
+        public ManagerRequestC2S() {}
+
+        public ManagerRequestC2S(FriendlyByteBuf buf) {}
+
+        public void encode(FriendlyByteBuf buf) {}
+
+        public static void handle(ManagerRequestC2S msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> com.ccnrcom.rp.character.CharacterService.onManagerRequest(
+                            ctx.get().getSender()));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    /** 管理器设置修改（C2S，管理员）。 */
+    public static final class ManagerSetC2S {
+        public final String key;
+        public final String value;
+
+        public ManagerSetC2S(String key, String value) {
+            this.key = key;
+            this.value = value;
+        }
+
+        public ManagerSetC2S(FriendlyByteBuf buf) {
+            this(buf.readUtf(64), buf.readUtf(16));
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(key, 64);
+            buf.writeUtf(value, 16);
+        }
+
+        public static void handle(ManagerSetC2S msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> com.ccnrcom.rp.character.CharacterService.onManagerSet(
+                            ctx.get().getSender(), msg.key, msg.value));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    /** 管理器状态（S2C）。 */
+    public static final class ManagerStateS2C {
+        public final String payload;
+
+        public ManagerStateS2C(String payload) {
+            this.payload = payload;
+        }
+
+        public ManagerStateS2C(FriendlyByteBuf buf) {
+            this(buf.readUtf(8192));
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(payload, 8192);
+        }
+
+        public static void handle(ManagerStateS2C msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(
+                            net.minecraftforge.api.distmarker.Dist.CLIENT,
+                            () -> () -> com.ccnrcom.rp.client.ClientPacketHandlers.onManagerState(msg.payload)));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
     public static final class ErrorS2C {
         public final String messageKey;
         public final String[] args;

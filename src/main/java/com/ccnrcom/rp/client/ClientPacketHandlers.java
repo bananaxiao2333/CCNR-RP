@@ -53,6 +53,10 @@ public final class ClientPacketHandlers {
         CharacterManagementScreen.refreshIfOpen();
     }
 
+    public static void onManagerState(String payload) {
+        ClientCharacterState.setManager(payload);
+    }
+
     public static void onCinematic(String payload) {
         try {
             CinematicController.start(com.ccnrcom.rp.util.JsonUtil.GSON.fromJson(payload, JsonObject.class));

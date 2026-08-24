@@ -91,6 +91,11 @@ public final class FactionProfessions {
         return str(def, "factionId", "");
     }
 
+    /** 出场音乐（可选）：配置内相对路径（相对 config/ccnr_rp/）或绝对路径；空串=无。 */
+    public static String music(JsonObject def) {
+        return str(def, "music", "");
+    }
+
     public static JsonObject loadout(JsonObject def) {
         return def.has("loadout") && def.get("loadout").isJsonObject()
                 ? def.getAsJsonObject("loadout")

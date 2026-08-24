@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.1.1（职业出场音乐，配置驱动）
+- 新：职业配置新增可选 music 字段（相对 config/ccnr_rp/ 的路径，或绝对路径；WAV 格式）——部署入场电影开始时播放，60 秒后 1.5s 淡出；换职业/再次部署自动切歌。
+- 默认配置新增「设施主管」（行政总部，selfDeploy=true）；真实配置已设 music: audio/de_mulan.wav（《三角洲行动》德穆兰战斗音乐已转 WAV 放入 config/ccnr_rp/audio/）。
+- 音乐不进 jar，全部配置化——管理员换音乐只需替换文件 + 改 professions 的 music 字段。
+
+## 1.1.0（职位划分落地 + CCNR-RP 管理器 + 入服/保留规则）
+- 数据：按《CCNR服务器职位划分.pdf》重建默认配置——8 部门（行政总部T0/麦迪逊M1-M5/区域核能运营部/研发与技术部R1-R5/QDF司令部S1-S5/QSA综合处理小组A1-A3/QSO H1-H2/后勤N1-N3）+ 28 职位，徽章 icon/tier 同步（新增 gear 图标）；真实配置已写入。
+- 新：CCNR-RP 管理器（管理员）——K 面板页眉「管理」入口，服务端权限节点校验（OP≥2），设置实时生效并写入 config/ccnr_rp/settings.json：
+  · 强制观察者入服（入服默认 OB）
+  · 入服默认打开角色面板（选择部署，无存活角色时自动弹出）
+  · 强制保留角色（转生/弃演或离服 → 角色直接判死并留下遗体，档案不删除；关闭后离服不再自动判死）
+- 新：K 面板操作行新增「转生/退役」按钮（强制保留开启时显示）——当前角色判定死亡+遗体落地，档案保留。
+- 说明：旧职业 id（qdf_guard 等）被 PDF 编码 id 取代（s4_guard 等），旧档案显示原始 id，管理员可手动删除重建。
+
 ## 1.0.10（命令提示全量补齐）
 - /rp help 重写：全量列出 9 大子命令完整参数签名（中英文），并新增 /rp help 别名。
 - 所有子命令/叶子节点裸输或缺参时直接打印对应命令用法（faction/profession/character/state/xp/level/evac/settle/event/phase/animation/spawn 全部覆盖）。
