@@ -40,12 +40,13 @@ public final class RpRoundRect {
     }
 
     public static void fill(GuiGraphics g, int x1, int y1, int x2, int y2, float radius, int argb) {
-        ShaderInstance sh = shader;
-        radius = Math.min(radius, Math.min((x2 - x1) / 2f, (y2 - y1) / 2f));
-        if (sh == null || radius <= 0) {
+        // v1.0.5 全局直角模式：忽略圆角，统一走方角矩形（军事终端风格）。
+        radius = 0f;
+        if (radius <= 0) {
             g.fill(x1, y1, x2, y2, argb);
             return;
         }
+        ShaderInstance sh = shader;
         g.flush();
 
         Matrix4f pose = g.pose().last().pose();
