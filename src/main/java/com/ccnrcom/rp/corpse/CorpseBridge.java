@@ -20,8 +20,23 @@ public final class CorpseBridge {
 
     private CorpseBridge() {}
 
+    private static Boolean corpsePresent = null;
+
     public static boolean available() {
-        return ModList.get().isLoaded("corpse");
+        if (corpsePresent == null) {
+            boolean ok = false;
+            try {
+                if (ModList.get().isLoaded("corpse")) {
+                    Class.forName(
+                            "de.maxhenkel.corpse.entities.CorpseEntity", false, CorpseBridge.class.getClassLoader());
+                    ok = true;
+                }
+            } catch (Throwable t) {
+                ok = false;
+            }
+            corpsePresent = ok;
+        }
+        return corpsePresent;
     }
 
     /**
@@ -34,18 +49,28 @@ public final class CorpseBridge {
             return false;
         }
         try {
+            CorpseSpawner.spawn(player);
+            return true;
+        } catch (Throwable t) {
+            LOGGER.error("[CCNR-RP] 遗体生成失败（降级为原生死亡）", t);
+            return false;
+        }
+    }
+
+    /**
+     * 独立内部类：仅此处引用 Corpse 类型。类验证/链接错误发生在 spawnCorpse 的 try 内，
+     * 可被捕获——避免"未装 Corpse 模组时 NoClassDefFoundError 逃逸崩服"。
+     */
+    private static final class CorpseSpawner {
+        static void spawn(ServerPlayer player) {
             if (!(player.level() instanceof ServerLevel level)) {
-                return false;
+                return;
             }
             de.maxhenkel.corpse.corelib.death.Death death = de.maxhenkel.corpse.corelib.death.Death.fromPlayer(player);
             de.maxhenkel.corpse.entities.CorpseEntity corpse =
                     de.maxhenkel.corpse.entities.CorpseEntity.createFromDeath(player, death);
             level.addFreshEntity(corpse);
             LOGGER.info("[CCNR-RP] 已生成遗体: {} @ {}", player.getGameProfile().getName(), player.blockPosition());
-            return true;
-        } catch (Throwable t) {
-            LOGGER.error("[CCNR-RP] 遗体生成失败（降级为原生死亡）", t);
-            return false;
         }
     }
 }

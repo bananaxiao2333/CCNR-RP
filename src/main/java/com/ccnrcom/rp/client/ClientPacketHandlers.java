@@ -17,6 +17,7 @@ public final class ClientPacketHandlers {
     public static void onCharacterList(String payload) {
         ClientCharacterState.setList(payload);
         CharacterManagementScreen.refreshIfOpen();
+        RpAdminScreen.refreshIfOpen();
     }
 
     public static void onCharacterUpdate(JsonObject data) {

@@ -34,7 +34,7 @@ public final class FactionProfessions {
         return out;
     }
 
-    /** 校验并写入（upsert），返回错误列表（空=成功）。 */
+    /** 校验并写入（upsert），返回错误列表（空=成功）。music/profile 为空串时从定义中移除。 */
     public static List<String> upsert(
             JsonObject root,
             String id,
@@ -42,6 +42,8 @@ public final class FactionProfessions {
             String factionId,
             boolean selfDeploy,
             JsonObject loadout,
+            String music,
+            String profile,
             java.util.function.Predicate<String> factionExists) {
         List<String> errors = new ArrayList<>();
         if (id == null || id.isBlank()) {
@@ -58,24 +60,50 @@ public final class FactionProfessions {
         }
         JsonArray profs = root.has("professions") ? root.getAsJsonArray("professions") : new JsonArray();
         root.add("professions", profs);
+        JsonObject picked = null;
         for (int i = 0; i < profs.size(); i++) {
             JsonObject o = profs.get(i).getAsJsonObject();
             if (str(o, "id", "").equals(id)) {
-                o.addProperty("name", name == null || name.isBlank() ? id : name);
-                o.addProperty("factionId", factionId);
-                o.addProperty("selfDeploy", selfDeploy);
-                o.add("loadout", loadout == null ? ProfessionJson.emptyLoadout() : loadout);
-                return List.of();
+                picked = o;
+                break;
             }
         }
-        JsonObject def = new JsonObject();
-        def.addProperty("id", id);
-        def.addProperty("name", name == null || name.isBlank() ? id : name);
-        def.addProperty("factionId", factionId);
-        def.addProperty("selfDeploy", selfDeploy);
-        def.add("loadout", loadout == null ? ProfessionJson.emptyLoadout() : loadout);
-        profs.add(def);
+        if (picked == null) {
+            picked = new JsonObject();
+            picked.addProperty("id", id);
+            profs.add(picked);
+        }
+        picked.addProperty("name", name == null || name.isBlank() ? id : name);
+        picked.addProperty("factionId", factionId);
+        picked.addProperty("selfDeploy", selfDeploy);
+        picked.add("loadout", loadout == null ? ProfessionJson.emptyLoadout() : loadout);
+        if (music != null && !music.isBlank()) {
+            picked.addProperty("music", music);
+        } else {
+            picked.remove("music");
+        }
+        if (profile != null && !profile.isBlank()) {
+            picked.addProperty("profile", profile);
+        } else {
+            picked.remove("profile");
+        }
         return List.of();
+    }
+
+    /** 删除职业定义（root 就地修改）；返回是否找到并删除。 */
+    public static boolean delete(JsonObject root, String id) {
+        JsonArray profs = root.has("professions") ? root.getAsJsonArray("professions") : null;
+        if (profs == null) {
+            return false;
+        }
+        for (int i = 0; i < profs.size(); i++) {
+            if (profs.get(i).isJsonObject()
+                    && str(profs.get(i).getAsJsonObject(), "id", "").equals(id)) {
+                profs.remove(i);
+                return true;
+            }
+        }
+        return false;
     }
 
     /** 常见于命令回显的稳定名称。 */
@@ -94,6 +122,11 @@ public final class FactionProfessions {
     /** 出场音乐（可选）：配置内相对路径（相对 config/ccnr_rp/）或绝对路径；空串=无。 */
     public static String music(JsonObject def) {
         return str(def, "music", "");
+    }
+
+    /** 项目简历（可选）：职业档案简介，入场电影/档案卡展示用。 */
+    public static String profile(JsonObject def) {
+        return str(def, "profile", "");
     }
 
     public static JsonObject loadout(JsonObject def) {
