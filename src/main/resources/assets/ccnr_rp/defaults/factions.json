@@ -25,7 +25,7 @@
     {"id": "hq_vp", "name": "量子科学副总裁", "factionId": "admin_hq", "selfDeploy": false, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
     {"id": "hq_dept_manager", "name": "部门主管", "factionId": "admin_hq", "selfDeploy": false, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
     {"id": "hq_admin_chief", "name": "行政总管", "factionId": "admin_hq", "selfDeploy": false, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
-    {"id": "facility_manager", "name": "设施主管", "factionId": "admin_hq", "selfDeploy": true, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
+    {"id": "facility_manager", "name": "设施主管", "factionId": "admin_hq", "selfDeploy": true, "loadout": {"inventory": [], "armor": [], "offhand": {}}, "profile": "设施整体运营、安保协调与权限审批；直接对接行政总部。"},
     {"id": "m1_master", "name": "研究所主管", "factionId": "madison", "selfDeploy": false, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
     {"id": "m2_chief_engineer", "name": "反应堆首席工程师", "factionId": "madison", "selfDeploy": false, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
     {"id": "m3_senior_researcher", "name": "高级研究员", "factionId": "madison", "selfDeploy": true, "loadout": {"inventory": [], "armor": [], "offhand": {}}},

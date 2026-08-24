@@ -208,9 +208,21 @@ public final class FactionManager {
     /** 职业定义管理（P2，读写同一个 factions.json）。 */
     public List<String> upsertProfession(
             String id, String name, String factionId, boolean selfDeploy, com.google.gson.JsonObject loadout) {
+        return upsertProfession(id, name, factionId, selfDeploy, loadout, "", "");
+    }
+
+    /** 职业定义管理（含出场音乐与项目简历）。 */
+    public List<String> upsertProfession(
+            String id,
+            String name,
+            String factionId,
+            boolean selfDeploy,
+            com.google.gson.JsonObject loadout,
+            String music,
+            String profile) {
         JsonObject candidate = root.deepCopy();
-        List<String> errors =
-                FactionProfessions.upsert(candidate, id, name, factionId, selfDeploy, loadout, f -> graph.factions()
+        List<String> errors = FactionProfessions.upsert(
+                candidate, id, name, factionId, selfDeploy, loadout, music, profile, f -> graph.factions()
                         .containsKey(f));
         if (!errors.isEmpty()) {
             return errors;
@@ -219,6 +231,102 @@ public final class FactionManager {
             return List.of("配置文件写入失败");
         }
         this.root = candidate;
+        return List.of();
+    }
+
+    /** 删除职业定义。 */
+    public List<String> deleteProfession(String id) {
+        JsonObject candidate = root.deepCopy();
+        if (!FactionProfessions.delete(candidate, id)) {
+            return List.of("未找到职业: " + id);
+        }
+        if (!JsonUtil.atomicWrite(file, candidate)) {
+            return List.of("配置文件写入失败");
+        }
+        this.root = candidate;
+        return List.of();
+    }
+
+    // ---------- 阵营 CRUD（管理器） ----------
+
+    private static final java.util.regex.Pattern ID_PATTERN = java.util.regex.Pattern.compile("[a-z0-9_]{1,32}");
+
+    /** 创建阵营。 */
+    public List<String> createFaction(String id, String name, String color, String description, String icon, int tier) {
+        if (id == null || !ID_PATTERN.matcher(id).matches()) {
+            return List.of("阵营 id 仅允许小写字母/数字/下划线，1-32 字符");
+        }
+        if (graph.factions().containsKey(id) || graph.groups().containsKey(id)) {
+            return List.of("阵营或组已存在: " + id);
+        }
+        JsonObject candidate = root.deepCopy();
+        JsonArray fa = candidate.has("factions") ? candidate.getAsJsonArray("factions") : new JsonArray();
+        candidate.add("factions", fa);
+        JsonObject o = new JsonObject();
+        o.addProperty("id", id);
+        o.addProperty("name", name == null || name.isBlank() ? id : name);
+        o.addProperty("color", color == null || color.isBlank() ? "#FFFFFF" : color);
+        o.addProperty("description", description == null ? "" : description);
+        o.addProperty("icon", icon == null || icon.isBlank() ? "hex" : icon);
+        o.addProperty("tier", Math.max(1, Math.min(3, tier)));
+        fa.add(o);
+        return commit(candidate);
+    }
+
+    /** 更新阵营。 */
+    public List<String> updateFaction(String id, String name, String color, String description, String icon, int tier) {
+        if (!graph.factions().containsKey(id)) {
+            return List.of("未找到阵营: " + id);
+        }
+        JsonObject candidate = root.deepCopy();
+        JsonArray fa = candidate.getAsJsonArray("factions");
+        for (int i = 0; i < fa.size(); i++) {
+            JsonObject o = fa.get(i).getAsJsonObject();
+            if (str(o, "id", "").equals(id)) {
+                o.addProperty("name", name == null || name.isBlank() ? id : name);
+                o.addProperty("color", color == null || color.isBlank() ? "#FFFFFF" : color);
+                o.addProperty("description", description == null ? "" : description);
+                o.addProperty("icon", icon == null || icon.isBlank() ? "hex" : icon);
+                o.addProperty("tier", Math.max(1, Math.min(3, tier)));
+                return commit(candidate);
+            }
+        }
+        return List.of("未找到阵营: " + id);
+    }
+
+    /** 删除阵营（存在下属职业引用时拒绝）。 */
+    public List<String> deleteFaction(String id) {
+        if (!graph.factions().containsKey(id)) {
+            return List.of("未找到阵营: " + id);
+        }
+        for (String pid : professionIds()) {
+            var def = findProfession(pid).orElse(null);
+            if (def != null && str(def, "factionId", "").equals(id)) {
+                return List.of("阵营仍有职业引用: " + pid + "，请先删除职业");
+            }
+        }
+        JsonObject candidate = root.deepCopy();
+        JsonArray fa = candidate.getAsJsonArray("factions");
+        for (int i = 0; i < fa.size(); i++) {
+            if (str(fa.get(i).getAsJsonObject(), "id", "").equals(id)) {
+                fa.remove(i);
+                return commit(candidate);
+            }
+        }
+        return List.of("未找到阵营: " + id);
+    }
+
+    /** 写盘 + 重载图谱。 */
+    private List<String> commit(JsonObject candidate) {
+        if (!JsonUtil.atomicWrite(file, candidate)) {
+            return List.of("配置文件写入失败");
+        }
+        this.root = candidate;
+        ParseResult result = parse(candidate);
+        if (!result.success()) {
+            return result.errors();
+        }
+        this.graph = result.graph();
         return List.of();
     }
 

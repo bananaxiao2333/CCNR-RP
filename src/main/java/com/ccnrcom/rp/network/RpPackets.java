@@ -568,6 +568,36 @@ public final class RpPackets {
         }
     }
 
+    /** 管理器 CRUD（C2S，管理员）：kind=faction|profession，action=create|update|delete。 */
+    public static final class ManagerCrudC2S {
+        public final String kind;
+        public final String action;
+        public final String payload;
+
+        public ManagerCrudC2S(String kind, String action, String payload) {
+            this.kind = kind;
+            this.action = action;
+            this.payload = payload;
+        }
+
+        public ManagerCrudC2S(FriendlyByteBuf buf) {
+            this(buf.readUtf(32), buf.readUtf(32), buf.readUtf(8192));
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(kind, 32);
+            buf.writeUtf(action, 32);
+            buf.writeUtf(payload, 8192);
+        }
+
+        public static void handle(ManagerCrudC2S msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> com.ccnrcom.rp.character.CharacterService.onManagerCrud(
+                            ctx.get().getSender(), msg.kind, msg.action, msg.payload));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
     /** 管理器状态（S2C）。 */
     public static final class ManagerStateS2C {
         public final String payload;
