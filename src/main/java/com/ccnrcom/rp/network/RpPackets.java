@@ -648,6 +648,61 @@ public final class RpPackets {
         }
     }
 
+    /** 管理端影响预检（C2S）：kind/action/payload → 服务端计算波及清单。 */
+    public static final class ManagerImpactC2S {
+        public final String kind;
+        public final String action;
+        public final String payload;
+
+        public ManagerImpactC2S(String kind, String action, String payload) {
+            this.kind = kind;
+            this.action = action;
+            this.payload = payload;
+        }
+
+        public ManagerImpactC2S(FriendlyByteBuf buf) {
+            this(buf.readUtf(32), buf.readUtf(32), buf.readUtf(8192));
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(kind, 32);
+            buf.writeUtf(action, 32);
+            buf.writeUtf(payload, 8192);
+        }
+
+        public static void handle(ManagerImpactC2S msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> com.ccnrcom.rp.character.CharacterService.onManagerImpact(
+                            ctx.get().getSender(), msg.kind, msg.action, msg.payload));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    /** 管理端影响预检返回（S2C）：JSON {kind, action, payload, lines:[...]}；lines 空=可直接执行。 */
+    public static final class ManagerImpactS2C {
+        public final String payload;
+
+        public ManagerImpactS2C(String payload) {
+            this.payload = payload;
+        }
+
+        public ManagerImpactS2C(FriendlyByteBuf buf) {
+            this(buf.readUtf(8192));
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(payload, 8192);
+        }
+
+        public static void handle(ManagerImpactS2C msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(
+                            net.minecraftforge.api.distmarker.Dist.CLIENT,
+                            () -> () -> com.ccnrcom.rp.client.ClientPacketHandlers.onManagerImpact(msg.payload)));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
     public static final class ErrorS2C {
         public final String messageKey;
         public final String[] args;

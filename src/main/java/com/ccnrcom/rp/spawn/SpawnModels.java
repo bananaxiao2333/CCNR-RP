@@ -27,7 +27,7 @@ public final class SpawnModels {
         }
     }
 
-    /** 刷新波定义。 */
+    /** 刷新波定义（内嵌行为序列：波触发时执行）。 */
     public record Wave(
             String id,
             Mode mode,
@@ -42,7 +42,41 @@ public final class SpawnModels {
             double y,
             double z,
             String dim,
-            int recruitTimeoutSeconds) {
+            int recruitTimeoutSeconds,
+            List<JsonObject> steps) {
+
+        public Wave(
+                String id,
+                Mode mode,
+                boolean enabled,
+                List<String> teamIds,
+                List<String> professionIds,
+                List<String> factionIds,
+                int count,
+                int minLevel,
+                String deployAtType,
+                double x,
+                double y,
+                double z,
+                String dim,
+                int recruitTimeoutSeconds) {
+            this(
+                    id,
+                    mode,
+                    enabled,
+                    teamIds,
+                    professionIds,
+                    factionIds,
+                    count,
+                    minLevel,
+                    deployAtType,
+                    x,
+                    y,
+                    z,
+                    dim,
+                    recruitTimeoutSeconds,
+                    List.of());
+        }
 
         public boolean matchesProfession(String professionId, String factionId) {
             boolean profOk = professionIds == null || professionIds.isEmpty() || professionIds.contains(professionId);
@@ -124,9 +158,24 @@ public final class SpawnModels {
                     num(d, "y", 64),
                     num(d, "z", 0),
                     str(d, "dim", "minecraft:overworld"),
-                    (int) num(o, "recruitTimeoutSeconds", 60)));
+                    (int) num(o, "recruitTimeoutSeconds", 60),
+                    parseSteps(o)));
         }
+
         return errors;
+    }
+
+    /** 内嵌行为序列（sequence 数组）。 */
+    public static List<JsonObject> parseSteps(JsonObject o) {
+        List<JsonObject> out = new ArrayList<>();
+        if (o.has("sequence") && o.get("sequence").isJsonArray()) {
+            for (JsonElement e : o.getAsJsonArray("sequence")) {
+                if (e.isJsonObject()) {
+                    out.add(e.getAsJsonObject());
+                }
+            }
+        }
+        return out;
     }
 
     private static List<String> strList(JsonObject o, String key) {

@@ -37,13 +37,9 @@ public class CharacterManagementScreen extends Screen {
     private String selectedId = "";
     private String filterFaction = "";
     private int scroll = 0;
-    private int factionIndex = 0;
-    private int professionIndex = 0;
-    private EditBox nameBox;
     private EditBox skinPathBox;
     private String notice = "";
     private long noticeUntil = 0;
-    private int nameLabelX, nameLabelY;
     private int skinLabelX, skinLabelY;
 
     // 布局几何
@@ -134,7 +130,6 @@ public class CharacterManagementScreen extends Screen {
         if (selectedId.isEmpty() || ClientCharacterState.find(selectedId) == null) {
             selectedId = ClientCharacterState.selected();
         }
-        nameBox = null;
         skinPathBox = null;
     }
 
@@ -227,36 +222,16 @@ public class CharacterManagementScreen extends Screen {
                     Component.translatable("ccnr_rp.gui.character.skin.upload"),
                     b -> uploadSkin()));
         }
-        // 创建表单卡（底部）：仅名称输入（只允许文字与空格）
+        // 创建角色（弹窗入口按钮）
         int createY1 = Math.max(bodyY2 - 74, pvY2 + 62);
         int fy = createY1 + 8;
-        nameLabelX = x;
-        nameLabelY = fy - 11;
-        int bw2 = (w - 4) / 2;
         addW(RpButton.primary(
-                x, fy + 44, w, 20, Component.translatable("ccnr_rp.gui.character.create"), b -> createSubmit()));
-        addW(RpButton.secondary(x, fy + 26, bw2, 18, Component.literal(professionLabel()), b -> {
-            List<String> list = matchingProfessions();
-            if (list.isEmpty()) {
-                notice("ccnr_rp.gui.character.profession.empty");
-                rebuild();
-                return;
-            }
-            professionIndex = (professionIndex + 1) % list.size();
-            rebuild();
-        }));
-        addW(RpButton.secondary(x + bw2 + 4, fy + 26, bw2, 18, Component.literal(factionLabel()), b -> {
-            if (!factionIds().isEmpty()) {
-                factionIndex = (factionIndex + 1) % factionIds().size();
-                professionIndex = 0;
-                rebuild();
-            }
-        }));
-        nameBox = new EditBox(font, x, fy + 2, w, 18, Component.translatable("ccnr_rp.gui.character.name"));
-        nameBox.setMaxLength(32);
-        nameBox.setFilter(s -> s.matches("[\\p{L} ]*"));
-        nameBox.setTextColor(RpTheme.CYAN);
-        addW(nameBox);
+                x,
+                fy,
+                w,
+                20,
+                Component.translatable("ccnr_rp.gui.character.create"),
+                b -> net.minecraft.client.Minecraft.getInstance().setScreen(new CreateCharacterModal())));
     }
 
     private void clearWidgets2() {
@@ -305,33 +280,6 @@ public class CharacterManagementScreen extends Screen {
         return id;
     }
 
-    private List<String> matchingProfessions() {
-        List<String> ids = factionIds();
-        if (ids.isEmpty()) {
-            return List.of();
-        }
-        String fid = ids.get(Math.min(factionIndex, ids.size() - 1));
-        return professionMeta.stream()
-                .filter(p -> str(p, "factionId").equals(fid))
-                .map(p -> p.get("id").getAsString())
-                .toList();
-    }
-
-    private String factionLabel() {
-        List<String> ids = factionIds();
-        if (ids.isEmpty()) {
-            return "阵营: ?";
-        }
-        return "阵营: " + factionName(ids.get(Math.min(factionIndex, ids.size() - 1)));
-    }
-
-    private String professionLabel() {
-        List<String> list = matchingProfessions();
-        return list.isEmpty()
-                ? "职业: (暂无配置)"
-                : "职业: " + professionName(list.get(Math.min(professionIndex, list.size() - 1)));
-    }
-
     // ---------- 交互 ----------
 
     private void uploadSkin() {
@@ -359,28 +307,6 @@ public class CharacterManagementScreen extends Screen {
         }
         RpChannels.sendToServer(new RpPackets.SkinUploadCommitC2S(selectedId, data.length, total));
         notice("ccnr_rp.gui.character.skin.uploading");
-    }
-
-    private void createSubmit() {
-        List<String> ids = factionIds();
-        if (ids.isEmpty()) {
-            notice("ccnr_rp.gui.character.faction.empty");
-            return;
-        }
-        if (nameBox == null) {
-            notice("ccnr_rp.gui.character.name.need");
-            return;
-        }
-        String name = nameBox.getValue();
-        if (!name.matches("[\\p{L} ]+")) {
-            notice("ccnr_rp.character.error.name_chars");
-            return;
-        }
-        String f = ids.get(Math.min(factionIndex, ids.size() - 1));
-        List<String> list = matchingProfessions();
-        String p = list.isEmpty() ? "" : list.get(Math.min(professionIndex, list.size() - 1));
-        RpChannels.sendToServer(new RpPackets.CharacterCreateC2S(name, f, p, ""));
-        notice("");
     }
 
     @Override
@@ -458,13 +384,6 @@ public class CharacterManagementScreen extends Screen {
         renderProfile(g);
         renderPreview(g, mouseX, mouseY);
         // 输入框用途标签
-        g.drawString(
-                font,
-                Component.translatable("ccnr_rp.gui.character.name.field").getString(),
-                nameLabelX,
-                nameLabelY,
-                RpTheme.TEXT_DIM,
-                false);
         g.drawString(
                 font,
                 Component.translatable("ccnr_rp.gui.character.skin.field").getString(),

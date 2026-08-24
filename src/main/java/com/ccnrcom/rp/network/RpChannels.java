@@ -152,6 +152,16 @@ public final class RpChannels {
                 .decoder(RpPackets.ErrorS2C::new)
                 .consumerNetworkThread(RpPackets.ErrorS2C::handle)
                 .add();
+        CHANNEL.messageBuilder(RpPackets.ManagerImpactC2S.class, id++, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(RpPackets.ManagerImpactC2S::encode)
+                .decoder(RpPackets.ManagerImpactC2S::new)
+                .consumerNetworkThread(RpPackets.ManagerImpactC2S::handle)
+                .add();
+        CHANNEL.messageBuilder(RpPackets.ManagerImpactS2C.class, id++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(RpPackets.ManagerImpactS2C::encode)
+                .decoder(RpPackets.ManagerImpactS2C::new)
+                .consumerNetworkThread(RpPackets.ManagerImpactS2C::handle)
+                .add();
     }
 
     public static void sendTo(ServerPlayer player, Object msg) {

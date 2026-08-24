@@ -63,6 +63,10 @@ public final class ClientPacketHandlers {
         ClientCharacterState.setManager(payload);
     }
 
+    public static void onManagerImpact(String payload) {
+        RpAdminScreen.onImpact(payload);
+    }
+
     public static void onCinematic(String payload) {
         CharacterManagementScreen.closeIfOpen();
         try {
