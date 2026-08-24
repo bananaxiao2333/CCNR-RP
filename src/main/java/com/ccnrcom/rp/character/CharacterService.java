@@ -353,6 +353,8 @@ public final class CharacterService {
         List<ValidationIssue> errors = new ArrayList<>();
         if (name == null || name.trim().length() < 1 || name.trim().length() > 32) {
             errors.add(new ValidationIssue("ccnr_rp.character.error.name"));
+        } else if (!name.matches("[\\p{L} ]+")) {
+            errors.add(new ValidationIssue("ccnr_rp.character.error.name_chars"));
         }
         if (CCNRRPMod.factions == null || !CCNRRPMod.factions.graph().factions().containsKey(factionId)) {
             errors.add(new ValidationIssue("ccnr_rp.character.error.faction", factionId));

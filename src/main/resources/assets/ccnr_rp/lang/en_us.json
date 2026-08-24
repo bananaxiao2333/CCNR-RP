@@ -45,6 +45,8 @@
   "ccnr_rp.character.skin.ok": "Skin uploaded: %s",
   "ccnr_rp.character.error.generic": "%s",
   "ccnr_rp.character.error.name": "Name must be 1-32 characters",
+  "ccnr_rp.character.error.name_chars": "Name may only contain letters and spaces (no digits or symbols)",
+  "ccnr_rp.gui.character.name.need": "Enter a name first",
   "ccnr_rp.character.error.faction": "Unknown faction: %s",
   "ccnr_rp.character.error.profession": "Unknown profession (or not in this faction): %s",
   "ccnr_rp.character.error.count": "Character limit reached (%s)",

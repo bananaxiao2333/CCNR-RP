@@ -45,6 +45,8 @@
   "ccnr_rp.character.skin.ok": "皮肤已上传: %s",
   "ccnr_rp.character.error.generic": "%s",
   "ccnr_rp.character.error.name": "名字长度需为 1-32 字符",
+  "ccnr_rp.character.error.name_chars": "名字只允许文字和空格（不允许数字或符号）",
+  "ccnr_rp.gui.character.name.need": "请先输入名字",
   "ccnr_rp.character.error.faction": "未知阵营: %s",
   "ccnr_rp.character.error.profession": "未知职业（或不属于该阵营）: %s",
   "ccnr_rp.character.error.count": "角色数量已达上限（%s）",

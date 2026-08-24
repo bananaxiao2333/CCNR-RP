@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.2（崩溃修复 + 创建表单简化 + 名称校验）
+- 修复：角色列表 S2C 到达时 reloadData 置空 nameBox 但未重建控件，点击「创建角色」触发 NPE 崩溃（refreshIfOpen 现同步 rebuild + createSubmit 空安全）。
+- 创建表单移除「背景输入」，只保留名称 + 阵营/职业切换 + 创建（背景一律为空）。
+- 名称规则：只允许文字（含中文/字母）与空格，禁止数字/符号——客户端输入过滤 + 提交校验 + 服务端二次校验（name_chars 错误提示）。
+
 ## 1.1.1（职业出场音乐，配置驱动）
 - 新：职业配置新增可选 music 字段（相对 config/ccnr_rp/ 的路径，或绝对路径；WAV 格式）——部署入场电影开始时播放，60 秒后 1.5s 淡出；换职业/再次部署自动切歌。
 - 默认配置新增「设施主管」（行政总部，selfDeploy=true）；真实配置已设 music: audio/de_mulan.wav（《三角洲行动》德穆兰战斗音乐已转 WAV 放入 config/ccnr_rp/audio/）。
