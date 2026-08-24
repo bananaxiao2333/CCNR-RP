@@ -10,8 +10,12 @@ import java.util.Map;
 /** P1 阵营关系领域模型（无 MC 依赖的纯数据/纯逻辑，可直接 JUnit 测）。 */
 public final class FactionModels {
 
-    /** 阵营。 */
-    public record Faction(String id, String name, String color, String description) {}
+    /** 阵营。icon 为客户端徽章图形(shield/claw/storm/hex/eye/target...)，tier 1..3 对应金/蓝/青徽章等级。 */
+    public record Faction(String id, String name, String color, String description, String icon, int tier) {
+        public Faction(String id, String name, String color, String description) {
+            this(id, name, color, description, "hex", 2);
+        }
+    }
 
     /** 阵营组：批量声明关系的容器。 */
     public record FactionGroup(String id, List<String> memberIds) {}

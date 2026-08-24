@@ -4,29 +4,60 @@
  */
 package com.ccnrcom.rp.client;
 
+import net.minecraft.client.gui.GuiGraphics;
+
 /**
- * CCNR-RP 界面主题（对齐 CCNR-Com 风格：深色面板/蓝主色/圆角）。
- * v2 UI 重做：与 CCNR-Com 的 CommsTheme 同款配色体系。
+ * CCNR-RP 界面主题 v3——"SCP:NET 机密终端"：
+ * 冷暗科技金属底 / 青色主色(文字+边框，电子屏发光) / 高饱和正红(选中+警戒) / 金·蓝徽章(机构等级)。
+ * 布局：严格三栏网格（左：机构分类徽章导航 / 中：角色档案列表 / 右：详细资料+3D预览+战术装备槽）。
  */
 public final class RpTheme {
-    public static final int RADIUS_MEDIUM = 8;
-    public static final int RADIUS_LARGE = 16;
+    // ---- 几何 ----
+    public static final float RADIUS_MEDIUM = 8;
+    public static final float RADIUS_LARGE = 14;
     public static final int PAD = 8;
 
-    public static final int OVERLAY = 0xEE101014;
-    public static final int PANEL_BG = 0xFF1E1E22;
-    public static final int PANEL_BORDER = 0xFF2E2E36;
-    public static final int PANEL_BG_ALT = 0xFF2A2A32;
-    public static final int TEXT_PRIMARY = 0xFFFFFFFF;
-    public static final int TEXT_SECONDARY = 0xFF9A9AA5;
-    public static final int ACCENT = 0xFF2F6BFF;
-    public static final int ACCENT_HOVER = 0xFF4A82FF;
-    public static final int ACCENT_TEXT = 0xFFFFFFFF;
-    public static final int DANGER = 0xFF8B3A3A;
-    public static final int DANGER_HOVER = 0xFFA04848;
-    public static final int STATUS_ALIVE = 0xFF4CAF50;
-    public static final int STATUS_DEAD = 0xFFE53935;
-    public static final int STATUS_OBSERVING = 0xFFB0BEC5;
+    // ---- 金属暗底（军事指挥中心 / 机密终端屏幕）----
+    public static final int OVERLAY = 0xF20A0E13;
+    public static final int BG_DEEP = 0xFF070A0E;
+    public static final int PANEL_BG = 0xEE141C22;
+    public static final int PANEL_BG_ALT = 0xFF202C34;
+    public static final int PANEL_BG_EVEN = 0xFF171F25;
+    public static final int PANEL_BORDER = 0xFF1A5A66;
+    public static final int PANEL_BORDER_BRIGHT = 0xFF2E8FA0;
+    public static final int SCANLINE = 0x20000000;
+    public static final int SHEEN = 0x12FFFFFF;
+
+    // ---- 文字（层级：标题>副标题>正文>弱化）----
+    public static final int TEXT_PRIMARY = 0xFFE8F6FA;
+    public static final int TEXT_SECONDARY = 0xFF86A4B0;
+    public static final int TEXT_DIM = 0xFF51666E;
+
+    // ---- 主色调：冷青色（电子屏发光 / 全息投影）----
+    public static final int CYAN = 0xFF45D8F2;
+    public static final int CYAN_DIM = 0xFF2B8195;
+    public static final int BLUE_BADGE = 0xFF3D7BFF;
+
+    // 兼容旧引用（按钮边界色）
+    public static final int ACCENT = CYAN_DIM;
+    public static final int ACCENT_HOVER = CYAN;
+    public static final int ACCENT_TEXT = 0xFF0B1418;
+
+    // ---- 警示/选中：高饱和正红 + 红底白字 ----
+    public static final int RED = 0xFFFF3B30;
+    public static final int RED_DIM = 0xFF8C2320;
+    public static final int RED_BG = 0xFF6F1613;
+    public static final int RED_LINE = 0xFFFF4A40;
+    public static final int DANGER = RED_DIM;
+    public static final int DANGER_HOVER = RED;
+
+    // ---- 徽章金（机构最高等级）----
+    public static final int GOLD = 0xFFFFC84C;
+
+    // ---- 状态（AM/M/OB）----
+    public static final int STATUS_ALIVE = 0xFF35E07A;
+    public static final int STATUS_DEAD = 0xFFFF3B30;
+    public static final int STATUS_OBSERVING = 0xFF7E8A8F;
     public static final int COOLDOWN = 0xFFFF9E9E;
 
     private RpTheme() {}
@@ -42,5 +73,60 @@ public final class RpTheme {
             case "dead" -> STATUS_DEAD;
             default -> STATUS_OBSERVING;
         };
+    }
+
+    /** 机构等级 → 徽章环色：1 金(最高机密) / 2 蓝(标准机构) / 3 青(普通编制)。 */
+    public static int tierColor(int tier) {
+        return switch (Math.max(1, Math.min(3, tier))) {
+            case 1 -> GOLD;
+            case 2 -> BLUE_BADGE;
+            default -> CYAN;
+        };
+    }
+
+    /** CRT 扫描线（每 3px 一暗线，强化屏幕质感）。 */
+    public static void scanlines(GuiGraphics g, int x1, int y1, int x2, int y2) {
+        for (int y = y1; y < y2; y += 3) {
+            g.fill(x1, y, x2, y + 1, SCANLINE);
+        }
+    }
+
+    /** 终端边框四角 L 型角标。 */
+    public static void cornerBrackets(GuiGraphics g, int x1, int y1, int x2, int y2, int len, int color) {
+        g.fill(x1, y1, x1 + len, y1 + 1, color);
+        g.fill(x1, y1, x1 + 1, y1 + len, color);
+        g.fill(x2 - len, y1, x2, y1 + 1, color);
+        g.fill(x2 - 1, y1, x2, y1 + len, color);
+        g.fill(x1, y2 - 1, x1 + len, y2, color);
+        g.fill(x1, y2 - len, x1 + 1, y2, color);
+        g.fill(x2 - len, y2 - 1, x2, y2, color);
+        g.fill(x2 - 1, y2 - len, x2, y2, color);
+    }
+
+    /** 终端主面板：金属底 + 青色描边 + 四角角标 + 扫描线 + 顶部金属光泽。 */
+    public static void terminalPanel(GuiGraphics g, int x1, int y1, int x2, int y2, float radius) {
+        RpRoundRect.fill(g, x1, y1, x2, y2, radius, OVERLAY);
+        RpRoundRect.outlined(g, x1, y1, x2, y2, radius, PANEL_BORDER, OVERLAY);
+        g.fillGradient(x1 + 3, y1 + 3, x2 - 3, y1 + 10, SHEEN, 0x00000000);
+        scanlines(g, x1 + 3, y1 + 3, x2 - 3, y2 - 3);
+        cornerBrackets(g, x1 + 2, y1 + 2, x2 - 2, y2 - 2, 7, CYAN_DIM);
+    }
+
+    /** 卡片：深色圆角 + 暗青描边。 */
+    public static void card(GuiGraphics g, int x1, int y1, int x2, int y2, float radius, int bg) {
+        RpRoundRect.outlined(g, x1, y1, x2, y2, radius, PANEL_BORDER, bg);
+    }
+
+    /** 选中高亮：红底近似 + 左侧红色高亮线 + 四角红标（战术选中态）。 */
+    public static void selectedBar(GuiGraphics g, int x1, int y1, int x2, int y2, float radius) {
+        RpRoundRect.fill(g, x1, y1, x2, y2, radius, 0xE68C1613);
+        RpRoundRect.fill(g, x1, y1, x1 + 3, y2, radius, RED);
+        cornerBrackets(g, x1, y1, x2, y2, 4, RED_LINE);
+        g.fill(x1 + 4, y2 - 2, x2 - 4, y2 - 1, RED_LINE);
+    }
+
+    /** 终端标签风格："[ 机构分类 ]"。 */
+    public static String tag(String s) {
+        return "[ " + s + " ]";
     }
 }

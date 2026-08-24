@@ -1,12 +1,12 @@
 {
   "version": 1,
   "factions": [
-    {"id": "quantum_science", "name": "量子科学", "color": "#2F6BFF", "description": "CCNR 全资子公司，设施运营主体"},
-    {"id": "qdf", "name": "QDF司令部", "color": "#4CAF50", "description": "设施保全与武装力量指挥"},
-    {"id": "qsa", "name": "QSA综合处理小组", "color": "#FF9800", "description": "高级安全保障部队"},
-    {"id": "qso", "name": "QSO", "color": "#9C27B0", "description": "直属最高层私人武装"},
-    {"id": "madison", "name": "麦迪逊研究所", "color": "#00BCD4", "description": "暗物质反应堆与科技研发"},
-    {"id": "logistics", "name": "后勤与供应链", "color": "#795548", "description": "物资保障、运输、仓储"}
+    {"id": "quantum_science", "name": "量子科学", "color": "#2F6BFF", "description": "CCNR 全资子公司，设施运营主体", "icon": "hex", "tier": 2},
+    {"id": "qdf", "name": "QDF司令部", "color": "#4CAF50", "description": "设施保全与武装力量指挥", "icon": "shield", "tier": 1},
+    {"id": "qsa", "name": "QSA综合处理小组", "color": "#FF9800", "description": "高级安全保障部队", "icon": "claw", "tier": 1},
+    {"id": "qso", "name": "QSO", "color": "#9C27B0", "description": "直属最高层私人武装", "icon": "storm", "tier": 1},
+    {"id": "madison", "name": "麦迪逊研究所", "color": "#00BCD4", "description": "暗物质反应堆与科技研发", "icon": "eye", "tier": 2},
+    {"id": "logistics", "name": "后勤与供应链", "color": "#795548", "description": "物资保障、运输、仓储", "icon": "target", "tier": 3}
   ],
   "groups": [
     {"id": "qsec_group", "memberIds": ["quantum_science", "madison"]},
