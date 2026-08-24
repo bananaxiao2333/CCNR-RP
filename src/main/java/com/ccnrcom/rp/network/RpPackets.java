@@ -326,6 +326,38 @@ public final class RpPackets {
         }
     }
 
+    /** 经验/等级更新（owner 定向）。 */
+    public static final class XpUpdateS2C {
+        public final String charId;
+        public final long xp;
+        public final int level;
+
+        public XpUpdateS2C(String charId, long xp, int level) {
+            this.charId = charId;
+            this.xp = xp;
+            this.level = level;
+        }
+
+        public XpUpdateS2C(FriendlyByteBuf buf) {
+            this(buf.readUtf(256), buf.readLong(), buf.readVarInt());
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(charId, 256);
+            buf.writeLong(xp);
+            buf.writeVarInt(level);
+        }
+
+        public static void handle(XpUpdateS2C msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(
+                            net.minecraftforge.api.distmarker.Dist.CLIENT,
+                            () -> () ->
+                                    com.ccnrcom.rp.client.ClientPacketHandlers.onXp(msg.charId, msg.xp, msg.level)));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
     public static final class ErrorS2C {
         public final String messageKey;
         public final String[] args;

@@ -33,6 +33,11 @@ public final class ClientPacketHandlers {
         CharacterManagementScreen.refreshIfOpen();
     }
 
+    public static void onXp(String charId, long xp, int level) {
+        ClientCharacterState.setXp(charId, xp, level);
+        CharacterManagementScreen.refreshIfOpen();
+    }
+
     public static void onError(String messageKey, String[] args) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player != null) {

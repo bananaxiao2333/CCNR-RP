@@ -67,5 +67,11 @@
   "ccnr_rp.status.killed.offline": "%s disconnected and was declared dead",
   "ccnr_rp.status.error.no_alive": "You have no alive character to kill",
   "ccnr_rp.command.kill.ok": "%s killed (corpse + cooldown applied)",
-  "ccnr_rp.command.state.header": "Character states of %s:"
+  "ccnr_rp.command.state.header": "Character states of %s:",
+  "ccnr_rp.xp.settle.result": "%s settled: +%s XP (duty %s / task %s / evac %s) -> total %s, level %s",
+  "ccnr_rp.xp.settle.all": "Settled %s characters",
+  "ccnr_rp.xp.info": "%s | XP %s | Level %s",
+  "ccnr_rp.xp.level.info": "%s | Level %s",
+  "ccnr_rp.xp.error.method": "Invalid evac method: %s (SAFE_RESCUE/DIED/OBSERVING_END/STAY_BEHIND)",
+  "ccnr_rp.xp.evac.set": "Evacuation set for %s: %s"
 }
