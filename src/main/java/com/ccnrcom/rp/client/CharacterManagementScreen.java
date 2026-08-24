@@ -666,7 +666,7 @@ public class CharacterManagementScreen extends Screen {
         // 3D 模型（裁剪在框内，跟随鼠标）
         if (c != null) {
             int pvH = pvY2 - pvY1;
-            int scale = Math.max(34, Math.min(110, (pvH - 70) / 2));
+            int scale = Math.max(32, Math.min(95, (pvH - 100) / 2));
             g.enableScissor(x + 2, pvY1 + 14, x + w - 2, pvY2 - 24);
             CharacterPreview.render(g, x + w / 2, pvY2 - 30, scale, mouseX, mouseY, c);
             g.disableScissor();
