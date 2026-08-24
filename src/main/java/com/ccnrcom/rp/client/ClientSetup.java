@@ -7,17 +7,18 @@ package com.ccnrcom.rp.client;
 import com.ccnrcom.rp.CCNRRPMod;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
-import net.minecraft.client.Minecraft;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.RegisterGuiOverlaysEvent;
 import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
 import net.minecraftforge.client.settings.KeyConflictContext;
-import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
 import org.lwjgl.glfw.GLFW;
 
-/** 客户端装配：按键（默认 K）打开角色管理界面；动画遮罩与镜头步进。 */
+/**
+ * 客户端装配（MOD 总线）：按键（默认 K）打开角色管理界面；动画遮罩与镜头步进。
+ * 注意：本类只订阅 MOD 总线事件；Forge 总线事件（ClientTick 等）见 {@link ClientForgeEvents}。
+ */
 @EventBusSubscriber(modid = CCNRRPMod.MODID, value = Dist.CLIENT, bus = EventBusSubscriber.Bus.MOD)
 public final class ClientSetup {
     public static final KeyMapping OPEN_CHARACTERS = new KeyMapping(
@@ -40,22 +41,5 @@ public final class ClientSetup {
         event.registerAboveAll(
                 "ccnr_rp_recruit",
                 (gui, gfx, partial, w, h) -> com.ccnrcom.rp.client.RecruitOverlayHud.render(gfx, w, h));
-    }
-
-    @SubscribeEvent
-    public static void onClientTick(TickEvent.ClientTickEvent event) {
-        if (event.phase != TickEvent.Phase.END) {
-            return;
-        }
-        ClientAnimationPlayer.tick();
-        if (!RecruitOverlayHud.isEmpty()
-                && Minecraft.getInstance().screen == null
-                && Minecraft.getInstance().player != null) {
-            Minecraft.getInstance().setScreen(new RecruitPopupScreen());
-        }
-        CameraEffect.tick();
-        while (OPEN_CHARACTERS.consumeClick()) {
-            Minecraft.getInstance().setScreen(new CharacterManagementScreen());
-        }
     }
 }
