@@ -20,6 +20,10 @@ public final class StatusHud {
         if (!ClientCharacterState.settingBool("hudEnabled", true)) {
             return;
         }
+        // 入场电影（黑屏）期间隐藏 HUD——层低于黑屏
+        if (CinematicController.active()) {
+            return;
+        }
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) {
             return;
@@ -48,10 +52,6 @@ public final class StatusHud {
         int margin = 10;
         int px = w - rowW - margin;
         int py = h - margin - (barH * 3 + rowGap * 2) - 12;
-
-        // 面板底
-        RpRoundRect.outlined(
-                g, px - 4, py - 4, px + rowW + 4, py + barH * 3 + rowGap * 2 + 4, 4f, RpTheme.PANEL_BORDER, 0xA00A0E13);
 
         int rowY = py;
         // 职位
