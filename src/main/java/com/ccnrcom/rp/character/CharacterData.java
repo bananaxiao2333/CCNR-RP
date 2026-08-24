@@ -133,6 +133,26 @@ public record CharacterData(
                 createdAt);
     }
 
+    /** 强制更换名字与职业（序列 FORCE_PICK 使用）。 */
+    public CharacterData withRole(String newName, String newProfessionId) {
+        return new CharacterData(
+                id,
+                playerUuid,
+                newName,
+                factionId,
+                newProfessionId,
+                background,
+                skin,
+                skinHash,
+                status,
+                xp,
+                dutySeconds,
+                cooldownUntil,
+                tasks,
+                evacuation,
+                createdAt);
+    }
+
     public CharacterData withSkin(String skinFile, String hash) {
         return new CharacterData(
                 id,

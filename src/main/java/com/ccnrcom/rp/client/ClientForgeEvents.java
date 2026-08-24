@@ -42,6 +42,23 @@ public final class ClientForgeEvents {
         }
     }
 
+    /** 事件横幅滚轮：鼠标悬停横幅区域时横向滚动（并拦截向下传递）。 */
+    @SubscribeEvent
+    public static void onMouseScroll(net.minecraftforge.client.event.InputEvent.MouseScrollingEvent event) {
+        if (EventBanner.active() && EventBanner.inArea(cursorX(), cursorY())) {
+            EventBanner.scroll(event.getScrollDelta());
+            event.setCanceled(true);
+        }
+    }
+
+    private static int cursorX() {
+        return (int) Minecraft.getInstance().mouseHandler.xpos();
+    }
+
+    private static int cursorY() {
+        return (int) Minecraft.getInstance().mouseHandler.ypos();
+    }
+
     /** 背包等任意界面打开时，事件横幅依然绘制在最上层。 */
     @SubscribeEvent
     public static void onScreenRender(net.minecraftforge.client.event.ScreenEvent.Render.Post event) {

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.4.0（序列编辑器 + 事件栏横向滚动）
+- 新：序列系统（sequences.json + 管理器「序列」页签）——步骤编排：WAIT（等待秒数）/ WAVE（触发刷新波）/ COMMAND（执行控制台命令，支持 {{event}} {{phase}} {{seq}} 变量）/ FORCE_PICK（强制抽取观察者：≤N 名在线、随机附职业、随机 UID 名字、可选刷新生效）。
+- 事件 hooks 新增 startSequence：事件开始自动运行序列（默认示例 qdf_support：等 10s → 抽 5 名 QDF → 触发 qdf_reinforce 波）。
+- 命令：/rp sequence list|run <id>（管理员）；序列 CRUD 热重载即时生效。
+- 事件横幅横向滚动：事件过多时鼠标悬停横幅滚轮横向滚动（背包界面同样生效），双侧箭头指示。
+
 ## 1.3.0（激活事件横幅 + 清空命令）
 - 新：激活事件横幅（EventStateS2C）——顶部居中 4:3 横向红色警戒长方形排开（进行中标记），正常 HUD 与任意界面（背包等 ScreenEvent.Render.Post）上层都可见；入场电影期间隐藏。
 - 事件开始/结束/清空/热重载自动广播横幅。

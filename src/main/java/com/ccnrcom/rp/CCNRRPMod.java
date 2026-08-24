@@ -34,6 +34,8 @@ public class CCNRRPMod {
     public static FactionManager factions;
     /** 管理器设置（settings.json：入服规则/强制保留；仅服务端）。 */
     public static com.ccnrcom.rp.config.ManagerSettings managerSettings;
+    /** 序列引擎（序列编辑器）。 */
+    public static com.ccnrcom.rp.sequence.SequenceEngine sequenceEngine;
     /** 角色服务（P3）。 */
     public static CharacterService characters;
     /** 状态管理（P4，注册到 Forge 总线；ServerStopping 注销）。 */
@@ -81,6 +83,8 @@ public class CCNRRPMod {
         animationEngine = new com.ccnrcom.rp.animation.AnimationEngine();
         eventManager = new com.ccnrcom.rp.event.EventManager(event.getServer());
         MinecraftForge.EVENT_BUS.register(eventManager);
+        sequenceEngine = new com.ccnrcom.rp.sequence.SequenceEngine(event.getServer());
+        MinecraftForge.EVENT_BUS.register(sequenceEngine);
         LOGGER.info(
                 "[CCNR-RP] 服务端运行时就绪：阵营 {} 个 / 组 {} 个 / 角色 {} 个",
                 factions.graph().factions().size(),
@@ -112,6 +116,10 @@ public class CCNRRPMod {
         if (eventManager != null) {
             MinecraftForge.EVENT_BUS.unregister(eventManager);
         }
+        if (sequenceEngine != null) {
+            MinecraftForge.EVENT_BUS.unregister(sequenceEngine);
+        }
+        sequenceEngine = null;
         eventManager = null;
         animationEngine = null;
         spawnFramework = null;
