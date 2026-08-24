@@ -72,10 +72,9 @@ public final class CharacterService {
             return;
         }
         CharacterService svc = service();
-        List<String> errors = svc.validateCreate(player, name, factionId, professionId);
+        List<ValidationIssue> errors = svc.validateCreate(player, name, factionId, professionId);
         if (!errors.isEmpty()) {
-            errors.forEach(
-                    e -> RpChannels.sendTo(player, new RpPackets.ErrorS2C("ccnr_rp.character.error.generic", e)));
+            errors.forEach(v -> RpChannels.sendTo(player, new RpPackets.ErrorS2C(v.key(), v.args())));
             return;
         }
         CharacterData c = svc.store.create(
@@ -235,23 +234,28 @@ public final class CharacterService {
                 .orElse(false);
     }
 
-    private List<String> validateCreate(ServerPlayer player, String name, String factionId, String professionId) {
-        List<String> errors = new ArrayList<>();
+    /** 创建校验（结构化错误：键+参数，客户端直接翻译，不再泄漏原始键）。 */
+    record ValidationIssue(String key, String... args) {}
+
+    private List<ValidationIssue> validateCreate(
+            ServerPlayer player, String name, String factionId, String professionId) {
+        List<ValidationIssue> errors = new ArrayList<>();
         if (name == null || name.trim().length() < 1 || name.trim().length() > 32) {
-            errors.add(tr("ccnr_rp.character.error.name"));
+            errors.add(new ValidationIssue("ccnr_rp.character.error.name"));
         }
         if (CCNRRPMod.factions == null || !CCNRRPMod.factions.graph().factions().containsKey(factionId)) {
-            errors.add(tr("ccnr_rp.character.error.faction", factionId));
+            errors.add(new ValidationIssue("ccnr_rp.character.error.faction", factionId));
         } else {
             var def = CCNRRPMod.factions.findProfession(professionId);
             if (def.isEmpty()) {
-                errors.add(tr("ccnr_rp.character.error.profession", professionId));
+                errors.add(new ValidationIssue("ccnr_rp.character.error.profession", professionId));
             } else if (!factionId.equals(com.ccnrcom.rp.faction.FactionProfessions.factionId(def.get()))) {
-                errors.add(tr("ccnr_rp.character.error.profession", professionId));
+                errors.add(new ValidationIssue("ccnr_rp.character.error.profession", professionId));
             }
         }
         if (store.countOf(player.getUUID().toString()) >= CCNRRPConfig.MAX_CHARACTERS_PER_PLAYER.get()) {
-            errors.add(tr("ccnr_rp.character.error.count", CCNRRPConfig.MAX_CHARACTERS_PER_PLAYER.get()));
+            errors.add(new ValidationIssue(
+                    "ccnr_rp.character.error.count", String.valueOf(CCNRRPConfig.MAX_CHARACTERS_PER_PLAYER.get())));
         }
         return errors;
     }
@@ -327,18 +331,6 @@ public final class CharacterService {
 
     public void sendError(ServerPlayer player, String key, String... args) {
         RpChannels.sendTo(player, new RpPackets.ErrorS2C(key, args));
-    }
-
-    /** 服务端错误文案（键+参数拼装；键由客户端翻译渲染）。 */
-    public static String tr(String key, Object... args) {
-        return args.length == 0
-                ? key
-                : key + " "
-                        + String.join(
-                                " ",
-                                java.util.Arrays.stream(args)
-                                        .map(String::valueOf)
-                                        .toList());
     }
 
     public static String sha256(byte[] data) {
