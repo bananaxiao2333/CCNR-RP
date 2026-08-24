@@ -1,32 +1,57 @@
 {
   "version": 1,
   "factions": [
-    {"id": "quantum_science", "name": "量子科学", "color": "#2F6BFF", "description": "CCNR 全资子公司，设施运营主体", "icon": "hex", "tier": 2},
-    {"id": "qdf", "name": "QDF司令部", "color": "#4CAF50", "description": "设施保全与武装力量指挥", "icon": "shield", "tier": 1},
-    {"id": "qsa", "name": "QSA综合处理小组", "color": "#FF9800", "description": "高级安全保障部队", "icon": "claw", "tier": 1},
-    {"id": "qso", "name": "QSO", "color": "#9C27B0", "description": "直属最高层私人武装", "icon": "storm", "tier": 1},
-    {"id": "madison", "name": "麦迪逊研究所", "color": "#00BCD4", "description": "暗物质反应堆与科技研发", "icon": "eye", "tier": 2},
-    {"id": "logistics", "name": "后勤与供应链", "color": "#795548", "description": "物资保障、运输、仓储", "icon": "target", "tier": 3}
+    {"id": "admin_hq", "name": "行政总部", "color": "#FFC84C", "description": "量子科学公司最高管理层，直接对接集团行政总部（T0）", "icon": "hex", "tier": 1},
+    {"id": "madison", "name": "麦迪逊研究所", "color": "#00BCD4", "description": "暗物质反应堆研发与设施内技术运行、科学研究（T1）", "icon": "eye", "tier": 1},
+    {"id": "nuclear", "name": "区域核能运营部", "color": "#FF9800", "description": "各核电站的运营与管理（T1）", "icon": "storm", "tier": 2},
+    {"id": "rd_tech", "name": "研发与技术部", "color": "#9C27B0", "description": "Epsilon-8生物 / Kilo-9医药 / Beta-6物理实验室（T1）", "icon": "cross", "tier": 1},
+    {"id": "qdf", "name": "QDF司令部", "color": "#4CAF50", "description": "设施保全与武装力量指挥。量子科技与量子防御共同下属（T2）", "icon": "shield", "tier": 2},
+    {"id": "qsa", "name": "QSA综合处理小组", "color": "#FF3B30", "description": "高级安全保障部队，直属上级为CCNR安全保障总局（T2）", "icon": "claw", "tier": 2},
+    {"id": "qso", "name": "QSO", "color": "#B26BFF", "description": "直属最高层的私人武装部队，非极端时刻不出场（T2）", "icon": "target", "tier": 1},
+    {"id": "logistics", "name": "后勤与供应链部", "color": "#795548", "description": "物资保障、运输、仓储、食堂（T3）", "icon": "gear", "tier": 3}
   ],
   "groups": [
-    {"id": "qsec_group", "memberIds": ["quantum_science", "madison"]},
+    {"id": "core_depts", "memberIds": ["admin_hq", "madison", "nuclear", "rd_tech"]},
     {"id": "sec_force", "memberIds": ["qdf", "qsa", "qso"]}
   ],
   "relations": [
-    {"from": "sec_force", "to": "qsec_group", "type": "friendly"},
+    {"from": "sec_force", "to": "core_depts", "type": "friendly"},
     {"from": "qso", "to": "qdf", "type": "friendly"},
-    {"from": "logistics", "to": "qsec_group", "type": "friendly"}
+    {"from": "logistics", "to": "core_depts", "type": "friendly"},
+    {"from": "admin_hq", "to": "sec_force", "type": "friendly"}
   ],
   "professions": [
-    {"id": "qdf_guard", "name": "QDF队员", "factionId": "qdf", "selfDeploy": false,
-     "loadout": {"inventory": [], "armor": [], "offhand": {}}},
-    {"id": "qdf_special", "name": "QDF高级特工", "factionId": "qdf", "selfDeploy": true,
-     "loadout": {"inventory": [], "armor": [], "offhand": {}}},
-    {"id": "qsa_member", "name": "QSA队员", "factionId": "qsa", "selfDeploy": false,
-     "loadout": {"inventory": [], "armor": [], "offhand": {}}},
-    {"id": "madison_researcher", "name": "研究员", "factionId": "madison", "selfDeploy": true,
-     "loadout": {"inventory": [], "armor": [], "offhand": {}}},
-    {"id": "logistics_staff", "name": "后勤专员", "factionId": "logistics", "selfDeploy": false,
-     "loadout": {"inventory": [], "armor": [], "offhand": {}}}
+    {"id": "hq_ceo", "name": "量子科学CEO", "factionId": "admin_hq", "selfDeploy": false, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
+    {"id": "hq_vp", "name": "量子科学副总裁", "factionId": "admin_hq", "selfDeploy": false, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
+    {"id": "hq_dept_manager", "name": "部门主管", "factionId": "admin_hq", "selfDeploy": false, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
+    {"id": "hq_admin_chief", "name": "行政总管", "factionId": "admin_hq", "selfDeploy": false, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
+    {"id": "facility_manager", "name": "设施主管", "factionId": "admin_hq", "selfDeploy": true, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
+    {"id": "m1_master", "name": "研究所主管", "factionId": "madison", "selfDeploy": false, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
+    {"id": "m2_chief_engineer", "name": "反应堆首席工程师", "factionId": "madison", "selfDeploy": false, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
+    {"id": "m3_senior_researcher", "name": "高级研究员", "factionId": "madison", "selfDeploy": true, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
+    {"id": "m4_researcher", "name": "研究员/实验员", "factionId": "madison", "selfDeploy": true, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
+    {"id": "m4_technician", "name": "技术员", "factionId": "madison", "selfDeploy": false, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
+    {"id": "m5_intern", "name": "访客/实习生", "factionId": "madison", "selfDeploy": false, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
+    {"id": "nu1_station_manager", "name": "核电站站长", "factionId": "nuclear", "selfDeploy": false, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
+    {"id": "nu2_operator", "name": "核电站操作员", "factionId": "nuclear", "selfDeploy": false, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
+    {"id": "nu3_maintenance", "name": "运维工程师", "factionId": "nuclear", "selfDeploy": true, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
+    {"id": "r1_director", "name": "研发总监", "factionId": "rd_tech", "selfDeploy": false, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
+    {"id": "r2_chief_scientist", "name": "首席科学家", "factionId": "rd_tech", "selfDeploy": false, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
+    {"id": "r3_senior_researcher", "name": "高级研究员", "factionId": "rd_tech", "selfDeploy": true, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
+    {"id": "r4_researcher", "name": "研究员/实验员", "factionId": "rd_tech", "selfDeploy": true, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
+    {"id": "r5_assistant", "name": "助理研究员/实习生", "factionId": "rd_tech", "selfDeploy": false, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
+    {"id": "s1_commander", "name": "QDF总司令", "factionId": "qdf", "selfDeploy": false, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
+    {"id": "s2_guard_captain", "name": "设施安保组长", "factionId": "qdf", "selfDeploy": false, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
+    {"id": "s3_special", "name": "QDF高级特工", "factionId": "qdf", "selfDeploy": true, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
+    {"id": "s4_guard", "name": "QDF队员", "factionId": "qdf", "selfDeploy": false, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
+    {"id": "s5_door_guard", "name": "门禁警卫", "factionId": "qdf", "selfDeploy": false, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
+    {"id": "a1_leader", "name": "QSA组长", "factionId": "qsa", "selfDeploy": false, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
+    {"id": "a2_elite", "name": "QSA高级队员", "factionId": "qsa", "selfDeploy": false, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
+    {"id": "a3_member", "name": "QSA队员", "factionId": "qsa", "selfDeploy": true, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
+    {"id": "h1_squad_leader", "name": "QSO小队长", "factionId": "qso", "selfDeploy": false, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
+    {"id": "h2_member", "name": "QSO队员", "factionId": "qso", "selfDeploy": false, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
+    {"id": "n1_director", "name": "后勤管理总监", "factionId": "logistics", "selfDeploy": false, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
+    {"id": "n2_logistics_manager", "name": "物流主任", "factionId": "logistics", "selfDeploy": false, "loadout": {"inventory": [], "armor": [], "offhand": {}}},
+    {"id": "n3_canteen_lead", "name": "食堂负责人", "factionId": "logistics", "selfDeploy": false, "loadout": {"inventory": [], "armor": [], "offhand": {}}}
   ]
 }

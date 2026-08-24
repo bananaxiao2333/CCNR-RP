@@ -41,6 +41,8 @@ public final class CinematicController {
     public static void start(JsonObject payload) {
         data = payload;
         startMs = System.currentTimeMillis();
+        // 职业出场音乐（配置驱动，未配置则静默跳过）
+        ClientAudio.playEntrance(payload == null ? "" : str(payload, "music"));
     }
 
     private static long t() {

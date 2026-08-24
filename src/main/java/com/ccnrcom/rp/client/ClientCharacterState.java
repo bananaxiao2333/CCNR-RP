@@ -17,6 +17,9 @@ public final class ClientCharacterState {
     private static final List<JsonObject> factions = new ArrayList<>();
     private static final List<JsonObject> professions = new ArrayList<>();
     private static String selected = "";
+    private static JsonObject settings = new JsonObject();
+    private static boolean isAdmin = false;
+    private static boolean autoOpenPending = false;
 
     private ClientCharacterState() {}
 
@@ -43,6 +46,22 @@ public final class ClientCharacterState {
             for (JsonElement e : root.getAsJsonArray("professions")) {
                 professions.add(e.getAsJsonObject());
             }
+        }
+        if (root.has("settings") && root.get("settings").isJsonObject()) {
+            settings = root.getAsJsonObject("settings");
+        }
+        isAdmin = root.has("admin") && root.get("admin").getAsBoolean();
+        autoOpenPending = bool("openPanelOnJoin", true);
+    }
+
+    private static boolean bool(String key, boolean def) {
+        try {
+            if (!settings.has(key)) {
+                return def;
+            }
+            return settings.get(key).getAsBoolean();
+        } catch (Exception e) {
+            return def;
         }
     }
 
@@ -101,6 +120,34 @@ public final class ClientCharacterState {
             c.addProperty("xp", xp);
             c.addProperty("level", level);
         }
+    }
+
+    public static synchronized boolean settingBool(String key, boolean def) {
+        return bool(key, def);
+    }
+
+    public static synchronized boolean isAdmin() {
+        return isAdmin;
+    }
+
+    /** 管理器状态（ManagerStateS2C）更新。 */
+    public static synchronized void setManager(String payload) {
+        JsonObject root = JsonUtil.GSON.fromJson(payload, JsonObject.class);
+        if (root == null) {
+            return;
+        }
+        if (root.has("settings") && root.get("settings").isJsonObject()) {
+            settings = root.getAsJsonObject("settings");
+        }
+        isAdmin = root.has("admin") && root.get("admin").getAsBoolean();
+        CharacterManagementScreen.refreshIfOpen();
+    }
+
+    /** 消耗入服自动打开面板标记（仅一次）。 */
+    public static synchronized boolean consumeAutoOpenPanel() {
+        boolean v = autoOpenPending;
+        autoOpenPending = false;
+        return v;
     }
 
     public static synchronized void clear() {

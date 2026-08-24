@@ -43,6 +43,9 @@ public final class StatusManager {
         if (!(event.getEntity() instanceof ServerPlayer player)) {
             return;
         }
+        if (CCNRRPMod.managerSettings != null && !CCNRRPMod.managerSettings.forceRetain()) {
+            return; // 未开启“强制保留角色”：离服不自动判死
+        }
         Optional<CharacterData> alive =
                 CCNRRPMod.characters.store().findAlive(player.getUUID().toString());
         if (alive.isPresent()) {
@@ -76,6 +79,9 @@ public final class StatusManager {
         }
         pollCounter = 0;
         long graceMs = CCNRRPConfig.OFFLINE_GRACE_SECONDS.get() * 1000L;
+        if (CCNRRPMod.managerSettings != null && !CCNRRPMod.managerSettings.forceRetain()) {
+            return; // 未开启“强制保留角色”：轮询兜底判死关闭
+        }
         for (CharacterData c : CCNRRPMod.characters.store().all()) {
             if (c.status() != CharacterStatus.ALIVE) {
                 continue;
@@ -106,6 +112,22 @@ public final class StatusManager {
                 player,
                 new RpPackets.ErrorS2C(
                         "ccnr_rp.status.killed.command", alive.get().name()));
+    }
+
+    /** 强制保留（转生/弃演）：角色直接判定死亡；在线存活时在最后位置落下遗体。档案保留不删除。 */
+    public static void retire(CharacterData data, ServerPlayer playerOrNull) {
+        if (data.status() == CharacterStatus.ALIVE) {
+            markDead(data, playerOrNull, playerOrNull != null, "retire");
+            return;
+        }
+        if (data.status() == CharacterStatus.DEAD) {
+            return;
+        }
+        long cooldownMs = CCNRRPConfig.DEATH_COOLDOWN_MINUTES.get() * 60000L;
+        CharacterData dead =
+                data.withStatus(CharacterStatus.DEAD).withCooldown(System.currentTimeMillis() + cooldownMs);
+        CharacterService.updateAndBroadcast(dead, playerOrNull);
+        LOGGER.info("[CCNR-RP] 退役 [retire] {} 角色 {}（非存活，仅状态）", data.playerUuid(), data.name());
     }
 
     /** 掉线判死：状态 + 冷却 + 遗体 + 同步（幂等：仅 ALIVE 生效）。 */

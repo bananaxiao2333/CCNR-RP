@@ -29,6 +29,14 @@ public final class ClientForgeEvents {
                 && Minecraft.getInstance().player != null) {
             Minecraft.getInstance().setScreen(new RecruitPopupScreen());
         }
+        // 入服自动打开角色面板（设置：openPanelOnJoin，且无存活角色时）
+        if (ClientCharacterState.consumeAutoOpenPanel()
+                && Minecraft.getInstance().screen == null
+                && Minecraft.getInstance().player != null
+                && ClientCharacterState.list().stream().noneMatch(c -> "alive"
+                        .equals(c.has("status") ? c.get("status").getAsString() : ""))) {
+            Minecraft.getInstance().setScreen(new CharacterManagementScreen());
+        }
         while (ClientSetup.OPEN_CHARACTERS.consumeClick()) {
             Minecraft.getInstance().setScreen(new CharacterManagementScreen());
         }

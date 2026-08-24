@@ -124,6 +124,65 @@ public final class CharacterService {
         service().sendCinematic(player, charId);
     }
 
+    // ---------- 管理器（管理员）----------
+
+    /** 请求管理器状态（管理员）。 */
+    public static void onManagerRequest(ServerPlayer player) {
+        if (!com.ccnrcom.rp.util.Permissions.canAdmin(player, com.ccnrcom.rp.util.Permissions.ADMIN_FACTION)) {
+            service().sendError(player, "ccnr_rp.command.no_permission");
+            return;
+        }
+        sendManagerState(player);
+    }
+
+    /** 设置项修改（管理员）。 */
+    public static void onManagerSet(ServerPlayer player, String key, String value) {
+        if (!com.ccnrcom.rp.util.Permissions.canAdmin(player, com.ccnrcom.rp.util.Permissions.ADMIN_FACTION)) {
+            service().sendError(player, "ccnr_rp.command.no_permission");
+            return;
+        }
+        if (CCNRRPMod.managerSettings == null) {
+            service().sendError(player, "ccnr_rp.error.invalid_argument", "管理器未就绪");
+            return;
+        }
+        List<String> errors = CCNRRPMod.managerSettings.set(key, value);
+        if (!errors.isEmpty()) {
+            service().sendError(player, "ccnr_rp.error.invalid_argument", String.join("; ", errors));
+            return;
+        }
+        sendManagerState(player);
+        service().sendList(player);
+    }
+
+    private static void sendManagerState(ServerPlayer player) {
+        if (CCNRRPMod.managerSettings == null) {
+            return;
+        }
+        JsonObject pay = new JsonObject();
+        pay.add("settings", CCNRRPMod.managerSettings.toJson());
+        pay.addProperty(
+                "admin",
+                com.ccnrcom.rp.util.Permissions.canAdmin(player, com.ccnrcom.rp.util.Permissions.ADMIN_FACTION));
+        RpChannels.sendTo(player, new RpPackets.ManagerStateS2C(pay.toString()));
+    }
+
+    /** 转生/退役（强制保留角色）：判死 + 遗体，档案保留。 */
+    public static void onRetire(ServerPlayer player, String charId) {
+        CharacterService svc = service();
+        Optional<CharacterData> c = svc.store.find(charId);
+        if (c.isEmpty() || !c.get().playerUuid().equals(player.getUUID().toString())) {
+            svc.sendError(player, "ccnr_rp.character.error.ownership");
+            return;
+        }
+        CharacterData data = c.get();
+        if (data.status() == com.ccnrcom.rp.status.CharacterStatus.DEAD) {
+            svc.sendError(player, "ccnr_rp.character.error.status", data.name(), "DEAD");
+            return;
+        }
+        com.ccnrcom.rp.status.StatusManager.retire(data, player);
+        svc.sendError(player, "ccnr_rp.character.retire.ok", data.name());
+    }
+
     /** 组装部署入场数据：名字/职业/阵营(图标+等级)/简历/阵营关系（图谱 resolve，非中立才列出）。 */
     private void sendCinematic(ServerPlayer player, String charId) {
         Optional<CharacterData> c = store.find(charId);
@@ -134,10 +193,12 @@ public final class CharacterService {
         JsonObject en = new JsonObject();
         en.addProperty("name", data.name());
         String profName = data.professionId();
+        String music = "";
         if (CCNRRPMod.factions != null) {
             var profDef = CCNRRPMod.factions.findProfession(data.professionId()).orElse(null);
             if (profDef != null) {
                 profName = com.ccnrcom.rp.faction.FactionProfessions.idsSafeName(profDef);
+                music = com.ccnrcom.rp.faction.FactionProfessions.music(profDef);
             }
             var graph = CCNRRPMod.factions.graph();
             var f = graph.factions().get(data.factionId());
@@ -162,6 +223,7 @@ public final class CharacterService {
             }
         }
         en.addProperty("professionName", profName);
+        en.addProperty("music", music);
         if (!en.has("factionName")) {
             en.addProperty("factionName", data.factionId());
             en.addProperty("icon", "hex");
@@ -378,6 +440,18 @@ public final class CharacterService {
             }
         }
         root.add("professions", pa);
+        // 管理器设置 + 权限（客户端 K 面板与管理界面使用）
+        JsonObject st = new JsonObject();
+        st.addProperty("forceObserving", true);
+        st.addProperty("openPanelOnJoin", true);
+        st.addProperty("forceRetain", true);
+        if (CCNRRPMod.managerSettings != null) {
+            st = CCNRRPMod.managerSettings.toJson();
+        }
+        root.add("settings", st);
+        root.addProperty(
+                "admin",
+                com.ccnrcom.rp.util.Permissions.canAdmin(player, com.ccnrcom.rp.util.Permissions.ADMIN_FACTION));
         RpChannels.sendTo(player, new RpPackets.CharacterListS2C(root.toString()));
     }
 
