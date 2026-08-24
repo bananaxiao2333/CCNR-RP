@@ -238,8 +238,6 @@ public class CharacterManagementScreen extends Screen {
 
     private void clearWidgets2() {
         clearWidgets();
-        navBounds.clear();
-        rowBounds.clear();
     }
 
     private void addW(AbstractWidget w) {
@@ -416,6 +414,7 @@ public class CharacterManagementScreen extends Screen {
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         renderBackground(g);
         RpTheme.terminalPanel(g, px1, py1, px2, py2, RpTheme.RADIUS_LARGE);
+        RpBg.draw(g, px1 + 4, py1 + 4, px2 - 4, py2 - 4);
         renderHeader(g, mouseX, mouseY);
         renderColHeaders(g);
         renderNav(g, mouseX, mouseY);
@@ -456,8 +455,11 @@ public class CharacterManagementScreen extends Screen {
         // 关闭
         boolean hover = mouseIn(mouseX, mouseY, closeX1, closeY1, closeX2, closeY2);
         if (hover) {
-            g.fill(closeX1 - 2, closeY1 - 1, closeX2 + 2, closeY2 + 1, 0xE66F1613);
-            RpRoundRect.outlined(g, closeX1 - 3, closeY1 - 2, closeX2 + 3, closeY2 + 2, 4f, RpTheme.RED, 0x00000000);
+            g.fill(closeX1 - 3, closeY1 - 2, closeX2 + 3, closeY2 + 2, 0xE66F1613);
+            g.fill(closeX1 - 3, closeY1 - 2, closeX2 + 2, closeY1 - 1, RpTheme.RED);
+            g.fill(closeX1 - 3, closeY2 + 1, closeX2 + 3, closeY2 + 2, RpTheme.RED);
+            g.fill(closeX1 - 3, closeY1 - 2, closeX1 - 2, closeY2 + 2, RpTheme.RED);
+            g.fill(closeX2 + 2, closeY1 - 2, closeX2 + 3, closeY2 + 2, RpTheme.RED);
         }
         g.drawString(
                 font, "X", (closeX1 + closeX2) / 2 - 2, closeY1 + 4, hover ? 0xFFFFFFFF : RpTheme.TEXT_SECONDARY, true);
@@ -536,7 +538,7 @@ public class CharacterManagementScreen extends Screen {
     }
 
     private void renderList(GuiGraphics g, int mouseX, int mouseY) {
-        RpRoundRect.outlined(g, mlX1 - 3, bodyY1 - 2, mlX2 + 3, bodyY2, 8f, RpTheme.PANEL_BORDER, 0x00000000);
+        RpRoundRect.outlined(g, mlX1 - 3, bodyY1 - 2, mlX2 + 3, bodyY2, 8f, RpTheme.PANEL_BORDER, RpTheme.PANEL_BG);
         List<JsonObject> visible = filteredChars();
         int offset = offsetOfRows();
         int rowH = 40;
