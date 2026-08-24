@@ -74,6 +74,7 @@ public class CCNRRPMod {
         experience = new com.ccnrcom.rp.experience.ExperienceService(event.getServer());
         MinecraftForge.EVENT_BUS.register(experience);
         spawnFramework = new com.ccnrcom.rp.spawn.SpawnFramework(event.getServer());
+        MinecraftForge.EVENT_BUS.register(spawnFramework);
         animationEngine = new com.ccnrcom.rp.animation.AnimationEngine();
         eventManager = new com.ccnrcom.rp.event.EventManager(event.getServer());
         MinecraftForge.EVENT_BUS.register(eventManager);
@@ -98,6 +99,9 @@ public class CCNRRPMod {
         }
         if (statusManager != null) {
             MinecraftForge.EVENT_BUS.unregister(statusManager);
+        }
+        if (spawnFramework != null) {
+            MinecraftForge.EVENT_BUS.unregister(spawnFramework);
         }
         if (experience != null) {
             MinecraftForge.EVENT_BUS.unregister(experience);

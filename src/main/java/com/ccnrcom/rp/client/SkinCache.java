@@ -37,6 +37,11 @@ public final class SkinCache {
     }
 
     /** 若已缓存则返回纹理（供界面头像渲染）；未缓存返回 null。 */
+    /** 若已缓存则返回纹理（供界面头像渲染）；未缓存返回 null。 */
+    public static ResourceLocation textureOrNull(String charId) {
+        return TEXTURES.get(charId);
+    }
+
     public static ResourceLocation texture(String charId) {
         return TEXTURES.get(charId);
     }

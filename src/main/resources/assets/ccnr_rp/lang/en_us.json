@@ -84,5 +84,17 @@
   "ccnr_rp.event.phase.item": "Phase %s (%s min, current=%s)",
   "ccnr_rp.event.phase.set": "Phase switched: %s",
   "ccnr_rp.event.phase.not_found": "Phase not found: %s",
-  "ccnr_rp.event.gameover": "Game-over flow triggered (evacuation + settlement)"
+  "ccnr_rp.event.gameover": "Game-over flow triggered (evacuation + settlement)",
+  "ccnr_rp.gui.character.deploy": "Deploy",
+  "ccnr_rp.spawn.deployed": "Character %s deployed",
+  "ccnr_rp.spawn.error.self_deploy": "Cannot self-deploy %s (need observing status and selfDeploy profession)",
+  "ccnr_rp.spawn.recruit.you": "Recruit offer: %s (wave %s) — accept within time limit",
+  "ccnr_rp.spawn.recruit.title": "Recruit Offers",
+  "ccnr_rp.spawn.recruit.accept": "Accept",
+  "ccnr_rp.spawn.recruit.decline": "Decline",
+  "ccnr_rp.spawn.recruit.failed": "Wave %s recruitment failed",
+  "ccnr_rp.spawn.list.item": "%s | mode=%s | enabled=%s | count=%s | teams=%s",
+  "ccnr_rp.spawn.triggered": "Wave triggered: %s",
+  "ccnr_rp.spawn.enabled": "Wave set: %s -> %s",
+  "ccnr_rp.spawn.not_found": "Wave not found: %s"
 }
