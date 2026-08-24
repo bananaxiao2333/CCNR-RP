@@ -84,7 +84,9 @@ public final class FactionManager {
                     o.get("id").getAsString(),
                     str(o, "name", o.get("id").getAsString()),
                     str(o, "color", "#FFFFFF"),
-                    str(o, "description", "")));
+                    str(o, "description", ""),
+                    str(o, "icon", "hex"),
+                    Math.max(1, Math.min(3, intOf(o, "tier", 2)))));
         }
         List<FactionGroup> groups = new ArrayList<>();
         JsonArray ga = root.has("groups") ? root.getAsJsonArray("groups") : new JsonArray();
@@ -119,6 +121,14 @@ public final class FactionManager {
 
     private static String str(JsonObject o, String key, String def) {
         return o.has(key) && !o.get(key).isJsonNull() ? o.get(key).getAsString() : def;
+    }
+
+    private static int intOf(JsonObject o, String key, int def) {
+        return o.has(key)
+                        && o.get(key).isJsonPrimitive()
+                        && o.get(key).getAsJsonPrimitive().isNumber()
+                ? o.get(key).getAsInt()
+                : def;
     }
 
     public FactionGraph graph() {

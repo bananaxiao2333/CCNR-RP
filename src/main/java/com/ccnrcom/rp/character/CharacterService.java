@@ -309,6 +309,9 @@ public final class CharacterService {
                 JsonObject o = new JsonObject();
                 o.addProperty("id", f.id());
                 o.addProperty("name", f.name());
+                o.addProperty("color", f.color());
+                o.addProperty("icon", f.icon());
+                o.addProperty("tier", f.tier());
                 fa.add(o);
             });
         }
