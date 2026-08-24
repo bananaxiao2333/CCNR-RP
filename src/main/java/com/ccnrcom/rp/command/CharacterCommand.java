@@ -22,7 +22,8 @@ final class CharacterCommand {
     private CharacterCommand() {}
 
     static void register(LiteralCommandNode<CommandSourceStack> rp) {
-        LiteralArgumentBuilder<CommandSourceStack> base = Commands.literal("character");
+        LiteralArgumentBuilder<CommandSourceStack> base = Commands.literal("character")
+                .executes(ctx -> RpCommand.usageHint(ctx.getSource(), "ccnr_rp.command.usage.character"));
 
         base.then(Commands.literal("list").executes(ctx -> {
             if (ctx.getSource().getEntity() instanceof ServerPlayer p) {
@@ -33,7 +34,7 @@ final class CharacterCommand {
         }));
 
         base.then(Commands.literal("create")
-                .then(Commands.argument("name", StringArgumentType.word())
+                .then(Commands.argument("name", StringArgumentType.string())
                         .then(Commands.argument("faction", StringArgumentType.word())
                                 .then(Commands.argument("profession", StringArgumentType.word())
                                         .then(Commands.argument("background", StringArgumentType.greedyString())

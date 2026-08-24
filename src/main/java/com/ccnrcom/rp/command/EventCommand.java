@@ -21,6 +21,7 @@ final class EventCommand {
 
     static void register(LiteralCommandNode<CommandSourceStack> rp) {
         rp.addChild(Commands.literal("event")
+                .executes(ctx -> RpCommand.usageHint(ctx.getSource(), "ccnr_rp.command.usage.event"))
                 .then(Commands.literal("list").executes(ctx -> list(ctx.getSource())))
                 .then(Commands.literal("trigger")
                         .requires(RpCommand.admin(Permissions.ADMIN_EVENT))
@@ -40,6 +41,7 @@ final class EventCommand {
                                                 BoolArgumentType.getBool(ctx, "on"))))))
                 .build());
         rp.addChild(Commands.literal("phase")
+                .executes(ctx -> RpCommand.usageHint(ctx.getSource(), "ccnr_rp.command.usage.event"))
                 .requires(RpCommand.admin(Permissions.ADMIN_PHASE))
                 .then(Commands.literal("list").executes(ctx -> phaseList(ctx.getSource())))
                 .then(Commands.literal("set")

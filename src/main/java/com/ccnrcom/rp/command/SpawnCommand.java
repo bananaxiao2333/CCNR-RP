@@ -21,12 +21,15 @@ final class SpawnCommand {
 
     static void register(LiteralCommandNode<CommandSourceStack> rp) {
         rp.addChild(Commands.literal("spawn")
+                .executes(ctx -> RpCommand.usageHint(ctx.getSource(), "ccnr_rp.command.usage.spawn"))
                 .requires(RpCommand.admin(Permissions.ADMIN_SPAWN))
                 .then(Commands.literal("list").executes(ctx -> list(ctx.getSource())))
                 .then(Commands.literal("trigger")
+                        .executes(ctx -> RpCommand.usageHint(ctx.getSource(), "ccnr_rp.command.usage.spawn"))
                         .then(Commands.argument("id", StringArgumentType.word())
                                 .executes(ctx -> trigger(ctx.getSource(), StringArgumentType.getString(ctx, "id")))))
                 .then(Commands.literal("enable")
+                        .executes(ctx -> RpCommand.usageHint(ctx.getSource(), "ccnr_rp.command.usage.spawn"))
                         .then(Commands.argument("id", StringArgumentType.word())
                                 .then(Commands.argument("on", BoolArgumentType.bool())
                                         .executes(ctx -> enable(

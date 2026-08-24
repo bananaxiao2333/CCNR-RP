@@ -23,20 +23,24 @@ final class XpCommand {
 
     static void register(LiteralCommandNode<CommandSourceStack> rp) {
         rp.addChild(Commands.literal("settle")
+                .executes(ctx -> RpCommand.usageHint(ctx.getSource(), "ccnr_rp.command.usage.xp"))
                 .requires(RpCommand.admin(Permissions.ADMIN_SETTLE))
                 .then(Commands.argument("player", StringArgumentType.word())
                         .executes(ctx -> settle(ctx.getSource(), StringArgumentType.getString(ctx, "player"))))
                 .then(Commands.literal("all").executes(ctx -> settleAll(ctx.getSource())))
                 .build());
         rp.addChild(Commands.literal("xp")
+                .executes(ctx -> RpCommand.usageHint(ctx.getSource(), "ccnr_rp.command.usage.xp"))
                 .then(Commands.argument("player", StringArgumentType.word())
                         .executes(ctx -> info(ctx.getSource(), StringArgumentType.getString(ctx, "player"), true)))
                 .build());
         rp.addChild(Commands.literal("level")
+                .executes(ctx -> RpCommand.usageHint(ctx.getSource(), "ccnr_rp.command.usage.xp"))
                 .then(Commands.argument("player", StringArgumentType.word())
                         .executes(ctx -> info(ctx.getSource(), StringArgumentType.getString(ctx, "player"), false)))
                 .build());
         rp.addChild(Commands.literal("evac")
+                .executes(ctx -> RpCommand.usageHint(ctx.getSource(), "ccnr_rp.command.usage.xp"))
                 .requires(RpCommand.admin(Permissions.ADMIN_SETTLE))
                 .then(Commands.argument("player", StringArgumentType.word())
                         .then(Commands.argument("method", StringArgumentType.word())

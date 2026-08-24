@@ -22,10 +22,12 @@ final class StateCommand {
 
     static void register(LiteralCommandNode<CommandSourceStack> rp) {
         rp.addChild(Commands.literal("state")
+                .executes(ctx -> RpCommand.usageHint(ctx.getSource(), "ccnr_rp.command.usage.state"))
                 .then(Commands.argument("player", StringArgumentType.word())
                         .executes(ctx -> state(ctx.getSource(), StringArgumentType.getString(ctx, "player"))))
                 .build());
         rp.addChild(Commands.literal("kill")
+                .executes(ctx -> RpCommand.usageHint(ctx.getSource(), "ccnr_rp.command.usage.state"))
                 .requires(RpCommand.admin(Permissions.ADMIN_KILL))
                 .then(Commands.argument("player", StringArgumentType.word())
                         .executes(ctx -> kill(ctx.getSource(), StringArgumentType.getString(ctx, "player"))))

@@ -26,11 +26,13 @@ final class ProfessionCommand {
     private ProfessionCommand() {}
 
     static void register(LiteralCommandNode<CommandSourceStack> rp) {
-        LiteralArgumentBuilder<CommandSourceStack> base = Commands.literal("profession");
+        LiteralArgumentBuilder<CommandSourceStack> base = Commands.literal("profession")
+                .executes(ctx -> RpCommand.usageHint(ctx.getSource(), "ccnr_rp.command.usage.profession"));
 
         base.then(Commands.literal("list").executes(ctx -> list(ctx.getSource())));
 
         base.then(Commands.literal("create")
+                .executes(ctx -> RpCommand.usageHint(ctx.getSource(), "ccnr_rp.command.usage.profession"))
                 .requires(RpCommand.admin(Permissions.ADMIN_PROFESSION))
                 .then(Commands.argument("id", StringArgumentType.word())
                         .then(Commands.argument("factionId", StringArgumentType.word())
@@ -39,9 +41,18 @@ final class ProfessionCommand {
                                                 ctx.getSource(),
                                                 StringArgumentType.getString(ctx, "id"),
                                                 StringArgumentType.getString(ctx, "factionId"),
-                                                BoolArgumentType.getBool(ctx, "selfDeploy")))))));
+                                                BoolArgumentType.getBool(ctx, "selfDeploy"),
+                                                StringArgumentType.getString(ctx, "id")))
+                                        .then(Commands.argument("name", StringArgumentType.greedyString())
+                                                .executes(ctx -> create(
+                                                        ctx.getSource(),
+                                                        StringArgumentType.getString(ctx, "id"),
+                                                        StringArgumentType.getString(ctx, "factionId"),
+                                                        BoolArgumentType.getBool(ctx, "selfDeploy"),
+                                                        StringArgumentType.getString(ctx, "name"))))))));
 
         base.then(Commands.literal("save")
+                .executes(ctx -> RpCommand.usageHint(ctx.getSource(), "ccnr_rp.command.usage.profession"))
                 .requires(RpCommand.admin(Permissions.ADMIN_PROFESSION))
                 .then(Commands.argument("id", StringArgumentType.word())
                         .executes(ctx -> save(ctx.getSource(), StringArgumentType.getString(ctx, "id"), false))
@@ -52,6 +63,7 @@ final class ProfessionCommand {
                                         ctx -> save(ctx.getSource(), StringArgumentType.getString(ctx, "id"), true)))));
 
         base.then(Commands.literal("load")
+                .executes(ctx -> RpCommand.usageHint(ctx.getSource(), "ccnr_rp.command.usage.profession"))
                 .requires(RpCommand.admin(Permissions.ADMIN_PROFESSION))
                 .then(Commands.argument("id", StringArgumentType.word())
                         .executes(ctx -> load(ctx.getSource(), StringArgumentType.getString(ctx, "id")))));
@@ -82,12 +94,13 @@ final class ProfessionCommand {
         return 1;
     }
 
-    private static int create(CommandSourceStack source, String id, String factionId, boolean selfDeploy) {
+    private static int create(CommandSourceStack source, String id, String factionId, boolean selfDeploy, String name) {
         FactionManager mgr = CCNRRPMod.factions;
         if (mgr == null) {
             return 0;
         }
-        List<String> errors = mgr.upsertProfession(id, id, factionId, selfDeploy, null);
+        String displayName = (name == null || name.isBlank()) ? id : name;
+        List<String> errors = mgr.upsertProfession(id, displayName, factionId, selfDeploy, null);
         if (!errors.isEmpty()) {
             source.sendSuccess(
                     () -> Component.translatable("ccnr_rp.profession.error.config", String.join("; ", errors)), false);
