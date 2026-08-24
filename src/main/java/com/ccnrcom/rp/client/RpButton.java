@@ -96,6 +96,20 @@ public final class RpButton extends Button {
                 0xFFFFFFFF);
     }
 
+    /** 弹窗内静态绘制按钮（非 widget，交给父屏手动命中）。 */
+    public static void draw(GuiGraphics g, int x1, int y1, int x2, int y2, String label, int border, boolean primary) {
+        RpRoundRect.outlined(g, x1, y1, x2, y2, 6f, border, primary ? 0xB0111A1E : 0xA8101418);
+        Font f2 = Minecraft.getInstance().font;
+        int tw = f2.width(label);
+        g.drawString(
+                f2,
+                label,
+                x1 + (x2 - x1 - tw) / 2,
+                y1 + (y2 - y1 - 8) / 2,
+                primary ? RpTheme.CYAN : RpTheme.TEXT_PRIMARY,
+                true);
+    }
+
     @Override
     public void renderWidget(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         int f = isHovered() ? fillHover : fill;

@@ -35,12 +35,14 @@ public final class CharacterService {
     private static final int MAX_SKIN_DIMENSION = 512;
     private static final int PART_SIZE = 32 * 1024;
 
+    private final MinecraftServer server;
     private final CharacterStore store;
     private final Path skinDir;
     private final Map<UUID, String> selected = new HashMap<>();
     private final Map<UUID, SkinUpload> uploads = new HashMap<>();
 
     public CharacterService(MinecraftServer server) {
+        this.server = server;
         net.minecraft.world.level.storage.LevelResource dir =
                 new net.minecraft.world.level.storage.LevelResource("ccnr_rp");
         this.store = new CharacterStore(server.getWorldPath(dir));
@@ -126,8 +128,6 @@ public final class CharacterService {
             return;
         }
         service().sendError(player, "ccnr_rp.spawn.deployed", charId);
-        // 部署成功 → 客户端入场电影（黑屏→阵营图标→打字档案→淡出）
-        service().sendCinematic(player, charId);
     }
 
     // ---------- 管理器（管理员）----------
@@ -156,8 +156,19 @@ public final class CharacterService {
             service().sendError(player, "ccnr_rp.error.invalid_argument", String.join("; ", errors));
             return;
         }
-        sendManagerState(player);
-        service().sendList(player);
+        service().broadcastToAll();
+    }
+
+    /** 管理端变更后同步全员：角色列表 + 管理器状态（阵营/职业/事件/阶段/波）。 */
+    private void broadcastToAll() {
+        if (server == null) {
+            return;
+        }
+        List<ServerPlayer> players = new ArrayList<>(server.getPlayerList().getPlayers());
+        for (ServerPlayer p : players) {
+            sendList(p);
+            sendManagerState(p);
+        }
     }
 
     private static void sendManagerState(ServerPlayer player) {
@@ -178,9 +189,6 @@ public final class CharacterService {
         JsonArray wav = new JsonArray();
         com.ccnrcom.rp.util.ConfigCrud.items("spawn_waves.json", "waves").forEach(wav::add);
         pay.add("waves", wav);
-        JsonArray seq = new JsonArray();
-        com.ccnrcom.rp.util.ConfigCrud.items("sequences.json", "sequences").forEach(seq::add);
-        pay.add("sequences", seq);
         RpChannels.sendTo(player, new RpPackets.ManagerStateS2C(pay.toString()));
     }
 
@@ -274,14 +282,6 @@ public final class CharacterService {
                     }
                 });
             }
-            case "sequence" -> {
-                String id = str(p, "id", "");
-                errors = crudArray("sequences.json", "sequences", action, id, p, o -> {
-                    if (!o.has("steps")) {
-                        o.add("steps", new JsonArray());
-                    }
-                });
-            }
             case "wave" -> {
                 String id = str(p, "id", "");
                 errors = crudArray("spawn_waves.json", "waves", action, id, p, o -> {
@@ -326,17 +326,214 @@ public final class CharacterService {
             if (CCNRRPMod.spawnFramework != null) {
                 CCNRRPMod.spawnFramework.reload();
             }
-        } else if ("sequence".equals(kind)) {
-            if (CCNRRPMod.sequenceEngine != null) {
-                CCNRRPMod.sequenceEngine.reload();
-            }
-            if (CCNRRPMod.eventManager != null) {
-                CCNRRPMod.eventManager.reload();
-            }
         }
         service().sendError(player, "ccnr_rp.manager.crud.ok", kind, action);
-        service().sendList(player);
-        sendManagerState(player);
+        service().broadcastToAll();
+    }
+
+    /** 管理端影响预检：更新/删除前统计波及（角色/阵营/职业/波/事件/阶段引用）。 */
+    public static void onManagerImpact(ServerPlayer player, String kind, String action, String payloadJson) {
+        if (player == null) {
+            return;
+        }
+        if (!com.ccnrcom.rp.util.Permissions.canAdmin(player, com.ccnrcom.rp.util.Permissions.ADMIN_FACTION)) {
+            service().sendError(player, "ccnr_rp.command.no_permission");
+            return;
+        }
+        JsonObject p;
+        try {
+            p = com.ccnrcom.rp.util.JsonUtil.GSON.fromJson(payloadJson, JsonObject.class);
+        } catch (Exception e) {
+            p = null;
+        }
+        if (p == null) {
+            service().sendError(player, "ccnr_rp.error.invalid_argument", "载荷解析失败");
+            return;
+        }
+        String id = str(p, "id", "");
+        List<String> lines = new ArrayList<>();
+        List<String> chars = new ArrayList<>();
+        List<String> waves = new ArrayList<>();
+        List<String> profs = new ArrayList<>();
+        List<String> events = new ArrayList<>();
+        List<String> phases = new ArrayList<>();
+        boolean rename = "update".equals(action);
+        // 职业：角色引用 / 波引用 / 序列步骤引用
+        if ("profession".equals(kind)) {
+            if (updateInvolvesIdChange("profession", id, p)) {
+                rename = true;
+            }
+            for (var c : CCNRRPMod.characters.store().all()) {
+                if (id.equals(c.professionId())) {
+                    chars.add(c.name());
+                }
+            }
+            waves = referenceWaves("profession", id);
+            profs = List.of();
+            stepsReferencing("profession", id, events, phases, waves);
+        } else if ("faction".equals(kind)) {
+            for (var c : CCNRRPMod.characters.store().all()) {
+                if (id.equals(c.factionId())) {
+                    chars.add(c.name());
+                }
+            }
+            for (String pid : CCNRRPMod.factions.professionIds()) {
+                var d = CCNRRPMod.factions.findProfession(pid).orElse(null);
+                if (d != null && id.equals(com.ccnrcom.rp.faction.FactionProfessions.factionId(d))) {
+                    profs.add(com.ccnrcom.rp.faction.FactionProfessions.idsSafeName(d));
+                }
+            }
+            waves = referenceWaves("faction", id);
+            stepsReferencing("faction", id, events, phases, waves);
+        } else if ("wave".equals(kind)) {
+            for (var e : com.ccnrcom.rp.util.ConfigCrud.items("events.json", "events")) {
+                JsonObject hooks = e.has("hooks") && e.get("hooks").isJsonObject() ? e.getAsJsonObject("hooks") : null;
+                if (hooks != null && id.equals(str(hooks, "spawnWave", ""))) {
+                    events.add(str(e, "id", "?"));
+                }
+                if (id.equals(str(e, "spawnWave", ""))) {
+                    events.add(str(e, "id", "?"));
+                }
+            }
+            stepsReferencing("wave", id, events, phases, waves);
+        } else if ("event".equals(kind)) {
+            stepsReferencing("event", id, events, phases, waves);
+        } else if ("phase".equals(kind)) {
+            stepsReferencing("phase", id, events, phases, waves);
+        }
+        if (!chars.isEmpty()) {
+            lines.add("角色(" + chars.size() + "): " + String.join(", ", chars.subList(0, Math.min(6, chars.size())))
+                    + (chars.size() > 6 ? "…" : ""));
+        }
+        if (!profs.isEmpty()) {
+            lines.add("职业(" + profs.size() + "): " + String.join(", ", profs.subList(0, Math.min(6, profs.size())))
+                    + (profs.size() > 6 ? "…" : ""));
+        }
+        if (!waves.isEmpty()) {
+            lines.add("刷新波(" + waves.size() + "): " + String.join(", ", waves.subList(0, Math.min(6, waves.size())))
+                    + (waves.size() > 6 ? "…" : ""));
+        }
+        if (!events.isEmpty()) {
+            lines.add("事件(" + events.size() + "): " + String.join(", ", events.subList(0, Math.min(6, events.size())))
+                    + (events.size() > 6 ? "…" : ""));
+        }
+        if (!phases.isEmpty()) {
+            lines.add("阶段(" + phases.size() + "): " + String.join(", ", phases.subList(0, Math.min(6, phases.size())))
+                    + (phases.size() > 6 ? "…" : ""));
+        }
+        if (rename && id.length() > 0) {
+            // 重命名（update 且 id 字段变化不算，UI 锁 id；此处仅提示改名不影响引用）
+        }
+        JsonObject resp = new JsonObject();
+        resp.addProperty("kind", kind);
+        resp.addProperty("action", action);
+        resp.addProperty("id", id);
+        JsonArray arr = new JsonArray();
+        for (String l : lines) {
+            arr.add(l);
+        }
+        resp.add("lines", arr);
+        RpChannels.sendTo(player, new RpPackets.ManagerImpactS2C(resp.toString()));
+    }
+
+    /** 更新时 id 是否发生变化（重命名 → 引用全断，必须确认）。 */
+    private static boolean updateInvolvesIdChange(String kind, String id, JsonObject p) {
+        String oldId = str(p, "_oldId", "");
+        return !oldId.isBlank() && !oldId.equals(id);
+    }
+
+    /** 波对 profession/faction 的引用（factionIds/professionIds 数组，来自 spawn_waves.json）。 */
+    private static List<String> referenceWaves(String kind, String id) {
+        List<String> out = new ArrayList<>();
+        for (JsonObject w : com.ccnrcom.rp.util.ConfigCrud.items("spawn_waves.json", "waves")) {
+            JsonArray arr = w.has("professionIds") && w.get("professionIds").isJsonArray()
+                    ? w.getAsJsonArray("professionIds")
+                    : w.has("factionIds") && w.get("factionIds").isJsonArray() ? w.getAsJsonArray("factionIds") : null;
+            if ("faction".equals(kind)
+                    && w.has("factionIds")
+                    && w.get("factionIds").isJsonArray()) {
+                arr = w.getAsJsonArray("factionIds");
+            }
+            if (arr == null) {
+                continue;
+            }
+            for (var e : arr) {
+                if (id.equals(e.getAsString())) {
+                    out.add(str(w, "id", "?"));
+                    break;
+                }
+            }
+        }
+        return out;
+    }
+
+    /** 序列步骤引用（inline sequence 数组，扫描事件/阶段/波）。 */
+    private static void stepsReferencing(
+            String kind, String id, List<String> events, List<String> phases, List<String> waves) {
+        scanSteps(com.ccnrcom.rp.util.ConfigCrud.items("events.json", "events"), "ev", kind, id, events, phases, waves);
+        scanSteps(com.ccnrcom.rp.util.ConfigCrud.items("phases.json", "phases"), "ph", kind, id, events, phases, waves);
+        scanSteps(
+                com.ccnrcom.rp.util.ConfigCrud.items("spawn_waves.json", "waves"),
+                "wv",
+                kind,
+                id,
+                events,
+                phases,
+                waves);
+    }
+
+    private static void scanSteps(
+            List<JsonObject> items,
+            String prefix,
+            String kind,
+            String id,
+            List<String> events,
+            List<String> phases,
+            List<String> waves) {
+        for (JsonObject item : items) {
+            if (!item.has("sequence") || !item.get("sequence").isJsonArray()) {
+                continue;
+            }
+            for (var e : item.getAsJsonArray("sequence")) {
+                if (!e.isJsonObject()) {
+                    continue;
+                }
+                JsonObject s = e.getAsJsonObject();
+                String type = str(s, "type", "");
+                boolean hit = false;
+                if ("profession".equals(kind) && "FORCE_PICK".equals(type)) {
+                    hit = csvContains(str(s, "professions", ""), id);
+                } else if ("faction".equals(kind) && "FORCE_PICK".equals(type)) {
+                    hit = id.equals(str(s, "faction", ""));
+                } else if ("wave".equals(kind) && "WAVE".equals(type)) {
+                    hit = id.equals(str(s, "wave", ""));
+                }
+                if (!hit) {
+                    continue;
+                }
+                String name = str(item, "id", "?");
+                if ("ev".equals(prefix)) {
+                    events.add(name);
+                } else if ("ph".equals(prefix)) {
+                    phases.add(name);
+                } else {
+                    waves.add(name);
+                }
+                break;
+            }
+        }
+    }
+
+    private static boolean csvContains(String csv, String id) {
+        if (csv == null || csv.isBlank()) {
+            return false;
+        }
+        for (String t : csv.split(",")) {
+            if (id.equals(t.trim())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** 通用数组段 CRUD：delete 删除；否则用 item 补齐缺省字段后 upsert。 */
@@ -378,8 +575,8 @@ public final class CharacterService {
     }
 
     /** 组装部署入场数据：名字/职业/阵营(图标+等级)/简历/阵营关系（图谱 resolve，非中立才列出）。 */
-    private void sendCinematic(ServerPlayer player, String charId) {
-        Optional<CharacterData> c = store.find(charId);
+    public static void sendCinematic(ServerPlayer player, String charId) {
+        Optional<CharacterData> c = service().store.find(charId);
         if (c.isEmpty()) {
             return;
         }

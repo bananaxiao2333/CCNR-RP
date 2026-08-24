@@ -10,7 +10,6 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import java.util.ArrayList;
 import java.util.List;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -31,7 +30,6 @@ public class RpAdminScreen extends Screen {
     private static final int TAB_EVENT = 3;
     private static final int TAB_PHASE = 4;
     private static final int TAB_WAVE = 5;
-    private static final int TAB_SEQUENCE = 6;
 
     private int tab = TAB_SETTINGS;
     private int px1, py1, px2, py2;
@@ -66,13 +64,19 @@ public class RpAdminScreen extends Screen {
     private boolean endSettle = true;
     private int modeIdx = 0;
     private int deployIdx = 0;
+    // 影响确认弹窗
+    private boolean impactOpen = false;
+    private String impactTitle = "";
+    private final List<String> impactLines = new ArrayList<>();
+    private int mX1, mY1, mX2, mY2;
+    private int okX1, okY1, okX2, okY2;
+    private int noX1, noY1, noX2, noY2;
+    private String pendingKind = "";
+    private String pendingAction = "";
+    private JsonObject pendingPayload;
+    private String stepsReadyFor = "";
+    // 当前编辑项的内嵌行为序列步骤（事件/阶段/波通用）
     private final List<JsonObject> seqSteps = new ArrayList<>();
-    private final List<int[]> stepBounds = new ArrayList<>();
-    private int stepSel = -1;
-    private int stepTypeIdx = 0;
-    private boolean stepRandom = true;
-    private boolean stepSpawn = true;
-    private static final String[] STEP_TYPES = {"WAIT", "WAVE", "COMMAND", "FORCE_PICK"};
 
     private static final String[] ICONS = {"hex", "shield", "claw", "storm", "eye", "target", "cross", "gear"};
     private static final String[] TABS = {
@@ -81,8 +85,7 @@ public class RpAdminScreen extends Screen {
         "ccnr_rp.gui.admin.tab.faction",
         "ccnr_rp.gui.admin.tab.event",
         "ccnr_rp.gui.admin.tab.phase",
-        "ccnr_rp.gui.admin.tab.wave",
-        "ccnr_rp.gui.admin.tab.sequence"
+        "ccnr_rp.gui.admin.tab.wave"
     };
 
     public RpAdminScreen() {
@@ -120,9 +123,9 @@ public class RpAdminScreen extends Screen {
         clearWidgets();
         rowBounds.clear();
         fieldLabels.clear();
-        int tabW = Math.min(88, (px2 - px1 - 30) / 7);
+        int tabW = Math.min(88, (px2 - px1 - 30) / 6);
         int tx = px1 + 12;
-        for (int i = 0; i < 7; i++) {
+        for (int i = 0; i < 6; i++) {
             int x = tx + i * (tabW + 6);
             rowBounds.add(new int[] {x, py1 + 42, x + tabW, py1 + 62});
         }
@@ -153,7 +156,6 @@ public class RpAdminScreen extends Screen {
             case TAB_EVENT -> ClientCharacterState.managerEvents();
             case TAB_PHASE -> ClientCharacterState.managerPhases();
             case TAB_WAVE -> ClientCharacterState.managerWaves();
-            case TAB_SEQUENCE -> ClientCharacterState.managerSequences();
             default -> List.of();
         };
     }
@@ -162,7 +164,7 @@ public class RpAdminScreen extends Screen {
         return switch (tab) {
             case TAB_PROFESSION -> 20;
             case TAB_FACTION -> 22;
-            case TAB_EVENT, TAB_PHASE, TAB_WAVE, TAB_SEQUENCE -> 20;
+            case TAB_EVENT, TAB_PHASE, TAB_WAVE -> 20;
             default -> 0;
         };
     }
@@ -174,7 +176,6 @@ public class RpAdminScreen extends Screen {
             case TAB_EVENT -> buildEventForm();
             case TAB_PHASE -> buildPhaseForm();
             case TAB_WAVE -> buildWaveForm();
-            case TAB_SEQUENCE -> buildSequenceForm();
             default -> {}
         }
     }
@@ -205,6 +206,9 @@ public class RpAdminScreen extends Screen {
         y += 30;
         fld3Box = mkBox(x, y, w, "时长(秒,0=事件持续时间)", ev == null ? "0" : num(ev, "durationSeconds", 0), false);
         y += 30;
+        syncSeqSteps(ev);
+        stepsRow(x, y, w);
+        y += 30;
         actionRow(x, y, w, edit);
     }
 
@@ -221,150 +225,38 @@ public class RpAdminScreen extends Screen {
         y += 30;
         fld3Box = mkBox(x, y, w, "时长(分钟)", ph == null ? "30" : num(ph, "durationMinutes", 30), false);
         y += 30;
-        actionRow(x, y, w, edit);
-    }
-
-    private void buildSequenceForm() {
-        int x = listX2 + 10;
-        int w = px2 - 12 - x;
-        int y = py1 + 76;
-        JsonObject seq = selItem();
-        String id = seq == null ? "" : str(seq, "id");
-        boolean edit = !id.isBlank();
-        idBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.id", id, !edit);
+        syncSeqSteps(ph);
+        stepsRow(x, y, w);
         y += 30;
-        // 步骤操作行
-        int bw4 = Math.max(56, (w - 12) / 4);
-        addRenderableWidget(RpButton.secondary(x, y, bw4, 18, Component.literal("+ 步骤"), b -> {
-            seqSteps.add(defaultStep());
-            stepSel = seqSteps.size() - 1;
-            applyStepEditor();
-            rebuild();
-        }));
-        addRenderableWidget(RpButton.danger(x + bw4 + 4, y, bw4, 18, Component.literal("删步骤"), b -> {
-            if (stepSel >= 0 && stepSel < seqSteps.size()) {
-                seqSteps.remove(stepSel);
-                stepSel = seqSteps.isEmpty() ? -1 : Math.max(0, stepSel - 1);
-                applyStepEditor();
-                rebuild();
-            }
-        }));
-        addRenderableWidget(RpButton.secondary(x + (bw4 + 4) * 2, y, bw4, 18, Component.literal("上移"), b -> {
-            if (stepSel > 0) {
-                java.util.Collections.swap(seqSteps, stepSel, stepSel - 1);
-                stepSel--;
-                rebuild();
-            }
-        }));
-        addRenderableWidget(RpButton.secondary(x + (bw4 + 4) * 3, y, bw4, 18, Component.literal("下移"), b -> {
-            if (stepSel >= 0 && stepSel + 1 < seqSteps.size()) {
-                java.util.Collections.swap(seqSteps, stepSel, stepSel + 1);
-                stepSel++;
-                rebuild();
-            }
-        }));
-        y += 22;
-        // 步骤列表区（手动渲染 + 命中）
-        stepBounds.clear();
-        int sy = y;
-        for (int i = 0; i < seqSteps.size() && i < 8; i++) {
-            stepBounds.add(new int[] {x, sy, x + w, sy + 18});
-            sy += 19;
-        }
-        y = sy + 6;
-        // 当前步骤编辑
-        String type = STEP_TYPES[stepTypeIdx];
-        int bw2 = (w - 4) / 2;
-        addRenderableWidget(RpButton.secondary(x, y, bw2, 18, Component.literal("类型: " + type), b -> {
-            stepTypeIdx = (stepTypeIdx + 1) % STEP_TYPES.length;
-            rebuild();
-        }));
-        if ("FORCE_PICK".equals(type)) {
-            addRenderableWidget(RpButton.secondary(
-                    x + bw2 + 4, y, bw2, 18, Component.literal("随机名: " + (stepRandom ? "是" : "否")), b -> {
-                        stepRandom = !stepRandom;
-                        rebuild();
-                    }));
-            y += 30;
-            fld2Box = mkBox(x, y, bw2, "数量", valueOr(seqStep(), "count", "5"), false);
-            fld3Box = mkBox(x + bw2 + 4, y, bw2, "职业ID(逗号)", valueOr(seqStep(), "professions", ""), false);
-            y += 30;
-            fld4Box = mkBox(x, y, w, "阵营ID", valueOr(seqStep(), "faction", ""), false);
-            y += 30;
-            addRenderableWidget(
-                    RpButton.primary(x, y, w, 18, Component.literal("刷新: " + (stepSpawn ? "是" : "否")), b -> {
-                        stepSpawn = !stepSpawn;
-                        rebuild();
-                    }));
-        } else if ("WAIT".equals(type)) {
-            fld2Box = mkBox(x, y + 30, w, "等待秒数", valueOr(seqStep(), "seconds", "10"), false);
-        } else if ("WAVE".equals(type)) {
-            fld2Box = mkBox(x, y + 30, w, "刷新波ID", valueOr(seqStep(), "wave", ""), false);
-        } else {
-            fld2Box = mkBox(
-                    x, y + 30, w, "命令文本（可用 {{event}} {{phase}} {{seq}} 变量）", valueOr(seqStep(), "command", ""), false);
-        }
-        y += 50;
         actionRow(x, y, w, edit);
     }
 
-    private JsonObject seqStep() {
-        return stepSel >= 0 && stepSel < seqSteps.size() ? seqSteps.get(stepSel) : null;
-    }
-
-    private String valueOr(JsonObject step, String key, String def) {
-        if (step == null || !step.has(key)) {
-            return def;
-        }
-        return step.get(key).getAsString();
-    }
-
-    private JsonObject defaultStep() {
-        JsonObject s = new JsonObject();
-        s.addProperty("type", "WAIT");
-        s.addProperty("seconds", 10);
-        return s;
-    }
-
-    private void applyStepEditor() {
-        JsonObject step = seqStep();
-        if (step == null) {
-            stepTypeIdx = 0;
-            stepRandom = true;
-            stepSpawn = true;
+    /** 同步当前编辑项的内嵌序列步骤（item 变化时读取 sequence 数组，与编辑器共享）。 */
+    private void syncSeqSteps(JsonObject item) {
+        String key = item == null ? "" : (tab + "|" + str(item, "id"));
+        if (key.equals(stepsReadyFor)) {
             return;
         }
-        String type = str(step, "type", "WAIT").toUpperCase(java.util.Locale.ROOT);
-        for (int i = 0; i < STEP_TYPES.length; i++) {
-            if (STEP_TYPES[i].equals(type)) {
-                stepTypeIdx = i;
+        seqSteps.clear();
+        if (item != null && item.has("sequence") && item.get("sequence").isJsonArray()) {
+            for (var e : item.getAsJsonArray("sequence")) {
+                if (e.isJsonObject()) {
+                    seqSteps.add(e.getAsJsonObject());
+                }
             }
         }
-        stepRandom = !step.has("randomName") || step.get("randomName").getAsBoolean();
-        stepSpawn = !step.has("spawn") || step.get("spawn").getAsBoolean();
+        stepsReadyFor = key;
     }
 
-    /** 把当前编辑器状态写回选中步骤。 */
-    private void applyEditorToStep() {
-        JsonObject step = seqStep();
-        if (step == null) {
-            return;
-        }
-        String type = STEP_TYPES[stepTypeIdx];
-        step.addProperty("type", type);
-        switch (type) {
-            case "WAIT" -> step.addProperty("seconds", Math.max(0, parseInt(fld2Box)));
-            case "WAVE" -> step.addProperty("wave", fld2Box.getValue());
-            case "COMMAND" -> step.addProperty("command", fld2Box.getValue());
-            case "FORCE_PICK" -> {
-                step.addProperty("count", Math.max(1, parseInt(fld2Box)));
-                step.addProperty("professions", fld3Box.getValue());
-                step.addProperty("faction", fld4Box.getValue());
-                step.addProperty("randomName", stepRandom);
-                step.addProperty("spawn", stepSpawn);
-            }
-            default -> {}
-        }
+    /** 行为序列行（事件/阶段/波通用）：显示步数 + 打开弹窗编辑（编辑 seqSteps 副本，保存时写回）。 */
+    private void stepsRow(int x, int y, int w) {
+        addRenderableWidget(RpButton.secondary(
+                x,
+                y,
+                w,
+                18,
+                Component.literal("行为序列: " + seqSteps.size() + " 步（WAIT/命令/刷新波/强制抽取） · 点击编辑"),
+                b -> net.minecraft.client.Minecraft.getInstance().setScreen(new StepsEditorModal(this, seqSteps))));
     }
 
     private void buildWaveForm() {
@@ -401,6 +293,9 @@ public class RpAdminScreen extends Screen {
         descBox = mkBox(x, y, bw2, "职业ID(逗号)", csv(wv, "professionIds"), false);
         musicBox = mkBox(x + bw2 + 4, y, bw2, "阵营ID(逗号)", csv(wv, "factionIds"), false);
         y += 30;
+        syncSeqSteps(wv);
+        stepsRow(x, y, w);
+        y += 30;
         actionRow(x, y, w, edit);
     }
 
@@ -411,7 +306,7 @@ public class RpAdminScreen extends Screen {
         java.util.function.Supplier<JsonObject> builder = this::buildPayload;
         addRenderableWidget(
                 RpButton.primary(x, y, bw3, 20, Component.translatable("ccnr_rp.gui.admin.crud.save"), b -> {
-                    sendCrud(kind, edit ? "update" : "create", builder.get());
+                    requestCrud(kind, edit ? "update" : "create", builder.get());
                 }));
         addRenderableWidget(
                 RpButton.danger(x + bw3 + 4, y, bw3, 20, Component.translatable("ccnr_rp.gui.admin.crud.delete"), b -> {
@@ -422,7 +317,7 @@ public class RpAdminScreen extends Screen {
                     }
                     JsonObject del = payload();
                     del.addProperty("id", sel);
-                    sendCrud(kind, "delete", del);
+                    requestCrud(kind, "delete", del);
                 }));
         addRenderableWidget(RpButton.secondary(
                 x + (bw3 + 4) * 2, y, bw3, 20, Component.translatable("ccnr_rp.gui.admin.crud.new"), b -> {
@@ -434,8 +329,7 @@ public class RpAdminScreen extends Screen {
                     evState = true;
                     endSettle = true;
                     seqSteps.clear();
-                    stepSel = -1;
-                    stepTypeIdx = 0;
+                    stepsReadyFor = "";
                     rebuild();
                 }));
     }
@@ -447,7 +341,6 @@ public class RpAdminScreen extends Screen {
             case TAB_EVENT -> "event";
             case TAB_PHASE -> "phase";
             case TAB_WAVE -> "wave";
-            case TAB_SEQUENCE -> "sequence";
             default -> "";
         };
     }
@@ -503,6 +396,7 @@ public class RpAdminScreen extends Screen {
                     p.addProperty("durationSeconds", parseInt(fld3Box));
                     p.addProperty("settleOnEnd", endSettle);
                 }
+                p.add("sequence", seqArray());
                 yield p;
             }
             case TAB_PHASE -> {
@@ -510,17 +404,7 @@ public class RpAdminScreen extends Screen {
                 p.addProperty("id", idBox.getValue());
                 p.addProperty("order", parseInt(fld2Box));
                 p.addProperty("durationMinutes", parseInt(fld3Box));
-                yield p;
-            }
-            case TAB_SEQUENCE -> {
-                applyEditorToStep();
-                JsonObject p = payload();
-                p.addProperty("id", idBox.getValue());
-                JsonArray steps = new JsonArray();
-                for (JsonObject s : seqSteps) {
-                    steps.add(s.deepCopy());
-                }
-                p.add("steps", steps);
+                p.add("sequence", seqArray());
                 yield p;
             }
             case TAB_WAVE -> {
@@ -554,10 +438,19 @@ public class RpAdminScreen extends Screen {
                 p.add("teamIds", csvArray(colorBox.getValue()));
                 p.add("professionIds", csvArray(descBox.getValue()));
                 p.add("factionIds", csvArray(musicBox.getValue()));
+                p.add("sequence", seqArray());
                 yield p;
             }
             default -> payload();
         };
+    }
+
+    private JsonArray seqArray() {
+        JsonArray arr = new JsonArray();
+        for (JsonObject s : seqSteps) {
+            arr.add(s.deepCopy());
+        }
+        return arr;
     }
 
     private static int parseInt(EditBox box) {
@@ -682,7 +575,7 @@ public class RpAdminScreen extends Screen {
                     }
                     JsonObject del = payload();
                     del.addProperty("id", sel);
-                    sendCrud("profession", "delete", del);
+                    requestCrud("profession", "delete", del);
                 }));
         addRenderableWidget(RpButton.secondary(
                 x + (bw3 + 4) * 2, y, bw3, 20, Component.translatable("ccnr_rp.gui.admin.crud.new"), b -> {
@@ -722,7 +615,7 @@ public class RpAdminScreen extends Screen {
         p.addProperty("selfDeploy", selfDeploy);
         p.addProperty("music", musicBox.getValue());
         p.addProperty("profile", profileBox.getValue());
-        sendCrud("profession", edit ? "update" : "create", p);
+        requestCrud("profession", edit ? "update" : "create", p);
     }
 
     private String currentFactionId() {
@@ -770,7 +663,7 @@ public class RpAdminScreen extends Screen {
                     }
                     JsonObject del = payload();
                     del.addProperty("id", sel);
-                    sendCrud("faction", "delete", del);
+                    requestCrud("faction", "delete", del);
                 }));
         addRenderableWidget(RpButton.secondary(
                 x + (bw3 + 4) * 2, y, bw3, 20, Component.translatable("ccnr_rp.gui.admin.crud.new"), b -> {
@@ -798,7 +691,7 @@ public class RpAdminScreen extends Screen {
         p.addProperty("description", descBox.getValue());
         p.addProperty("icon", ICONS[iconIdx]);
         p.addProperty("tier", tierIdx + 1);
-        sendCrud("faction", edit ? "update" : "create", p);
+        requestCrud("faction", edit ? "update" : "create", p);
     }
 
     // ---------- 通用 ----------
@@ -832,12 +725,70 @@ public class RpAdminScreen extends Screen {
         RpChannels.sendToServer(new RpPackets.ManagerCrudC2S(kind, action, payload.toString()));
     }
 
+    /** 更新/删除先向服务端做影响预检（波及角色/波/事件/阶段），确认后再执行；新建直接执行。 */
+    private void requestCrud(String kind, String action, JsonObject payload) {
+        if ("create".equals(action)) {
+            sendCrud(kind, action, payload);
+            return;
+        }
+        pendingKind = kind;
+        pendingAction = action;
+        pendingPayload = payload;
+        RpChannels.sendToServer(new RpPackets.ManagerImpactC2S(kind, action, payload.toString()));
+    }
+
+    /** 服务端影响清单返回（ClientPacketHandlers 转发；空清单=无波及，直接执行）。 */
+    public static void onImpact(String payloadJson) {
+        if (open == null) {
+            return;
+        }
+        open.applyImpact(payloadJson);
+    }
+
+    private void applyImpact(String payloadJson) {
+        JsonObject root;
+        try {
+            root = com.ccnrcom.rp.util.JsonUtil.GSON.fromJson(payloadJson, JsonObject.class);
+        } catch (Exception e) {
+            root = null;
+        }
+        if (root == null) {
+            sendCrud(pendingKind, pendingAction, pendingPayload);
+            return;
+        }
+        impactLines.clear();
+        if (root.has("lines") && root.get("lines").isJsonArray()) {
+            for (var e : root.getAsJsonArray("lines")) {
+                impactLines.add(e.getAsString());
+            }
+        }
+        if (impactLines.isEmpty()) {
+            // 无波及 → 直接执行
+            sendCrud(pendingKind, pendingAction, pendingPayload);
+            return;
+        }
+        impactTitle = root.has("id") ? root.get("id").getAsString() : "";
+        impactOpen = true;
+    }
+
     private boolean value(String key) {
         return ClientCharacterState.settingBool(key, true);
     }
 
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
+        if (impactOpen) {
+            if (mx >= okX1 && mx <= okX2 && my >= okY1 && my <= okY2) {
+                impactOpen = false;
+                sendCrud(pendingKind, pendingAction, pendingPayload);
+                return true;
+            }
+            if (mx >= noX1 && mx <= noX2 && my >= noY1 && my <= noY2) {
+                impactOpen = false;
+                return true;
+            }
+            return true;
+        }
         if (super.mouseClicked(mx, my, button)) {
             return true;
         }
@@ -845,7 +796,7 @@ public class RpAdminScreen extends Screen {
             onClose();
             return true;
         }
-        for (int i = 0; i < 7; i++) {
+        for (int i = 0; i < 6; i++) {
             int[] b = rowBounds.get(i);
             if (mx >= b[0] && mx <= b[2] && my >= b[1] && my <= b[3]) {
                 tab = i;
@@ -853,29 +804,16 @@ public class RpAdminScreen extends Screen {
                 selProfId = "";
                 selFactionId = "";
                 selSelId = "";
-                seqSteps.clear();
-                stepSel = -1;
+                stepsReadyFor = "";
                 rebuild();
                 return true;
-            }
-        }
-        // 序列步骤行
-        if (tab == TAB_SEQUENCE) {
-            for (int i = 0; i < stepBounds.size(); i++) {
-                int[] b = stepBounds.get(i);
-                if (mx >= b[0] && mx <= b[2] && my >= b[1] && my <= b[3]) {
-                    stepSel = i;
-                    applyStepEditor();
-                    rebuild();
-                    return true;
-                }
             }
         }
         if (!ClientCharacterState.isAdmin() && tab != TAB_SETTINGS) {
             notice = Component.translatable("ccnr_rp.gui.admin.no_perm").getString();
             return true;
         }
-        for (int i = 7; i < rowBounds.size(); i++) {
+        for (int i = 6; i < rowBounds.size(); i++) {
             int[] b = rowBounds.get(i);
             if (mx >= b[0] && mx <= b[2] && my >= b[1] && my <= b[3]) {
                 if (tab == TAB_SETTINGS) {
@@ -884,10 +822,10 @@ public class RpAdminScreen extends Screen {
                                 .getString();
                         return true;
                     }
-                    String key = SETTING_KEYS[i - 7];
+                    String key = SETTING_KEYS[i - 6];
                     RpChannels.sendToServer(new RpPackets.ManagerSetC2S(key, String.valueOf(!value(key))));
                 } else {
-                    JsonObject item = visibleItem(i - 7);
+                    JsonObject item = visibleItem(i - 6);
                     if (item != null) {
                         selectItem(item);
                     }
@@ -920,21 +858,10 @@ public class RpAdminScreen extends Screen {
             return;
         }
         selSelId = str(item, "id");
+        stepsReadyFor = "";
         if (tab == TAB_EVENT) {
             evState = !item.has("enabled") || item.get("enabled").getAsBoolean();
             endSettle = !item.has("settleOnEnd") || item.get("settleOnEnd").getAsBoolean();
-        } else if (tab == TAB_SEQUENCE) {
-            selSelId = str(item, "id");
-            seqSteps.clear();
-            if (item.has("steps") && item.get("steps").isJsonArray()) {
-                for (com.google.gson.JsonElement e : item.getAsJsonArray("steps")) {
-                    if (e.isJsonObject()) {
-                        seqSteps.add(e.getAsJsonObject());
-                    }
-                }
-            }
-            stepSel = seqSteps.isEmpty() ? -1 : 0;
-            applyStepEditor();
         } else if (tab == TAB_WAVE) {
             String mode = str(item, "mode");
             for (int i = 0; i < Modes.length; i++) {
@@ -1054,7 +981,7 @@ public class RpAdminScreen extends Screen {
                 font, "X", (closeX1 + closeX2) / 2 - 2, closeY1 + 4, hover ? 0xFFFFFFFF : RpTheme.TEXT_SECONDARY, true);
         g.fill(px1 + 8, py1 + 26, px2 - 8, py1 + 27, RpTheme.CYAN_DIM);
 
-        for (int i = 0; i < 7; i++) {
+        for (int i = 0; i < 6; i++) {
             int[] b = rowBounds.get(i);
             boolean sel = tab == i;
             boolean hov = mouseX >= b[0] && mouseX <= b[2] && mouseY >= b[1] && mouseY <= b[3];
@@ -1084,14 +1011,79 @@ public class RpAdminScreen extends Screen {
         } else {
             renderListTab(g, mouseX, mouseY);
         }
-        if (tab == TAB_SEQUENCE) {
-            renderSequenceSteps(g, mouseX, mouseY);
-        }
         renderFieldLabels(g);
         if (!notice.isBlank()) {
             g.drawCenteredString(font, "[ 系统 ] " + notice, (px1 + px2) / 2, py2 - 46, RpTheme.RED_LINE);
         }
         super.render(g, mouseX, mouseY, partialTick);
+        if (impactOpen) {
+            renderImpactModal(g, mouseX, mouseY);
+        }
+    }
+
+    /** 影响确认弹窗：显示波及清单 + 确认/取消。 */
+    private void renderImpactModal(GuiGraphics g, int mouseX, int mouseY) {
+        g.fill(0, 0, width, height, 0xAA000000);
+        int w = Math.min(520, width - 80);
+        int lines = Math.max(1, impactLines.size());
+        int h = 96 + lines * 12 + 40;
+        mX1 = (width - w) / 2;
+        mY1 = (height - h) / 2;
+        mX2 = mX1 + w;
+        mY2 = mY1 + h;
+        RpTheme.terminalPanel(g, mX1, mY1, mX2, mY2, RpTheme.RADIUS_LARGE);
+        g.drawString(
+                font,
+                Component.translatable("ccnr_rp.gui.admin.impact.title")
+                        .getString()
+                        .toUpperCase(java.util.Locale.ROOT),
+                mX1 + 14,
+                mY1 + 10,
+                RpTheme.RED_LINE,
+                true);
+        g.fill(mX1 + 8, mY1 + 28, mX2 - 8, mY1 + 29, RpTheme.CYAN_DIM);
+        int y = mY1 + 38;
+        g.drawString(
+                font,
+                Component.translatable("ccnr_rp.gui.admin.impact.hint").getString(),
+                mX1 + 14,
+                y,
+                RpTheme.TEXT_DIM);
+        y += 14;
+        for (String line : impactLines) {
+            g.drawString(font, "• " + line, mX1 + 18, y, RpTheme.RED_LINE);
+            y += 12;
+        }
+        int bw = Math.max(90, (w - 48) / 2);
+        int by = mY2 - 34;
+        okX1 = mX1 + 14;
+        okY1 = by;
+        okX2 = okX1 + bw;
+        okY2 = by + 20;
+        noX1 = mX2 - 14 - bw;
+        noY1 = by;
+        noX2 = mX2 - 14;
+        noY2 = by + 20;
+        boolean hOk = mouseX >= okX1 && mouseX <= okX2 && mouseY >= okY1 && mouseY <= okY2;
+        boolean hNo = mouseX >= noX1 && mouseX <= noX2 && mouseY >= noY1 && mouseY <= noY2;
+        RpButton.draw(
+                g,
+                okX1,
+                okY1,
+                okX2,
+                okY2,
+                Component.translatable("ccnr_rp.gui.admin.impact.confirm").getString(),
+                hOk ? RpTheme.RED : RpTheme.CYAN,
+                true);
+        RpButton.draw(
+                g,
+                noX1,
+                noY1,
+                noX2,
+                noY2,
+                Component.translatable("ccnr_rp.gui.admin.impact.cancel").getString(),
+                hNo ? RpTheme.RED : RpTheme.TEXT_SECONDARY,
+                false);
     }
 
     private void renderListTab(GuiGraphics g, int mouseX, int mouseY) {
@@ -1112,7 +1104,7 @@ public class RpAdminScreen extends Screen {
                 RpTheme.TEXT_DIM);
         for (int i = 0; i < items.size() && i < maxVisible; i++) {
             JsonObject item = items.get(off + i);
-            int[] b = rowBounds.get(7 + i);
+            int[] b = rowBounds.get(6 + i);
             boolean sel = str(item, "id").equals(currentSelId());
             boolean hov = mouseX >= b[0] && mouseX <= b[2] && mouseY >= b[1] && mouseY <= b[3];
             if (sel) {
@@ -1137,45 +1129,6 @@ public class RpAdminScreen extends Screen {
         }
     }
 
-    private void renderSequenceSteps(GuiGraphics g, int mouseX, int mouseY) {
-        var font = Minecraft.getInstance().font;
-        int x = listX2 + 10;
-        int w = px2 - 12 - x;
-        int y = py1 + 120;
-        for (int i = 0; i < stepBounds.size(); i++) {
-            int[] b = stepBounds.get(i);
-            boolean sel = i == stepSel;
-            if (sel) {
-                RpTheme.selectedBar(g, b[0], b[1], b[2], b[3], 3f);
-            } else {
-                g.fill(b[0], b[1], b[2], b[3] + 1, i % 2 == 0 ? RpTheme.PANEL_BG : 0x00000000);
-            }
-            JsonObject s = stepBounds.size() > i && i < seqSteps.size() ? seqSteps.get(i) : null;
-            g.drawString(
-                    font,
-                    (i + 1) + ". " + stepSummary(s),
-                    b[0] + 4,
-                    b[1] + 2,
-                    sel ? 0xFFFFFFFF : RpTheme.TEXT_PRIMARY,
-                    true);
-        }
-        g.drawString(font, "（共 " + seqSteps.size() + " 步，点击步骤编辑）", x, y - 10, RpTheme.TEXT_DIM);
-    }
-
-    private String stepSummary(JsonObject s) {
-        if (s == null) {
-            return "?";
-        }
-        String type = str(s, "type", "WAIT");
-        return switch (type) {
-            case "WAIT" -> "WAIT " + num(s, "seconds", 0) + "s";
-            case "WAVE" -> "WAVE " + str(s, "wave");
-            case "COMMAND" -> "CMD " + str(s, "command");
-            case "FORCE_PICK" -> "PICK " + num(s, "count", 1) + "人[" + str(s, "faction") + "]";
-            default -> type;
-        };
-    }
-
     private String currentSelId() {
         return switch (tab) {
             case TAB_PROFESSION -> selProfId;
@@ -1186,7 +1139,7 @@ public class RpAdminScreen extends Screen {
 
     private void renderSettings(GuiGraphics g, int mouseX, int mouseY) {
         for (int i = 0; i < 6; i++) {
-            int[] b = rowBounds.get(7 + i);
+            int[] b = rowBounds.get(6 + i);
             boolean on = value(SETTING_KEYS[i]);
             boolean hoverRow = mouseX >= b[0] && mouseX <= b[2] && mouseY >= b[1] && mouseY <= b[3];
             RpRoundRect.outlined(

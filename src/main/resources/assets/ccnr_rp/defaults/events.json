@@ -5,6 +5,10 @@
      "triggers": [{"type": "ON_PHASE_START", "phase": "danger"}],
      "tasks": [{"id": "evacuate_zone", "xp": 50}],
      "hooks": {"startAnimation": "event_start_alarm", "spawnWave": "wave_qdf_reinforce"},
+     "sequence": [
+       {"type": "WAIT", "seconds": 5},
+       {"type": "COMMAND", "command": "say [CCNR-RP] 撤离警报生效：前往疏散区，危险阶段开始"}
+     ],
      "durationSeconds": 0,
      "settleOnEnd": true}
   ]

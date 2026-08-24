@@ -5,7 +5,6 @@
 package com.ccnrcom.rp.spawn;
 
 import com.ccnrcom.rp.CCNRRPMod;
-import com.ccnrcom.rp.animation.AnimationHooks;
 import com.ccnrcom.rp.character.CharacterData;
 import com.ccnrcom.rp.character.CharacterService;
 import com.ccnrcom.rp.config.CCNRRPConfig;
@@ -124,6 +123,12 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
                 }
             }
             recruit.offer(wave.id(), sel.recruit(), online);
+        }
+        // 内嵌行为序列（波触发时执行：WAIT/COMMAND/WAVE/FORCE_PICK 等）
+        if (CCNRRPMod.sequenceEngine != null
+                && wave.steps() != null
+                && !wave.steps().isEmpty()) {
+            CCNRRPMod.sequenceEngine.runSteps("wave/" + waveId, wave.steps(), java.util.Map.of("wave", waveId));
         }
         LOGGER.info(
                 "[CCNR-RP] 复活波 {} 完成：部署 {} 人，招募 {} 人",
@@ -252,9 +257,8 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
         svc.store().update(alive);
         svc.store().save();
         CharacterService.updateAndBroadcast(alive, p);
-        if (!cinematic) {
-            AnimationHooks.playerSpawn(p, c.name());
-        }
+        // 统一部署动画：所有部署路径都走入场电影（黑屏→图标→打字档案→淡出）
+        CharacterService.sendCinematic(p, c.id());
         return true;
     }
 
@@ -343,7 +347,8 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
                                 w.y(),
                                 w.z(),
                                 w.dim(),
-                                w.recruitTimeoutSeconds()));
+                                w.recruitTimeoutSeconds(),
+                                w.steps()));
                 return true;
             }
         }

@@ -156,7 +156,21 @@ public final class EventManager {
         autoEndRunnings();
     }
 
+    /** 阶段开始 → 执行内嵌行为序列。 */
+    private void runPhaseSteps(PhaseClock.Transition tr) {
+        if (CCNRRPMod.sequenceEngine == null || tr == null || !tr.changed() || tr.started() == null) {
+            return;
+        }
+        for (GamePhase p : clock.phases()) {
+            if (p.id().equals(tr.started()) && p.steps() != null && !p.steps().isEmpty()) {
+                CCNRRPMod.sequenceEngine.runSteps("phase/" + p.id(), p.steps(), java.util.Map.of("phase", p.id()));
+                return;
+            }
+        }
+    }
+
     private void evaluateAll(PhaseClock.Transition tr) {
+        runPhaseSteps(tr);
         TriggerContext ctx = new TriggerContext(
                 clock.phaseId(),
                 tr.ended(),
@@ -197,10 +211,17 @@ public final class EventManager {
         if (!def.spawnWave().isBlank() && CCNRRPMod.spawnFramework != null) {
             CCNRRPMod.spawnFramework.triggerWave(def.spawnWave());
         }
-        // 序列钩子（序列编辑器：等待/命令/刷新波/强制抽取等步骤）
-        if (!def.startSequence().isBlank() && CCNRRPMod.sequenceEngine != null) {
-            CCNRRPMod.sequenceEngine.run(
-                    def.startSequence(), java.util.Map.of("event", def.id(), "phase", clock.phaseId()));
+        // 行为序列（内嵌步骤序列：等待/命令/刷新波/强制抽取等；兼容旧 startSequence 引用）
+        if (CCNRRPMod.sequenceEngine != null) {
+            if (def.steps() != null && !def.steps().isEmpty()) {
+                CCNRRPMod.sequenceEngine.runSteps(
+                        "event/" + def.id(),
+                        def.steps(),
+                        java.util.Map.of("event", def.id(), "phase", clock.phaseId()));
+            } else if (!def.startSequence().isBlank()) {
+                CCNRRPMod.sequenceEngine.run(
+                        def.startSequence(), java.util.Map.of("event", def.id(), "phase", clock.phaseId()));
+            }
         }
         // 任务登记：事件开始时把所有任务标记给当前参与角色（简化：结算时按任务表）
         if (!def.tasks().isEmpty() && CCNRRPMod.experience != null) {
@@ -260,7 +281,8 @@ public final class EventManager {
                         d.notifyTitleKey(),
                         d.durationSeconds(),
                         d.settleOnEnd(),
-                        on ? EventState.SCHEDULED : EventState.SETTLED);
+                        on ? EventState.SCHEDULED : EventState.SETTLED,
+                        d.steps());
                 events.set(i, nd);
                 return true;
             }

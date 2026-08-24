@@ -17,8 +17,12 @@ import java.util.Set;
 /** 事件/阶段/触发器领域模型与 JSON 解析（纯逻辑，无 MC 依赖）。 */
 public final class EventModels {
 
-    /** 游戏阶段。 */
-    public record GamePhase(String id, int order, long durationMinutes) {}
+    /** 游戏阶段（内嵌行为序列：阶段开始时执行）。 */
+    public record GamePhase(String id, int order, long durationMinutes, List<JsonObject> steps) {
+        public GamePhase(String id, int order, long durationMinutes) {
+            this(id, order, durationMinutes, List.of());
+        }
+    }
 
     /** 触发器（type + 参数）。 */
     public record Trigger(Type type, Map<String, String> params) {
@@ -46,7 +50,7 @@ public final class EventModels {
     /** 事件中的任务（供经验结算）。 */
     public record Task(String id, int xp) {}
 
-    /** 事件定义。 */
+    /** 事件定义（内嵌行为序列：事件开始时执行）。 */
     public record EventDefinition(
             String id,
             boolean enabled,
@@ -58,7 +62,35 @@ public final class EventModels {
             String notifyTitleKey,
             long durationSeconds,
             boolean settleOnEnd,
-            EventState state) {
+            EventState state,
+            List<JsonObject> steps) {
+
+        public EventDefinition(
+                String id,
+                boolean enabled,
+                List<Trigger> triggers,
+                List<Task> tasks,
+                String startAnimation,
+                String spawnWave,
+                String startSequence,
+                String notifyTitleKey,
+                long durationSeconds,
+                boolean settleOnEnd,
+                EventState state) {
+            this(
+                    id,
+                    enabled,
+                    triggers,
+                    tasks,
+                    startAnimation,
+                    spawnWave,
+                    startSequence,
+                    notifyTitleKey,
+                    durationSeconds,
+                    settleOnEnd,
+                    state,
+                    List.of());
+        }
 
         public EventDefinition withState(EventState s) {
             return new EventDefinition(
@@ -72,7 +104,8 @@ public final class EventModels {
                     notifyTitleKey,
                     durationSeconds,
                     settleOnEnd,
-                    s);
+                    s,
+                    steps);
         }
     }
 
@@ -185,7 +218,23 @@ public final class EventModels {
             for (JsonElement e : root.getAsJsonArray("phases")) {
                 JsonObject o = e.getAsJsonObject();
                 out.add(new GamePhase(
-                        str(o, "id", "?"), (int) num(o, "order", out.size()), num(o, "durationMinutes", 30)));
+                        str(o, "id", "?"),
+                        (int) num(o, "order", out.size()),
+                        num(o, "durationMinutes", 30),
+                        parseSteps(o)));
+            }
+        }
+        return out;
+    }
+
+    /** 内嵌行为序列（sequence 数组：{type, ...参数}）。 */
+    public static List<JsonObject> parseSteps(JsonObject o) {
+        List<JsonObject> out = new ArrayList<>();
+        if (o.has("sequence") && o.get("sequence").isJsonArray()) {
+            for (JsonElement e : o.getAsJsonArray("sequence")) {
+                if (e.isJsonObject()) {
+                    out.add(e.getAsJsonObject());
+                }
             }
         }
         return out;
@@ -222,7 +271,8 @@ public final class EventModels {
                 str(o, "notifyTitleKey", ""),
                 num(o, "durationSeconds", 0),
                 !o.has("settleOnEnd") || o.get("settleOnEnd").getAsBoolean(),
-                EventState.SCHEDULED));
+                EventState.SCHEDULED,
+                parseSteps(o)));
     }
 
     private static String str(JsonObject o, String key, String def) {

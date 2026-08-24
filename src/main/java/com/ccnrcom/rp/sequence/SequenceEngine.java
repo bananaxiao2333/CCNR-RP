@@ -101,14 +101,24 @@ public final class SequenceEngine {
         if (seq == null || !seq.has("steps")) {
             return List.of("未找到序列: " + seqId);
         }
+        List<JsonObject> steps = new ArrayList<>();
+        for (JsonElement e : seq.getAsJsonArray("steps")) {
+            if (e.isJsonObject()) {
+                steps.add(e.getAsJsonObject());
+            }
+        }
+        return runSteps("seq/" + seqId, steps, vars);
+    }
+
+    /** 直接运行一组步骤（事件/阶段/复活波内嵌行为，不再单独成实体）。 */
+    public List<String> runSteps(String label, List<JsonObject> stepsIn, Map<String, String> vars) {
+        if (stepsIn == null || stepsIn.isEmpty()) {
+            return List.of("无步骤");
+        }
         long now = System.currentTimeMillis();
         long acc = 0;
         List<Step> steps = new ArrayList<>();
-        for (JsonElement e : seq.getAsJsonArray("steps")) {
-            if (!e.isJsonObject()) {
-                continue;
-            }
-            JsonObject s = e.getAsJsonObject();
+        for (JsonObject s : stepsIn) {
             String type = str(s, "type", "WAIT").toUpperCase(java.util.Locale.ROOT);
             long delay = num(s, "seconds", 0);
             steps.add(new Step(type, s, now + acc));
@@ -118,11 +128,11 @@ public final class SequenceEngine {
             }
         }
         Map<String, String> merged = new HashMap<>(vars);
-        merged.put("seq", seqId);
+        merged.put("seq", label);
         synchronized (runs) {
-            runs.add(new Run(seqId, merged, steps, now));
+            runs.add(new Run(label, merged, steps, now));
         }
-        LOGGER.info("[CCNR-RP] 序列启动: {} ({} 步)", seqId, steps.size());
+        LOGGER.info("[CCNR-RP] 序列启动: {} ({} 步)", label, steps.size());
         return List.of();
     }
 
