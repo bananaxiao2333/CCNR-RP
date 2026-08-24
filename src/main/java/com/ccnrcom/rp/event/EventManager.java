@@ -197,6 +197,11 @@ public final class EventManager {
         if (!def.spawnWave().isBlank() && CCNRRPMod.spawnFramework != null) {
             CCNRRPMod.spawnFramework.triggerWave(def.spawnWave());
         }
+        // 序列钩子（序列编辑器：等待/命令/刷新波/强制抽取等步骤）
+        if (!def.startSequence().isBlank() && CCNRRPMod.sequenceEngine != null) {
+            CCNRRPMod.sequenceEngine.run(
+                    def.startSequence(), java.util.Map.of("event", def.id(), "phase", clock.phaseId()));
+        }
         // 任务登记：事件开始时把所有任务标记给当前参与角色（简化：结算时按任务表）
         if (!def.tasks().isEmpty() && CCNRRPMod.experience != null) {
             for (Task t : def.tasks()) {
@@ -251,6 +256,7 @@ public final class EventManager {
                         d.tasks(),
                         d.startAnimation(),
                         d.spawnWave(),
+                        d.startSequence(),
                         d.notifyTitleKey(),
                         d.durationSeconds(),
                         d.settleOnEnd(),

@@ -23,6 +23,7 @@ public final class ClientCharacterState {
     private static final List<JsonObject> managerEvents = new ArrayList<>();
     private static final List<JsonObject> managerPhases = new ArrayList<>();
     private static final List<JsonObject> managerWaves = new ArrayList<>();
+    private static final List<JsonObject> managerSequences = new ArrayList<>();
     private static final List<String> activeEvents = new ArrayList<>();
 
     private ClientCharacterState() {}
@@ -147,9 +148,11 @@ public final class ClientCharacterState {
         managerEvents.clear();
         managerPhases.clear();
         managerWaves.clear();
+        managerSequences.clear();
         copyArray(root, "events", managerEvents);
         copyArray(root, "phases", managerPhases);
         copyArray(root, "waves", managerWaves);
+        copyArray(root, "sequences", managerSequences);
         CharacterManagementScreen.refreshIfOpen();
         RpAdminScreen.refreshIfOpen();
     }
@@ -174,6 +177,10 @@ public final class ClientCharacterState {
 
     public static synchronized List<JsonObject> managerWaves() {
         return List.copyOf(managerWaves);
+    }
+
+    public static synchronized List<JsonObject> managerSequences() {
+        return List.copyOf(managerSequences);
     }
 
     /** 激活事件横幅（EventStateS2C）。 */

@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "sequences": [
+    {
+      "id": "qdf_support",
+      "steps": [
+        {"type": "WAIT", "seconds": 10},
+        {"type": "FORCE_PICK", "faction": "qdf", "count": 5, "professions": "s4_guard,s3_special", "randomName": true, "spawn": true},
+        {"type": "WAVE", "wave": "qdf_reinforce"}
+      ]
+    }
+  ]
+}

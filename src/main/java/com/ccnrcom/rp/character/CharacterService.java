@@ -172,6 +172,9 @@ public final class CharacterService {
         JsonArray wav = new JsonArray();
         com.ccnrcom.rp.util.ConfigCrud.items("spawn_waves.json", "waves").forEach(wav::add);
         pay.add("waves", wav);
+        JsonArray seq = new JsonArray();
+        com.ccnrcom.rp.util.ConfigCrud.items("sequences.json", "sequences").forEach(seq::add);
+        pay.add("sequences", seq);
         RpChannels.sendTo(player, new RpPackets.ManagerStateS2C(pay.toString()));
     }
 
@@ -265,6 +268,14 @@ public final class CharacterService {
                     }
                 });
             }
+            case "sequence" -> {
+                String id = str(p, "id", "");
+                errors = crudArray("sequences.json", "sequences", action, id, p, o -> {
+                    if (!o.has("steps")) {
+                        o.add("steps", new JsonArray());
+                    }
+                });
+            }
             case "wave" -> {
                 String id = str(p, "id", "");
                 errors = crudArray("spawn_waves.json", "waves", action, id, p, o -> {
@@ -308,6 +319,13 @@ public final class CharacterService {
         } else if ("wave".equals(kind)) {
             if (CCNRRPMod.spawnFramework != null) {
                 CCNRRPMod.spawnFramework.reload();
+            }
+        } else if ("sequence".equals(kind)) {
+            if (CCNRRPMod.sequenceEngine != null) {
+                CCNRRPMod.sequenceEngine.reload();
+            }
+            if (CCNRRPMod.eventManager != null) {
+                CCNRRPMod.eventManager.reload();
             }
         }
         service().sendError(player, "ccnr_rp.manager.crud.ok", kind, action);

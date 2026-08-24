@@ -31,6 +31,7 @@ public final class RpCommand {
         EventCommand.register(rp);
         AnimationCommand.register(rp);
         SpawnCommand.register(rp);
+        SequenceCommand.register(rp);
         rpNode = rp;
     }
 
@@ -53,6 +54,7 @@ public final class RpCommand {
             "ccnr_rp.command.usage.event",
             "ccnr_rp.command.usage.animation",
             "ccnr_rp.command.usage.spawn",
+            "ccnr_rp.command.usage.sequence",
             "ccnr_rp.command.usage.admin"
         };
         for (String k : keys) {
