@@ -1,6 +1,6 @@
 {
   "ccnr_rp.mod.name": "CCNR-RP",
-  "ccnr_rp.command.help": "CCNR-RP 指令列表",
+  "ccnr_rp.command.help": "CCNR-RP 指令列表：",
   "ccnr_rp.command.unknown": "未知指令，输入 /rp help 查看",
   "ccnr_rp.command.no_permission": "你无权执行该指令",
   "ccnr_rp.status.alive": "存活",
@@ -9,5 +9,15 @@
   "ccnr_rp.status.cooldown": "冷却中",
   "ccnr_rp.error.invalid_argument": "参数无效：%s",
   "ccnr_rp.error.player_not_found": "未找到玩家：%s",
-  "ccnr_rp.error.not_implemented": "该功能正在开发中（阶段 %s）"
+  "ccnr_rp.error.not_implemented": "该功能正在开发中（阶段 %s）",
+  "ccnr_rp.faction.list.header": "阵营与关系列表：",
+  "ccnr_rp.faction.list.faction": "阵营 %s — %s（%s）",
+  "ccnr_rp.faction.list.group": "组 %s → [%s]",
+  "ccnr_rp.faction.relation.result": "%s ↔ %s = %s",
+  "ccnr_rp.faction.relation.set": "已设置关系 %s ↔ %s = %s（已保存并重载）",
+  "ccnr_rp.faction.error.invalid_type": "无效关系类型，应为 hostile/neutral/friendly",
+  "ccnr_rp.faction.error.not_found": "未找到阵营或组: %s",
+  "ccnr_rp.faction.error.exists": "阵营或组已存在: %s",
+  "ccnr_rp.faction.error.config": "配置失败: %s",
+  "ccnr_rp.faction.group.created": "阵营组已创建: %s = [%s]"
 }

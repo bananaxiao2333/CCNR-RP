@@ -4,26 +4,64 @@
  */
 package com.ccnrcom.rp;
 
+import com.ccnrcom.rp.command.RpCommand;
+import com.ccnrcom.rp.config.CCNRRPConfig;
+import com.ccnrcom.rp.faction.FactionManager;
+import com.ccnrcom.rp.util.Permissions;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.RegisterCommandsEvent;
+import net.minecraftforge.event.server.ServerAboutToStartEvent;
+import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.config.ModConfig;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-/** CCNR-RP（RolePlay）模组入口 —— 目前仅为项目框架，功能开发中。 */
+/** CCNR-RP（RolePlay）模组入口。服务端运行时服务在此装配（P1 起按阶段扩展）。 */
 @Mod(CCNRRPMod.MODID)
 public class CCNRRPMod {
     public static final String MODID = "ccnr_rp";
     private static final Logger LOGGER = LogManager.getLogger();
 
+    /** 阵营配置管理器（仅服务端/服务器线程访问；ServerStopping 清空）。 */
+    public static FactionManager factions;
+
     public CCNRRPMod() {
+        ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, CCNRRPConfig.SPEC);
         IEventBus modBus = FMLJavaModLoadingContext.get().getModEventBus();
         modBus.addListener(this::commonSetup);
-        LOGGER.info("[CCNR-RP] 模组框架初始化完成（功能开发中）");
+        MinecraftForge.EVENT_BUS.register(this);
+        MinecraftForge.EVENT_BUS.register(Permissions.class);
+        LOGGER.info("[CCNR-RP] 模组初始化完成");
     }
 
     private void commonSetup(FMLCommonSetupEvent event) {
         event.enqueueWork(() -> LOGGER.info("[CCNR-RP] 公共初始化完成（服务端 + 客户端）"));
+    }
+
+    @SubscribeEvent
+    public void onRegisterCommands(RegisterCommandsEvent event) {
+        RpCommand.register(event.getDispatcher());
+    }
+
+    @SubscribeEvent
+    public void onServerAboutToStart(ServerAboutToStartEvent event) {
+        factions = new FactionManager();
+        factions.load();
+        LOGGER.info(
+                "[CCNR-RP] 服务端运行时就绪：阵营 {} 个 / 组 {} 个",
+                factions.graph().factions().size(),
+                factions.graph().groups().size());
+    }
+
+    @SubscribeEvent
+    public void onServerStopping(ServerStoppingEvent event) {
+        factions = null;
+        LOGGER.info("[CCNR-RP] 服务端运行时清理完成");
     }
 }

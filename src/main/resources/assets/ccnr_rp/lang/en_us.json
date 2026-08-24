@@ -1,6 +1,6 @@
 {
   "ccnr_rp.mod.name": "CCNR-RP",
-  "ccnr_rp.command.help": "CCNR-RP command list",
+  "ccnr_rp.command.help": "CCNR-RP commands:",
   "ccnr_rp.command.unknown": "Unknown command. Type /rp help",
   "ccnr_rp.command.no_permission": "You do not have permission to run this command",
   "ccnr_rp.status.alive": "Alive",
@@ -9,5 +9,15 @@
   "ccnr_rp.status.cooldown": "Cooldown",
   "ccnr_rp.error.invalid_argument": "Invalid argument: %s",
   "ccnr_rp.error.player_not_found": "Player not found: %s",
-  "ccnr_rp.error.not_implemented": "This feature is under development (stage %s)"
+  "ccnr_rp.error.not_implemented": "This feature is under development (stage %s)",
+  "ccnr_rp.faction.list.header": "Factions and relations:",
+  "ccnr_rp.faction.list.faction": "Faction %s — %s (%s)",
+  "ccnr_rp.faction.list.group": "Group %s → [%s]",
+  "ccnr_rp.faction.relation.result": "%s ↔ %s = %s",
+  "ccnr_rp.faction.relation.set": "Relation set: %s ↔ %s = %s (saved and reloaded)",
+  "ccnr_rp.faction.error.invalid_type": "Invalid relation type, expected hostile/neutral/friendly",
+  "ccnr_rp.faction.error.not_found": "Faction or group not found: %s",
+  "ccnr_rp.faction.error.exists": "Faction or group already exists: %s",
+  "ccnr_rp.faction.error.config": "Config error: %s",
+  "ccnr_rp.faction.group.created": "Group created: %s = [%s]"
 }
