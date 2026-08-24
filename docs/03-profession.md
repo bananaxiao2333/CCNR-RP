@@ -7,8 +7,8 @@
 ## 2. 数据模型
 - `ProfessionDefinition {id, name, factionId, selfDeploy:boolean, loadout}`
 - `Loadout {inventory: SlotItem[], armor: SlotItem[], offhand: SlotItem}`
-- `SlotItem {slot:int, item:ResourceLocation, count:int, nbt:base64}`（nbt = NbtUtils.base64 化的 CompoundTag；
-  库存放兼容 `net.minecraft.nbt` 的任意内容：附魔、组件、自定义键）。
+- `SlotItem {slot:int, item:ResourceLocation, count:int, nbt:base64}`（nbt = NbtIo 字节 base64 化的 CompoundTag，
+  含任意内容：附魔、组件、自定义键）。槽位为 MC 背包索引：0-35 背包、36 鞋/37 裤/38 胸甲/39 头盔、40 副手。
 
 ## 3. 配置位置
 `config/ccnr_rp/factions.json` 的 `"professions": [...]` 段（职业挂在阵营下，与阵营同文件、同重载）。
@@ -18,8 +18,8 @@
    "loadout": {
      "inventory": [{"slot": 0, "item": "minecraft:iron_sword", "count": 1, "nbt": "H4sIAA..."}],
      "armor": [
-       {"slot": "feet", "item": "minecraft:leather_boots", "count": 1, "nbt": null},
-       {"slot": "head", "item": "minecraft:iron_helmet", "count": 1, "nbt": null}
+       {"slot": 36, "item": "minecraft:leather_boots", "count": 1, "nbt": null},
+       {"slot": 39, "item": "minecraft:iron_helmet", "count": 1, "nbt": null}
      ],
      "offhand": {"slot": 40, "item": "minecraft:shield", "count": 1, "nbt": null}
    }

@@ -195,6 +195,31 @@ public final class FactionManager {
         return List.of();
     }
 
+    /** 职业定义管理（P2，读写同一个 factions.json）。 */
+    public List<String> upsertProfession(
+            String id, String name, String factionId, boolean selfDeploy, com.google.gson.JsonObject loadout) {
+        JsonObject candidate = root.deepCopy();
+        List<String> errors =
+                FactionProfessions.upsert(candidate, id, name, factionId, selfDeploy, loadout, f -> graph.factions()
+                        .containsKey(f));
+        if (!errors.isEmpty()) {
+            return errors;
+        }
+        if (!JsonUtil.atomicWrite(file, candidate)) {
+            return List.of("配置文件写入失败");
+        }
+        this.root = candidate;
+        return List.of();
+    }
+
+    public java.util.Optional<com.google.gson.JsonObject> findProfession(String id) {
+        return FactionProfessions.find(root, id);
+    }
+
+    public List<String> professionIds() {
+        return FactionProfessions.ids(root);
+    }
+
     /** 重新从盘读取。 */
     public void reload() {
         JsonUtil.readObject(file).ifPresent(o -> {
