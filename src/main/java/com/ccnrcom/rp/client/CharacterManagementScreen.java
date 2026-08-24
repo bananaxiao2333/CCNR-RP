@@ -40,7 +40,6 @@ public class CharacterManagementScreen extends Screen {
     private int factionIndex = 0;
     private int professionIndex = 0;
     private EditBox nameBox;
-    private EditBox backgroundBox;
     private EditBox skinPathBox;
     private String notice = "";
     private long noticeUntil = 0;
@@ -63,6 +62,7 @@ public class CharacterManagementScreen extends Screen {
     public static void refreshIfOpen() {
         if (open != null && net.minecraft.client.Minecraft.getInstance() != null) {
             open.reloadData();
+            open.rebuild();
         }
     }
 
@@ -124,7 +124,6 @@ public class CharacterManagementScreen extends Screen {
             selectedId = ClientCharacterState.selected();
         }
         nameBox = null;
-        backgroundBox = null;
         skinPathBox = null;
     }
 
@@ -215,18 +214,13 @@ public class CharacterManagementScreen extends Screen {
                     Component.translatable("ccnr_rp.gui.character.skin.upload"),
                     b -> uploadSkin()));
         }
-        // 创建表单卡（底部）
-        int createY1 = Math.max(bodyY2 - 96, pvY2 + 62);
+        // 创建表单卡（底部）：仅名称输入（只允许文字与空格）
+        int createY1 = Math.max(bodyY2 - 74, pvY2 + 62);
         int fy = createY1 + 8;
-        addW(RpButton.primary(
-                x, fy + 72, w, 20, Component.translatable("ccnr_rp.gui.character.create"), b -> createSubmit()));
-        backgroundBox =
-                new EditBox(font, x, fy + 50, w, 18, Component.translatable("ccnr_rp.gui.character.background"));
-        backgroundBox.setMaxLength(256);
-        backgroundBox.setTextColor(RpTheme.CYAN);
-        addW(backgroundBox);
         int bw2 = (w - 4) / 2;
-        addW(RpButton.secondary(x, fy + 28, bw2, 18, Component.literal(professionLabel()), b -> {
+        addW(RpButton.primary(
+                x, fy + 44, w, 20, Component.translatable("ccnr_rp.gui.character.create"), b -> createSubmit()));
+        addW(RpButton.secondary(x, fy + 26, bw2, 18, Component.literal(professionLabel()), b -> {
             List<String> list = matchingProfessions();
             if (list.isEmpty()) {
                 notice("ccnr_rp.gui.character.profession.empty");
@@ -236,15 +230,16 @@ public class CharacterManagementScreen extends Screen {
             professionIndex = (professionIndex + 1) % list.size();
             rebuild();
         }));
-        addW(RpButton.secondary(x + bw2 + 4, fy + 28, bw2, 18, Component.literal(factionLabel()), b -> {
+        addW(RpButton.secondary(x + bw2 + 4, fy + 26, bw2, 18, Component.literal(factionLabel()), b -> {
             if (!factionIds().isEmpty()) {
                 factionIndex = (factionIndex + 1) % factionIds().size();
                 professionIndex = 0;
                 rebuild();
             }
         }));
-        nameBox = new EditBox(font, x, fy + 4, w, 18, Component.translatable("ccnr_rp.gui.character.name"));
+        nameBox = new EditBox(font, x, fy + 2, w, 18, Component.translatable("ccnr_rp.gui.character.name"));
         nameBox.setMaxLength(32);
+        nameBox.setFilter(s -> s.matches("[\\p{L} ]*"));
         nameBox.setTextColor(RpTheme.CYAN);
         addW(nameBox);
     }
@@ -357,10 +352,19 @@ public class CharacterManagementScreen extends Screen {
             notice("ccnr_rp.gui.character.faction.empty");
             return;
         }
+        if (nameBox == null) {
+            notice("ccnr_rp.gui.character.name.need");
+            return;
+        }
+        String name = nameBox.getValue();
+        if (!name.matches("[\\p{L} ]+")) {
+            notice("ccnr_rp.character.error.name_chars");
+            return;
+        }
         String f = ids.get(Math.min(factionIndex, ids.size() - 1));
         List<String> list = matchingProfessions();
         String p = list.isEmpty() ? "" : list.get(Math.min(professionIndex, list.size() - 1));
-        RpChannels.sendToServer(new RpPackets.CharacterCreateC2S(nameBox.getValue(), f, p, backgroundBox.getValue()));
+        RpChannels.sendToServer(new RpPackets.CharacterCreateC2S(name, f, p, ""));
         notice("");
     }
 
