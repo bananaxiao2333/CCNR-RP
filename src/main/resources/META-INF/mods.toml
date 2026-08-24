@@ -1,0 +1,26 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="MIT"
+
+[[mods]]
+modId="ccnr_rp"
+version="${file.jarVersion}"
+displayName="CCNR-RP"
+authors="CCNR"
+description='''CCNR-RP（RolePlay）模组框架（Forge 1.20.1）
+
+当前仅为项目骨架，功能开发中。'''
+
+[[dependencies.ccnr_rp]]
+    modId="forge"
+    mandatory=true
+    versionRange="[47,)"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.ccnr_rp]]
+    modId="minecraft"
+    mandatory=true
+    versionRange="[1.20.1,1.21)"
+    ordering="NONE"
+    side="BOTH"
