@@ -932,7 +932,7 @@ public class RpAdminScreen extends Screen {
 
     private void renderSettings(GuiGraphics g, int mouseX, int mouseY) {
         for (int i = 0; i < 6; i++) {
-            int[] b = rowBounds.get(3 + i);
+            int[] b = rowBounds.get(6 + i);
             boolean on = value(SETTING_KEYS[i]);
             boolean hoverRow = mouseX >= b[0] && mouseX <= b[2] && mouseY >= b[1] && mouseY <= b[3];
             RpRoundRect.outlined(
@@ -988,7 +988,7 @@ public class RpAdminScreen extends Screen {
         g.drawString(font, "职业(" + profs.size() + ")", listX1 + 4, listY1 - 4, RpTheme.TEXT_DIM);
         for (int i = 0; i < profs.size() && i < maxVisible; i++) {
             JsonObject p = profs.get(off + i);
-            int[] b = rowBounds.get(3 + i);
+            int[] b = rowBounds.get(6 + i);
             boolean sel = str(p, "id").equals(selProfId);
             boolean hov = mouseX >= b[0] && mouseX <= b[2] && mouseY >= b[1] && mouseY <= b[3];
             if (sel) {
@@ -1015,7 +1015,7 @@ public class RpAdminScreen extends Screen {
         g.drawString(font, "阵营(" + facs.size() + ")", listX1 + 4, listY1 - 4, RpTheme.TEXT_DIM);
         for (int i = 0; i < facs.size(); i++) {
             JsonObject f = facs.get(i);
-            int[] b = rowBounds.get(3 + i);
+            int[] b = rowBounds.get(6 + i);
             boolean sel = str(f, "id").equals(selFactionId);
             boolean hov = mouseX >= b[0] && mouseX <= b[2] && mouseY >= b[1] && mouseY <= b[3];
             if (sel) {
