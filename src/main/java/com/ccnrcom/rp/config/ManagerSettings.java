@@ -36,6 +36,10 @@ public final class ManagerSettings {
         o.addProperty("forceObserving", true);
         o.addProperty("openPanelOnJoin", true);
         o.addProperty("forceRetain", true);
+        o.addProperty("hudEnabled", true);
+        o.addProperty("hudProfessionText", true);
+        o.addProperty("hudFactionText", false);
+        o.addProperty("hudHealthText", false);
         return o;
     }
 
@@ -77,9 +81,32 @@ public final class ManagerSettings {
         }
     }
 
+    public boolean hudEnabled() {
+        return bool("hudEnabled", true);
+    }
+
+    public boolean hudProfessionText() {
+        return bool("hudProfessionText", true);
+    }
+
+    public boolean hudFactionText() {
+        return bool("hudFactionText", false);
+    }
+
+    public boolean hudHealthText() {
+        return bool("hudHealthText", false);
+    }
+
     /** 设置项键列表（管理面板展示顺序）。 */
     public static List<String> keys() {
-        return List.of("forceObserving", "openPanelOnJoin", "forceRetain");
+        return List.of(
+                "forceObserving",
+                "openPanelOnJoin",
+                "forceRetain",
+                "hudEnabled",
+                "hudProfessionText",
+                "hudFactionText",
+                "hudHealthText");
     }
 
     /** 设置单个键（仅 bool 支持），返回错误列表（空=成功）。 */

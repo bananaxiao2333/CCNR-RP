@@ -114,9 +114,9 @@ public class RpAdminScreen extends Screen {
         }
         if (tab == TAB_SETTINGS) {
             int y = py1 + 80;
-            for (int i = 0; i < 3; i++) {
-                rowBounds.add(new int[] {px1 + 12, y, px2 - 12, y + 50});
-                y += 56;
+            for (int i = 0; i < 7; i++) {
+                rowBounds.add(new int[] {px1 + 12, y, px2 - 12, y + 40});
+                y += 44;
             }
         } else {
             List<JsonObject> items = listItems();
@@ -743,16 +743,32 @@ public class RpAdminScreen extends Screen {
         rebuild();
     }
 
-    private static final String[] SETTING_KEYS = {"forceObserving", "openPanelOnJoin", "forceRetain"};
+    private static final String[] SETTING_KEYS = {
+        "forceObserving",
+        "openPanelOnJoin",
+        "forceRetain",
+        "hudEnabled",
+        "hudProfessionText",
+        "hudFactionText",
+        "hudHealthText"
+    };
     private static final String[] SETTING_TITLES = {
         "ccnr_rp.gui.admin.setting.force_observing",
         "ccnr_rp.gui.admin.setting.open_panel",
-        "ccnr_rp.gui.admin.setting.force_retain"
+        "ccnr_rp.gui.admin.setting.force_retain",
+        "ccnr_rp.gui.admin.setting.hud_enabled",
+        "ccnr_rp.gui.admin.setting.hud_profession",
+        "ccnr_rp.gui.admin.setting.hud_faction",
+        "ccnr_rp.gui.admin.setting.hud_health"
     };
     private static final String[] SETTING_DESCS = {
         "ccnr_rp.gui.admin.setting.force_observing.desc",
         "ccnr_rp.gui.admin.setting.open_panel.desc",
-        "ccnr_rp.gui.admin.setting.force_retain.desc"
+        "ccnr_rp.gui.admin.setting.force_retain.desc",
+        "ccnr_rp.gui.admin.setting.hud_enabled.desc",
+        "ccnr_rp.gui.admin.setting.hud_profession.desc",
+        "ccnr_rp.gui.admin.setting.hud_faction.desc",
+        "ccnr_rp.gui.admin.setting.hud_health.desc"
     };
 
     private JsonObject visibleProfession(int i) {
@@ -923,7 +939,7 @@ public class RpAdminScreen extends Screen {
     }
 
     private void renderSettings(GuiGraphics g, int mouseX, int mouseY) {
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < 7; i++) {
             int[] b = rowBounds.get(3 + i);
             boolean on = value(SETTING_KEYS[i]);
             boolean hoverRow = mouseX >= b[0] && mouseX <= b[2] && mouseY >= b[1] && mouseY <= b[3];
@@ -940,12 +956,12 @@ public class RpAdminScreen extends Screen {
                     font,
                     Component.translatable(SETTING_TITLES[i]).getString(),
                     b[0] + 10,
-                    b[1] + 8,
+                    b[1] + 4,
                     on ? RpTheme.CYAN : RpTheme.TEXT_PRIMARY,
                     true);
             g.drawString(
-                    font, Component.translatable(SETTING_DESCS[i]).getString(), b[0] + 10, b[1] + 24, RpTheme.TEXT_DIM);
-            drawSwitch(g, b[2] - 60, b[1] + 18, on);
+                    font, Component.translatable(SETTING_DESCS[i]).getString(), b[0] + 10, b[1] + 16, RpTheme.TEXT_DIM);
+            drawSwitch(g, b[2] - 60, b[1] + 13, on);
         }
     }
 
