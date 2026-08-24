@@ -73,5 +73,16 @@
   "ccnr_rp.xp.info": "%s | XP %s | Level %s",
   "ccnr_rp.xp.level.info": "%s | Level %s",
   "ccnr_rp.xp.error.method": "Invalid evac method: %s (SAFE_RESCUE/DIED/OBSERVING_END/STAY_BEHIND)",
-  "ccnr_rp.xp.evac.set": "Evacuation set for %s: %s"
+  "ccnr_rp.xp.evac.set": "Evacuation set for %s: %s",
+  "ccnr_rp.event.started": "Event started: %s",
+  "ccnr_rp.event.ended": "Event ended: %s",
+  "ccnr_rp.event.list.item": "%s | enabled=%s | state=%s | triggers=%s | tasks=%s",
+  "ccnr_rp.event.triggered": "Event force-triggered: %s",
+  "ccnr_rp.event.not_runnable": "Event not runnable (disabled or running): %s",
+  "ccnr_rp.event.enabled": "Event set: %s -> %s",
+  "ccnr_rp.event.not_found": "Event not found: %s",
+  "ccnr_rp.event.phase.item": "Phase %s (%s min, current=%s)",
+  "ccnr_rp.event.phase.set": "Phase switched: %s",
+  "ccnr_rp.event.phase.not_found": "Phase not found: %s",
+  "ccnr_rp.event.gameover": "Game-over flow triggered (evacuation + settlement)"
 }

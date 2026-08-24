@@ -27,6 +27,7 @@ public final class RpCommand {
         CharacterCommand.register(rp);
         StateCommand.register(rp);
         XpCommand.register(rp);
+        EventCommand.register(rp);
         rpNode = rp;
     }
 

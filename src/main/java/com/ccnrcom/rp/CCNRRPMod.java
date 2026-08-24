@@ -38,6 +38,10 @@ public class CCNRRPMod {
     public static com.ccnrcom.rp.status.StatusManager statusManager;
     /** 经验服务（P5）。 */
     public static com.ccnrcom.rp.experience.ExperienceService experience;
+    /** 事件管理（P6）。 */
+    public static com.ccnrcom.rp.event.EventManager eventManager;
+    /** 刷新框架（P8 完整实现；P6 起为占位）。 */
+    public static com.ccnrcom.rp.spawn.SpawnFramework spawnFramework;
 
     public CCNRRPMod() {
         ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, CCNRRPConfig.SPEC);
@@ -67,6 +71,9 @@ public class CCNRRPMod {
         MinecraftForge.EVENT_BUS.register(statusManager);
         experience = new com.ccnrcom.rp.experience.ExperienceService(event.getServer());
         MinecraftForge.EVENT_BUS.register(experience);
+        spawnFramework = new com.ccnrcom.rp.spawn.SpawnFramework(event.getServer());
+        eventManager = new com.ccnrcom.rp.event.EventManager(event.getServer());
+        MinecraftForge.EVENT_BUS.register(eventManager);
         LOGGER.info(
                 "[CCNR-RP] 服务端运行时就绪：阵营 {} 个 / 组 {} 个 / 角色 {} 个",
                 factions.graph().factions().size(),
@@ -92,6 +99,11 @@ public class CCNRRPMod {
         if (experience != null) {
             MinecraftForge.EVENT_BUS.unregister(experience);
         }
+        if (eventManager != null) {
+            MinecraftForge.EVENT_BUS.unregister(eventManager);
+        }
+        eventManager = null;
+        spawnFramework = null;
         experience = null;
         statusManager = null;
         characters = null;
