@@ -21,7 +21,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * 语言包一致性回归测试：防止"只更新 zh_cn 漏掉 en_us"（红字原始键）或键漂移。
- * 镜像自 CCNR-Com 的 LangFileTest 思路。
+ * 镜像自 CCNR-Com 的 LangFileTest 思路。键命名空间允许 ccnr_rp.* 与 MC 键位约定 key.*。
  */
 class LangFileTest {
 
@@ -48,7 +48,7 @@ class LangFileTest {
     void allKeysFollowNamespaceAndRequiredKeysExist() {
         Map<String, String> zh = load("/assets/ccnr_rp/lang/zh_cn.json");
         for (String key : zh.keySet()) {
-            assertTrue(key.startsWith("ccnr_rp."), "键未遵循命名空间: " + key);
+            assertTrue(key.startsWith("ccnr_rp.") || key.startsWith("key."), "键未遵循命名空间: " + key);
             assertFalse(key.equals(zh.get(key)), "值渲染成了原始键（漏翻译）: " + key);
         }
         assertTrue(
