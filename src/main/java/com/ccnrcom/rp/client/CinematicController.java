@@ -147,30 +147,35 @@ public final class CinematicController {
             }
         }
 
-        // 主标题：职业（打字）
-        long titleStart = T_BLACK_HOLD + T_ICON_HOLD;
-        int tc = typedCount(title, titleStart, now);
-        if (tc > 0) {
-            String typed = title.substring(0, tc);
-            float scale = 2.6f;
-            g.pose().pushPose();
-            g.pose().translate(w / 2f, h * 0.52f, 0f);
-            g.pose().scale(scale, scale, 1f);
-            g.drawCenteredString(Minecraft.getInstance().font, typed, 0, 0, cy);
-            g.pose().popPose();
-        }
-
         // 副标题：四行（逐行打字）
+        long titleStart = T_BLACK_HOLD + T_ICON_HOLD;
         long lineStart = titleStart + (long) title.length() * T_TYPE_MS + T_LINE_GAP;
-        int ly = (int) (h * 0.60);
+        int ly = (int) (h * 0.57);
+        float lineScale = 1.4f;
         for (int i = 0; i < lines.size(); i++) {
             String line = lines.get(i);
             int c = typedCount(line, lineStart, now);
             if (c > 0) {
-                g.drawCenteredString(Minecraft.getInstance().font, line.substring(0, c), w / 2, ly, cs);
+                g.pose().pushPose();
+                g.pose().translate(w / 2f, ly + 6f, 0f);
+                g.pose().scale(lineScale, lineScale, 1f);
+                g.drawCenteredString(Minecraft.getInstance().font, line.substring(0, c), 0, 0, cs);
+                g.pose().popPose();
             }
-            ly += 15;
+            ly += 21;
             lineStart += (long) line.length() * T_TYPE_MS + T_LINE_GAP;
+        }
+
+        // 主标题：职业（打字）——屏幕正中央，绘于最上层（徽标位置不变）
+        int tc = typedCount(title, titleStart, now);
+        if (tc > 0) {
+            String typed = title.substring(0, tc);
+            float scale = 3.4f;
+            g.pose().pushPose();
+            g.pose().translate(w / 2f, h * 0.50f, 0f);
+            g.pose().scale(scale, scale, 1f);
+            g.drawCenteredString(Minecraft.getInstance().font, typed, 0, 0, cy);
+            g.pose().popPose();
         }
     }
 

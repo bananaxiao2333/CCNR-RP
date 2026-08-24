@@ -201,15 +201,15 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
     private int deployCandidates(List<Candidate> toDeploy, Wave wave, boolean recruited) {
         int deployed = 0;
         for (Candidate cand : toDeploy) {
-            if (deployCharacter(cand.charId(), wave, recruited)) {
+            if (deployCharacter(cand.charId(), wave, recruited, false)) {
                 deployed++;
             }
         }
         return deployed;
     }
 
-    /** 核心部署：校验 → 装备 → 传送 → 状态 ALIVE → 动画/广播。 */
-    public boolean deployCharacter(String charId, Wave wave, boolean recruited) {
+    /** 核心部署：校验 → 装备 → 传送 → 状态 ALIVE → 动画/广播。cinematic=true（自部署）时跳过旧 spawn 动画，由入场电影接管。 */
+    public boolean deployCharacter(String charId, Wave wave, boolean recruited, boolean cinematic) {
         CharacterService svc = CCNRRPMod.characters;
         if (svc == null) {
             return false;
@@ -244,7 +244,9 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
         svc.store().update(alive);
         svc.store().save();
         CharacterService.updateAndBroadcast(alive, p);
-        AnimationHooks.playerSpawn(p, c.name());
+        if (!cinematic) {
+            AnimationHooks.playerSpawn(p, c.name());
+        }
         return true;
     }
 
@@ -299,7 +301,7 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
                         0,
                         "minecraft:overworld",
                         60));
-        return deployCharacter(charId, wave, false);
+        return deployCharacter(charId, wave, false, true);
     }
 
     private boolean isSelfDeployable(CharacterData c) {
@@ -344,7 +346,7 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
 
     @Override
     public void onRecruitAccepted(String charId, String waveId) {
-        wave(waveId).ifPresent(w -> deployCharacter(charId, w, true));
+        wave(waveId).ifPresent(w -> deployCharacter(charId, w, true, false));
     }
 
     @Override
