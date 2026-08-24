@@ -3,6 +3,7 @@ plugins {
     id 'idea'
     id 'maven-publish'
     id 'net.minecraftforge.gradle' version '[6.0,6.2)'
+    id 'com.diffplug.spotless' version '6.25.0'
 }
 
 version = mod_version
@@ -51,6 +52,15 @@ repositories {
 
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+
+    // Corpse（henkelmax，Forge 1.20.1）——可选联动依赖，仅编译期；
+    // 运行时玩家可自行安装；未安装时模组降级为原生死亡处理。
+    // 版本随 libs/ 内文件名浮动（scripts/fetch-corpse.sh 解析最新版）。
+    compileOnly fileTree(dir: 'libs', include: 'corpse-forge-1.20.1-*.jar')
+
+    // ---- 测试（JUnit5；离线开发环境不自动跑，显式 `-PrunTests` 才执行）----
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
 }
 
 jar {
@@ -74,4 +84,22 @@ jar.finalizedBy('reobfJar')
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
     options.release = 17
+    // 语法/类型检查增强（警告不阻断构建；配合 CI 门禁使用）
+    options.compilerArgs += ['-Xlint:all']
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+    onlyIf { project.hasProperty('runTests') }
+}
+
+// ---- 代码风格（spotless：palantirJavaFormat + license 头）----
+spotless {
+    java {
+        target 'src/main/java/**/*.java', 'src/test/java/**/*.java'
+        palantirJavaFormat()
+        licenseHeaderFile 'config/spotless/license-header.txt'
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
 }

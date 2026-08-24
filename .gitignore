@@ -13,6 +13,10 @@ run/
 *.iml
 eclipse/
 
+# 第三方依赖（Corpse，运行 scripts/fetch-corpse.sh 获取）与发布产物
+libs/
+release/
+
 # macOS
 .DS_Store
 logs/
