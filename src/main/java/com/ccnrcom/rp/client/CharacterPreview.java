@@ -51,7 +51,10 @@ public final class CharacterPreview {
         if (p == null) {
             return;
         }
-        InventoryScreen.renderEntityInInventoryFollowsMouse(g, cx, cy, scale, cx - mouseX, cy - mouseY, p);
+        // 旋转角钳制：yaw ≤45°，pitch ≤33°——限制鼠标拖拽幅度，避免模型前倾时头“穿出”预览框。
+        float dx = Math.max(-40f, Math.min(40f, cx - mouseX));
+        float dy = Math.max(-26f, Math.min(26f, cy - mouseY));
+        InventoryScreen.renderEntityInInventoryFollowsMouse(g, cx, cy, scale, dx, dy, p);
     }
 
     private static AbstractClientPlayer entity(ClientLevel level, JsonObject c) {
