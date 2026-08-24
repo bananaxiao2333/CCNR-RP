@@ -114,7 +114,7 @@ public class RpAdminScreen extends Screen {
         }
         if (tab == TAB_SETTINGS) {
             int y = py1 + 80;
-            for (int i = 0; i < 7; i++) {
+            for (int i = 0; i < 6; i++) {
                 rowBounds.add(new int[] {px1 + 12, y, px2 - 12, y + 40});
                 y += 44;
             }
@@ -422,7 +422,7 @@ public class RpAdminScreen extends Screen {
     }
 
     private static String csv(JsonObject o, String key) {
-        if (!o.has(key) || !o.get(key).isJsonArray()) {
+        if (o == null || !o.has(key) || !o.get(key).isJsonArray()) {
             return "";
         }
         java.util.List<String> parts = new ArrayList<>();
@@ -433,7 +433,7 @@ public class RpAdminScreen extends Screen {
     }
 
     private static String posStr(JsonObject o) {
-        if (!o.has("deployAt") || !o.get("deployAt").isJsonObject()) {
+        if (o == null || !o.has("deployAt") || !o.get("deployAt").isJsonObject()) {
             return "";
         }
         JsonObject d = o.getAsJsonObject("deployAt");
@@ -451,7 +451,7 @@ public class RpAdminScreen extends Screen {
 
     private static String num(JsonObject o, String key, long def) {
         try {
-            return o.has(key) ? o.get(key).getAsString() : String.valueOf(def);
+            return o != null && o.has(key) ? o.get(key).getAsString() : String.valueOf(def);
         } catch (Exception e) {
             return String.valueOf(def);
         }
@@ -744,19 +744,12 @@ public class RpAdminScreen extends Screen {
     }
 
     private static final String[] SETTING_KEYS = {
-        "forceObserving",
-        "openPanelOnJoin",
-        "forceRetain",
-        "hudEnabled",
-        "hudProfessionText",
-        "hudFactionText",
-        "hudHealthText"
+        "forceObserving", "openPanelOnJoin", "forceRetain", "hudProfessionText", "hudFactionText", "hudHealthText"
     };
     private static final String[] SETTING_TITLES = {
         "ccnr_rp.gui.admin.setting.force_observing",
         "ccnr_rp.gui.admin.setting.open_panel",
         "ccnr_rp.gui.admin.setting.force_retain",
-        "ccnr_rp.gui.admin.setting.hud_enabled",
         "ccnr_rp.gui.admin.setting.hud_profession",
         "ccnr_rp.gui.admin.setting.hud_faction",
         "ccnr_rp.gui.admin.setting.hud_health"
@@ -765,7 +758,6 @@ public class RpAdminScreen extends Screen {
         "ccnr_rp.gui.admin.setting.force_observing.desc",
         "ccnr_rp.gui.admin.setting.open_panel.desc",
         "ccnr_rp.gui.admin.setting.force_retain.desc",
-        "ccnr_rp.gui.admin.setting.hud_enabled.desc",
         "ccnr_rp.gui.admin.setting.hud_profession.desc",
         "ccnr_rp.gui.admin.setting.hud_faction.desc",
         "ccnr_rp.gui.admin.setting.hud_health.desc"
@@ -939,7 +931,7 @@ public class RpAdminScreen extends Screen {
     }
 
     private void renderSettings(GuiGraphics g, int mouseX, int mouseY) {
-        for (int i = 0; i < 7; i++) {
+        for (int i = 0; i < 6; i++) {
             int[] b = rowBounds.get(3 + i);
             boolean on = value(SETTING_KEYS[i]);
             boolean hoverRow = mouseX >= b[0] && mouseX <= b[2] && mouseY >= b[1] && mouseY <= b[3];

@@ -103,7 +103,6 @@ public final class ManagerSettings {
                 "forceObserving",
                 "openPanelOnJoin",
                 "forceRetain",
-                "hudEnabled",
                 "hudProfessionText",
                 "hudFactionText",
                 "hudHealthText");
