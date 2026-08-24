@@ -55,6 +55,10 @@ public final class ClientPacketHandlers {
         CharacterManagementScreen.refreshIfOpen();
     }
 
+    public static void onEventState(String payload) {
+        ClientCharacterState.setActiveEvents(payload);
+    }
+
     public static void onManagerState(String payload) {
         ClientCharacterState.setManager(payload);
     }

@@ -31,6 +31,9 @@ final class EventCommand {
                         .requires(RpCommand.admin(Permissions.ADMIN_EVENT))
                         .then(Commands.argument("id", StringArgumentType.word())
                                 .executes(ctx -> end(ctx.getSource(), StringArgumentType.getString(ctx, "id")))))
+                .then(Commands.literal("clear")
+                        .requires(RpCommand.admin(Permissions.ADMIN_EVENT))
+                        .executes(ctx -> clear(ctx.getSource())))
                 .then(Commands.literal("enable")
                         .requires(RpCommand.admin(Permissions.ADMIN_EVENT))
                         .then(Commands.argument("id", StringArgumentType.word())
@@ -60,6 +63,16 @@ final class EventCommand {
                     return 0;
                 })
                 .build());
+    }
+
+    /** /rp event clear：清空当前正在运行的所有事件（横幅同时清空）。 */
+    private static int clear(CommandSourceStack source) {
+        if (CCNRRPMod.eventManager == null) {
+            return 0;
+        }
+        var cleared = CCNRRPMod.eventManager.clearAll();
+        source.sendSuccess(() -> Component.translatable("ccnr_rp.event.cleared", cleared.size()), true);
+        return 1;
     }
 
     private static int list(CommandSourceStack source) {

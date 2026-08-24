@@ -17,6 +17,7 @@ import com.ccnrcom.rp.network.RpChannels;
 import com.ccnrcom.rp.network.RpPackets;
 import com.ccnrcom.rp.status.CharacterStatus;
 import com.ccnrcom.rp.util.JsonUtil;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -56,6 +57,41 @@ public final class EventManager {
         clock = new PhaseClock(loadPhases());
         loadEvents();
         LOGGER.info("[CCNR-RP] 事件/阶段已热重载");
+        broadcastState();
+    }
+
+    /** 当前激活事件 id 列表（RUNNING）。 */
+    public List<String> activeEventIds() {
+        return events.stream()
+                .filter(e -> e.state() == EventState.RUNNING)
+                .map(EventDefinition::id)
+                .toList();
+    }
+
+    /** 推送激活事件横幅（全服在线）。 */
+    public void broadcastState() {
+        JsonObject pay = new JsonObject();
+        JsonArray a = new JsonArray();
+        activeEventIds().forEach(id -> a.add(id));
+        pay.add("events", a);
+        for (ServerPlayer p : onlinePlayers()) {
+            RpChannels.sendTo(p, new RpPackets.EventStateS2C(pay.toString()));
+        }
+    }
+
+    /** 清空当前事件（/rp event clear）：全部 RUNNING → SETTLED → 重置为 SCHEDULED 并广播横幅。 */
+    public List<String> clearAll() {
+        List<String> out = new ArrayList<>();
+        for (int i = 0; i < events.size(); i++) {
+            EventDefinition def = events.get(i);
+            if (def.state() == EventState.RUNNING) {
+                events.set(i, def.withState(EventState.SETTLED));
+                out.add(def.id());
+            }
+        }
+        resetEvents();
+        broadcastState();
+        return out;
     }
 
     public PhaseClock clock() {
@@ -156,6 +192,7 @@ public final class EventManager {
         List<ServerPlayer> targets = onlinePlayers();
         targets.forEach(p -> RpChannels.sendTo(p, new RpPackets.ErrorS2C("ccnr_rp.event.started", def.id())));
         AnimationHooks.eventStart(def.id(), targets);
+        broadcastState();
         // P8：刷新波钩子（若已实现）
         if (!def.spawnWave().isBlank() && CCNRRPMod.spawnFramework != null) {
             CCNRRPMod.spawnFramework.triggerWave(def.spawnWave());
@@ -252,6 +289,7 @@ public final class EventManager {
         LOGGER.info("[CCNR-RP] 事件结束: {} ", def.id());
         List<ServerPlayer> targets = onlinePlayers();
         targets.forEach(p -> RpChannels.sendTo(p, new RpPackets.ErrorS2C("ccnr_rp.event.ended", def.id())));
+        broadcastState();
         if (def.settleOnEnd() && CCNRRPMod.experience != null) {
             CCNRRPMod.experience.settleAll(null);
         }
