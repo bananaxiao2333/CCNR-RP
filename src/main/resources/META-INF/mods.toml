@@ -6,6 +6,7 @@ license="MIT"
 modId="ccnr_rp"
 version="${file.jarVersion}"
 displayName="CCNR-RP"
+logoFile="icon.png"
 authors="CCNR"
 description='''CCNR-RP（RolePlay）模组框架（Forge 1.20.1）
 
