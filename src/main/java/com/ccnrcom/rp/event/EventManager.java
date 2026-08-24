@@ -58,25 +58,24 @@ public final class EventManager {
         return List.copyOf(events);
     }
 
-    private List<GamePhase> loadPhases() {
-        Path file = FMLPaths.CONFIGDIR.get().resolve("ccnr_rp").resolve("phases.json");
-        JsonObject root = JsonUtil.readObject(file).orElseGet(() -> {
-            JsonObject d = JsonUtil.readResource("/assets/ccnr_rp/defaults/phases.json")
-                    .orElseGet(JsonObject::new);
+    private JsonObject loadOrDefaults(Path file, String resource) {
+        JsonObject root = JsonUtil.readObject(file).orElseGet(JsonObject::new);
+        if (root.size() == 0) {
+            JsonObject d = JsonUtil.readResource(resource).orElseGet(JsonObject::new);
             JsonUtil.atomicWrite(file, d);
             return d;
-        });
-        return EventModels.parsePhases(root);
+        }
+        return root;
+    }
+
+    private List<GamePhase> loadPhases() {
+        Path file = FMLPaths.CONFIGDIR.get().resolve("ccnr_rp").resolve("phases.json");
+        return EventModels.parsePhases(loadOrDefaults(file, "/assets/ccnr_rp/defaults/phases.json"));
     }
 
     private void loadEvents() {
         Path file = FMLPaths.CONFIGDIR.get().resolve("ccnr_rp").resolve("events.json");
-        JsonObject root = JsonUtil.readObject(file).orElseGet(() -> {
-            JsonObject d = JsonUtil.readResource("/assets/ccnr_rp/defaults/events.json")
-                    .orElseGet(JsonObject::new);
-            JsonUtil.atomicWrite(file, d);
-            return d;
-        });
+        JsonObject root = loadOrDefaults(file, "/assets/ccnr_rp/defaults/events.json");
         for (String e : EventModels.parseEvents(root)) {
             LOGGER.error("[CCNR-RP] events.json: {}", e);
         }

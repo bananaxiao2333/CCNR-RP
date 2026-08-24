@@ -17,5 +17,16 @@
     {"from": "qso", "to": "qdf", "type": "friendly"},
     {"from": "logistics", "to": "qsec_group", "type": "friendly"}
   ],
-  "professions": []
+  "professions": [
+    {"id": "qdf_guard", "name": "QDF队员", "factionId": "qdf", "selfDeploy": false,
+     "loadout": {"inventory": [], "armor": [], "offhand": {}}},
+    {"id": "qdf_special", "name": "QDF高级特工", "factionId": "qdf", "selfDeploy": true,
+     "loadout": {"inventory": [], "armor": [], "offhand": {}}},
+    {"id": "qsa_member", "name": "QSA队员", "factionId": "qsa", "selfDeploy": false,
+     "loadout": {"inventory": [], "armor": [], "offhand": {}}},
+    {"id": "madison_researcher", "name": "研究员", "factionId": "madison", "selfDeploy": true,
+     "loadout": {"inventory": [], "armor": [], "offhand": {}}},
+    {"id": "logistics_staff", "name": "后勤专员", "factionId": "logistics", "selfDeploy": false,
+     "loadout": {"inventory": [], "armor": [], "offhand": {}}}
+  ]
 }

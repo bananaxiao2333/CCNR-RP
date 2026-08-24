@@ -31,12 +31,12 @@ public final class AnimationEngine {
 
     public AnimationEngine() {
         Path file = FMLPaths.CONFIGDIR.get().resolve("ccnr_rp").resolve("animations.json");
-        JsonObject root = JsonUtil.readObject(file).orElseGet(() -> {
-            JsonObject d = JsonUtil.readResource("/assets/ccnr_rp/defaults/animations.json")
+        JsonObject root = JsonUtil.readObject(file).orElseGet(JsonObject::new);
+        if (root.size() == 0) {
+            root = JsonUtil.readResource("/assets/ccnr_rp/defaults/animations.json")
                     .orElseGet(JsonObject::new);
-            JsonUtil.atomicWrite(file, d);
-            return d;
-        });
+            JsonUtil.atomicWrite(file, root);
+        }
         List<String> errors = AnimationModels.parseAll(root, sequences);
         errors.forEach(e -> LOGGER.error("[CCNR-RP] animations.json: {}", e));
         if (root.has("hooks") && root.getAsJsonObject("hooks").size() > 0) {
