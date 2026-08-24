@@ -88,6 +88,14 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
         errors.forEach(e -> LOGGER.error("[CCNR-RP] spawn_waves.json: {}", e));
     }
 
+    /** 热重载（管理器 CRUD 后调用）：重读 spawn_waves.json 并清空队伍触发记录。 */
+    public void reload() {
+        waves.clear();
+        teamTriggered.clear();
+        loadWaves();
+        LOGGER.info("[CCNR-RP] 刷新波已热重载");
+    }
+
     public List<Wave> waves() {
         return List.copyOf(waves);
     }

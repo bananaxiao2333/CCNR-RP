@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.1（管理器事件/阶段/刷新波 CRUD）
+- 管理器新增三页签：事件（启用/时长/结束后结算/触发器任务沿用）、阶段（顺序/时长分钟）、刷新波（模式 SELF_DEPLOY|RECRUIT|BOTH、部署点 WORLD_SPAWN|POS、数量/等级/招募时限/维度/坐标/队伍·职业·阵营ID列表）。
+- CRUD 后热重载：EventManager / SpawnFramework 实时生效（事件/阶段重读 json，刷新波清空队伍触发记录）。
+- 管理器数据（事件/阶段/刷新波列表）随 ManagerStateS2C 下发，K 面板与管理器同步刷新。
+
 ## 1.2.0（管理器 CRUD + 职业简历配置化 + Corpse 崩服修复）
 - 修复：未安装 Corpse 模组时离服判死触发 NoClassDefFoundError（类验证发生在 try 外逃逸）崩服——CorpseBridge 改为类探测（Class.forName 缓存）+ 独立内部类隔离引用 + 兜底捕获；低版本 1.0.8 亦曾崩（同根因现全覆盖）。
 - 管理器 v2：三个页签——设置（入服规则 3 项）/ 职业 CRUD（列表+建档：名称/阵营/自部署/出场音乐/项目简历/保存/删除/新建）/ 阵营 CRUD（名称/颜色/图标 8 种/等级 1-3/描述）。全部实时写入 config/ccnr_rp/factions.json。

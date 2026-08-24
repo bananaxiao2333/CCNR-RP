@@ -39,7 +39,7 @@ public final class EventManager {
     private static final Logger LOGGER = LogManager.getLogger();
 
     private final MinecraftServer server;
-    private final PhaseClock clock;
+    private PhaseClock clock;
     private final List<EventDefinition> events = new ArrayList<>();
     private long evalCounter = 0;
     private long startedAtMillis = System.currentTimeMillis();
@@ -48,6 +48,14 @@ public final class EventManager {
         this.server = server;
         this.clock = new PhaseClock(loadPhases());
         loadEvents();
+    }
+
+    /** 热重载（管理器 CRUD 后调用）：重读 phases.json/events.json。 */
+    public void reload() {
+        events.clear();
+        clock = new PhaseClock(loadPhases());
+        loadEvents();
+        LOGGER.info("[CCNR-RP] 事件/阶段已热重载");
     }
 
     public PhaseClock clock() {

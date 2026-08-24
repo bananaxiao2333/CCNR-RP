@@ -163,6 +163,15 @@ public final class CharacterService {
         pay.addProperty(
                 "admin",
                 com.ccnrcom.rp.util.Permissions.canAdmin(player, com.ccnrcom.rp.util.Permissions.ADMIN_FACTION));
+        JsonArray eva = new JsonArray();
+        com.ccnrcom.rp.util.ConfigCrud.items("events.json", "events").forEach(eva::add);
+        pay.add("events", eva);
+        JsonArray pha = new JsonArray();
+        com.ccnrcom.rp.util.ConfigCrud.items("phases.json", "phases").forEach(pha::add);
+        pay.add("phases", pha);
+        JsonArray wav = new JsonArray();
+        com.ccnrcom.rp.util.ConfigCrud.items("spawn_waves.json", "waves").forEach(wav::add);
+        pay.add("waves", wav);
         RpChannels.sendTo(player, new RpPackets.ManagerStateS2C(pay.toString()));
     }
 
@@ -225,15 +234,102 @@ public final class CharacterService {
                     default -> errors = List.of("未知操作: " + action);
                 }
             }
+            case "event" -> {
+                String id = str(p, "id", "");
+                errors = crudArray("events.json", "events", action, id, p, o -> {
+                    if (!o.has("enabled")) {
+                        o.addProperty("enabled", true);
+                    }
+                    if (!o.has("durationSeconds")) {
+                        o.addProperty("durationSeconds", 0);
+                    }
+                    if (!o.has("settleOnEnd")) {
+                        o.addProperty("settleOnEnd", true);
+                    }
+                    if (!o.has("triggers")) {
+                        o.add("triggers", new JsonArray());
+                    }
+                    if (!o.has("tasks")) {
+                        o.add("tasks", new JsonArray());
+                    }
+                });
+            }
+            case "phase" -> {
+                String id = str(p, "id", "");
+                errors = crudArray("phases.json", "phases", action, id, p, o -> {
+                    if (!o.has("order")) {
+                        o.addProperty("order", 0);
+                    }
+                    if (!o.has("durationMinutes")) {
+                        o.addProperty("durationMinutes", 30);
+                    }
+                });
+            }
+            case "wave" -> {
+                String id = str(p, "id", "");
+                errors = crudArray("spawn_waves.json", "waves", action, id, p, o -> {
+                    if (!o.has("mode")) {
+                        o.addProperty("mode", "BOTH");
+                    }
+                    if (!o.has("enabled")) {
+                        o.addProperty("enabled", true);
+                    }
+                    if (!o.has("count")) {
+                        o.addProperty("count", 1);
+                    }
+                    if (!o.has("minLevel")) {
+                        o.addProperty("minLevel", 0);
+                    }
+                    if (!o.has("teamIds")) {
+                        o.add("teamIds", new JsonArray());
+                    }
+                    if (!o.has("professionIds")) {
+                        o.add("professionIds", new JsonArray());
+                    }
+                    if (!o.has("factionIds")) {
+                        o.add("factionIds", new JsonArray());
+                    }
+                    if (!o.has("recruitTimeoutSeconds")) {
+                        o.addProperty("recruitTimeoutSeconds", 60);
+                    }
+                });
+            }
             default -> errors = List.of("未知类型: " + kind);
         }
         if (!errors.isEmpty()) {
             service().sendError(player, "ccnr_rp.error.invalid_argument", String.join("; ", errors));
             return;
         }
+        // 热重载对应系统
+        if ("event".equals(kind) || "phase".equals(kind)) {
+            if (CCNRRPMod.eventManager != null) {
+                CCNRRPMod.eventManager.reload();
+            }
+        } else if ("wave".equals(kind)) {
+            if (CCNRRPMod.spawnFramework != null) {
+                CCNRRPMod.spawnFramework.reload();
+            }
+        }
         service().sendError(player, "ccnr_rp.manager.crud.ok", kind, action);
         service().sendList(player);
         sendManagerState(player);
+    }
+
+    /** 通用数组段 CRUD：delete 删除；否则用 item 补齐缺省字段后 upsert。 */
+    private static List<String> crudArray(
+            String file,
+            String arrayKey,
+            String action,
+            String id,
+            JsonObject payload,
+            java.util.function.Consumer<JsonObject> fillDefaults) {
+        if ("delete".equals(action)) {
+            return com.ccnrcom.rp.util.ConfigCrud.delete(file, arrayKey, id);
+        }
+        JsonObject item = payload.deepCopy();
+        item.addProperty("id", id);
+        fillDefaults.accept(item);
+        return com.ccnrcom.rp.util.ConfigCrud.upsert(file, arrayKey, item);
     }
 
     private static String str(JsonObject o, String key, String def) {
