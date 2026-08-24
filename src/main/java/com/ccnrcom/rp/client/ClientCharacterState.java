@@ -23,6 +23,7 @@ public final class ClientCharacterState {
     private static final List<JsonObject> managerEvents = new ArrayList<>();
     private static final List<JsonObject> managerPhases = new ArrayList<>();
     private static final List<JsonObject> managerWaves = new ArrayList<>();
+    private static final List<String> activeEvents = new ArrayList<>();
 
     private ClientCharacterState() {}
 
@@ -173,6 +174,24 @@ public final class ClientCharacterState {
 
     public static synchronized List<JsonObject> managerWaves() {
         return List.copyOf(managerWaves);
+    }
+
+    /** 激活事件横幅（EventStateS2C）。 */
+    public static synchronized void setActiveEvents(String payload) {
+        activeEvents.clear();
+        JsonObject root = JsonUtil.GSON.fromJson(payload, JsonObject.class);
+        if (root == null) {
+            return;
+        }
+        if (root.has("events") && root.get("events").isJsonArray()) {
+            for (JsonElement e : root.getAsJsonArray("events")) {
+                activeEvents.add(e.getAsString());
+            }
+        }
+    }
+
+    public static synchronized List<String> activeEvents() {
+        return List.copyOf(activeEvents);
     }
 
     /** 消耗入服自动打开面板标记（仅一次）。 */

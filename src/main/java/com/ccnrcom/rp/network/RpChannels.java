@@ -142,6 +142,11 @@ public final class RpChannels {
                 .decoder(RpPackets.ManagerCrudC2S::new)
                 .consumerNetworkThread(RpPackets.ManagerCrudC2S::handle)
                 .add();
+        CHANNEL.messageBuilder(RpPackets.EventStateS2C.class, id++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(RpPackets.EventStateS2C::encode)
+                .decoder(RpPackets.EventStateS2C::new)
+                .consumerNetworkThread(RpPackets.EventStateS2C::handle)
+                .add();
         CHANNEL.messageBuilder(RpPackets.ErrorS2C.class, id++, NetworkDirection.PLAY_TO_CLIENT)
                 .encoder(RpPackets.ErrorS2C::encode)
                 .decoder(RpPackets.ErrorS2C::new)

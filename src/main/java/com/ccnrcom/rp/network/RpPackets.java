@@ -598,6 +598,31 @@ public final class RpPackets {
         }
     }
 
+    /** 激活事件横幅（S2C）。 */
+    public static final class EventStateS2C {
+        public final String payload;
+
+        public EventStateS2C(String payload) {
+            this.payload = payload;
+        }
+
+        public EventStateS2C(FriendlyByteBuf buf) {
+            this(buf.readUtf(8192));
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(payload, 8192);
+        }
+
+        public static void handle(EventStateS2C msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(
+                            net.minecraftforge.api.distmarker.Dist.CLIENT,
+                            () -> () -> com.ccnrcom.rp.client.ClientPacketHandlers.onEventState(msg.payload)));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
     /** 管理器状态（S2C）。 */
     public static final class ManagerStateS2C {
         public final String payload;

@@ -41,4 +41,10 @@ public final class ClientForgeEvents {
             Minecraft.getInstance().setScreen(new CharacterManagementScreen());
         }
     }
+
+    /** 背包等任意界面打开时，事件横幅依然绘制在最上层。 */
+    @SubscribeEvent
+    public static void onScreenRender(net.minecraftforge.client.event.ScreenEvent.Render.Post event) {
+        EventBanner.render(event.getGuiGraphics(), event.getScreen().width, event.getScreen().height);
+    }
 }

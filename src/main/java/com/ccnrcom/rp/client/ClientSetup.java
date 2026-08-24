@@ -47,6 +47,7 @@ public final class ClientSetup {
                 "ccnr_rp_recruit",
                 (gui, gfx, partial, w, h) -> com.ccnrcom.rp.client.RecruitOverlayHud.render(gfx, w, h));
         event.registerAboveAll("ccnr_rp_status", (gui, gfx, partial, w, h) -> StatusHud.render(gfx, w, h));
+        event.registerAboveAll("ccnr_rp_events", (gui, gfx, partial, w, h) -> EventBanner.render(gfx, w, h));
         event.registerAboveAll("ccnr_rp_cinematic", (gui, gfx, partial, w, h) -> CinematicController.render(gfx, w, h));
     }
 }
