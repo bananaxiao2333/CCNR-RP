@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.10（命令提示全量补齐）
+- /rp help 重写：全量列出 9 大子命令完整参数签名（中英文），并新增 /rp help 别名。
+- 所有子命令/叶子节点裸输或缺参时直接打印对应命令用法（faction/profession/character/state/xp/level/evac/settle/event/phase/animation/spawn 全部覆盖）。
+- profession create 新增可选 [显示名]（支持中文，如 /rp profession create qso_director qso true 设施总监）。
+- character create 的 name 参数改为 string 类型，支持中文角色名。
+
 ## 1.0.9（入场电影打磨）
 - 自部署走电影时不再播放旧 spawn 动画（CCNR-RP 标题不再闪现在黑屏上/被电影覆盖）。
 - 主标题（职业打字）移到屏幕正中央并最后绘制（在最上层）；徽标位置保持不变。

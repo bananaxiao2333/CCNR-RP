@@ -27,8 +27,10 @@ final class AnimationCommand {
 
     static void register(LiteralCommandNode<CommandSourceStack> rp) {
         rp.addChild(Commands.literal("animation")
+                .executes(ctx -> RpCommand.usageHint(ctx.getSource(), "ccnr_rp.command.usage.animation"))
                 .requires(RpCommand.admin(Permissions.ADMIN_ANIMATION))
                 .then(Commands.literal("play")
+                        .executes(ctx -> RpCommand.usageHint(ctx.getSource(), "ccnr_rp.command.usage.animation"))
                         .then(Commands.argument("id", StringArgumentType.word())
                                 .suggests(SEQ)
                                 .then(Commands.argument("targets", StringArgumentType.greedyString())

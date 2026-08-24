@@ -20,8 +20,9 @@ public final class RpCommand {
     private RpCommand() {}
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        LiteralCommandNode<CommandSourceStack> rp =
-                dispatcher.register(Commands.literal("rp").executes(ctx -> help(ctx.getSource())));
+        LiteralCommandNode<CommandSourceStack> rp = dispatcher.register(Commands.literal("rp")
+                .executes(ctx -> help(ctx.getSource()))
+                .then(Commands.literal("help").executes(ctx -> help(ctx.getSource()))));
         FactionCommand.register(rp);
         ProfessionCommand.register(rp);
         CharacterCommand.register(rp);
@@ -39,12 +40,30 @@ public final class RpCommand {
         return rpNode;
     }
 
+    /** /rp help：全量命令提示（分级 + 参数签名）。 */
     private static int help(CommandSourceStack source) {
-        source.sendSuccess(() -> Component.translatable("ccnr_rp.command.help"), false);
-        source.sendSuccess(
-                () -> Component.literal("  /rp faction list | relation <a> <b> | relation set <a> <b> <type>"
-                        + " | group list | group create <id> <ids...> | group relation <g1> <g2> <type>"),
-                false);
+        String[] keys = {
+            "ccnr_rp.command.help",
+            "ccnr_rp.command.usage.gui",
+            "ccnr_rp.command.usage.faction",
+            "ccnr_rp.command.usage.profession",
+            "ccnr_rp.command.usage.character",
+            "ccnr_rp.command.usage.state",
+            "ccnr_rp.command.usage.xp",
+            "ccnr_rp.command.usage.event",
+            "ccnr_rp.command.usage.animation",
+            "ccnr_rp.command.usage.spawn",
+            "ccnr_rp.command.usage.admin"
+        };
+        for (String k : keys) {
+            source.sendSuccess(() -> Component.translatable(k), false);
+        }
+        return 1;
+    }
+
+    /** 打印命令提示（缺参/裸命令时输出该命令完整用法）。 */
+    public static int usageHint(CommandSourceStack source, String usageKey) {
+        source.sendSuccess(() -> Component.translatable(usageKey), false);
         return 1;
     }
 

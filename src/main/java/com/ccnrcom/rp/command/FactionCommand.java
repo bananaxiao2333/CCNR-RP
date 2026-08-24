@@ -23,10 +23,12 @@ final class FactionCommand {
     private FactionCommand() {}
 
     static void register(LiteralCommandNode<CommandSourceStack> rp) {
-        LiteralArgumentBuilder<CommandSourceStack> base = Commands.literal("faction");
+        LiteralArgumentBuilder<CommandSourceStack> base = Commands.literal("faction")
+                .executes(ctx -> RpCommand.usageHint(ctx.getSource(), "ccnr_rp.command.usage.faction"));
         base.then(Commands.literal("list").executes(ctx -> list(ctx.getSource())));
 
         base.then(Commands.literal("relation")
+                .executes(ctx -> RpCommand.usageHint(ctx.getSource(), "ccnr_rp.command.usage.faction"))
                 .then(Commands.argument("a", StringArgumentType.word())
                         .then(Commands.argument("b", StringArgumentType.word())
                                 .executes(ctx -> getRelation(
@@ -43,6 +45,7 @@ final class FactionCommand {
                                                         StringArgumentType.getString(ctx, "type"))))))));
 
         base.then(Commands.literal("group")
+                .executes(ctx -> RpCommand.usageHint(ctx.getSource(), "ccnr_rp.command.usage.faction"))
                 .then(Commands.literal("list").executes(ctx -> list(ctx.getSource())))
                 .then(Commands.literal("create")
                         .requires(RpCommand.admin(Permissions.ADMIN_FACTION))
