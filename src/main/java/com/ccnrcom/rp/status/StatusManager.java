@@ -97,6 +97,38 @@ public final class StatusManager {
         }
     }
 
+    /** 阴间循环检测（每 5 秒）：DEAD 且冷却结束 → 自动回观察者，等待被重新部署，绝不自动复活。 */
+    private long deadCheckCounter = 0;
+
+    @SubscribeEvent
+    public void onServerTickCheckDead(TickEvent.ServerTickEvent event) {
+        if (event.phase != TickEvent.Phase.END || CCNRRPMod.characters == null) {
+            return;
+        }
+        if (++deadCheckCounter < 100) { // 100 ticks = 5s
+            return;
+        }
+        deadCheckCounter = 0;
+        long now = System.currentTimeMillis();
+        for (CharacterData c : CCNRRPMod.characters.store().all()) {
+            if (c.status() != CharacterStatus.DEAD) {
+                continue;
+            }
+            if (c.cooldownUntil() > now) {
+                continue; // 冷却中继续“阴间”
+            }
+            CharacterData obs = c.withStatus(CharacterStatus.OBSERVING).withCooldown(0);
+            CCNRRPMod.characters.store().update(obs);
+            CCNRRPMod.characters.store().save();
+            CharacterService.updateAndBroadcast(obs, null);
+            var owner = server.getPlayerList().getPlayer(java.util.UUID.fromString(c.playerUuid()));
+            if (owner != null) {
+                CCNRRPMod.characters.sendList(owner); // 在线拥有者：同步回观察者 + 面板锁
+            }
+            LOGGER.info("[CCNR-RP] 阴间循环：{} 已回观察者池（冷却结束）", c.name());
+        }
+    }
+
     // ---------- 判死 ----------
 
     /** 管理命令：处决玩家（在线则生成遗体）。 */
@@ -143,6 +175,9 @@ public final class StatusManager {
         CharacterData dead =
                 data.withStatus(CharacterStatus.DEAD).withCooldown(System.currentTimeMillis() + cooldownMs);
         CharacterService.updateAndBroadcast(dead, player);
+        if (player != null) {
+            CCNRRPMod.characters.sendList(player); // 立即刷新面板锁（死亡即解锁）
+        }
         if (spawnCorpse && player != null && CorpseBridge.available()) {
             CorpseBridge.spawnCorpse(player);
         }

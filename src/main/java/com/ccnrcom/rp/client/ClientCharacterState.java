@@ -57,13 +57,25 @@ public final class ClientCharacterState {
             settings = root.getAsJsonObject("settings");
         }
         isAdmin = root.has("admin") && root.get("admin").getAsBoolean();
-        panelLocked = root.has("panelLocked") && root.get("panelLocked").getAsBoolean();
+        refreshPanelLocked();
         autoOpenPending = bool("openPanelOnJoin", true) && !panelLocked;
     }
 
     /** 面板锁：有存活角色时禁止打开 K 面板。 */
     public static synchronized boolean panelLocked() {
         return panelLocked;
+    }
+
+    /** 由角色列表实时推导面板锁：死亡/观察后立即解锁，不依赖新的全量列表包。 */
+    private static void refreshPanelLocked() {
+        panelLocked = false;
+        for (JsonObject c : characters) {
+            String st = c.has("status") ? c.get("status").getAsString() : "";
+            if ("alive".equals(st)) {
+                panelLocked = true;
+                return;
+            }
+        }
     }
 
     private static boolean bool(String key, boolean def) {
@@ -97,14 +109,17 @@ public final class ClientCharacterState {
         for (int i = 0; i < characters.size(); i++) {
             if (characters.get(i).get("id").getAsString().equals(id)) {
                 characters.set(i, data);
+                refreshPanelLocked();
                 return;
             }
         }
         characters.add(data);
+        refreshPanelLocked();
     }
 
     public static synchronized void remove(String charId) {
         characters.removeIf(c -> c.get("id").getAsString().equals(charId));
+        refreshPanelLocked();
     }
 
     public static synchronized List<JsonObject> list() {

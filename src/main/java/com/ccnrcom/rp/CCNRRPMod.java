@@ -95,6 +95,18 @@ public class CCNRRPMod {
     @SubscribeEvent
     public void onPlayerLoggedIn(net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent event) {
         if (characters != null && event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
+            // 登录归一化：DEAD 且冷却结束 → 立即回观察者（阴间），随后同步列表
+            long now = System.currentTimeMillis();
+            for (var c : java.util.List.copyOf(characters.store().all())) {
+                if (c.playerUuid().equals(player.getUUID().toString())
+                        && c.status() == com.ccnrcom.rp.status.CharacterStatus.DEAD
+                        && c.cooldownUntil() <= now) {
+                    var obs = c.withStatus(com.ccnrcom.rp.status.CharacterStatus.OBSERVING)
+                            .withCooldown(0);
+                    characters.store().update(obs);
+                }
+            }
+            characters.store().save();
             characters.sendList(player);
         }
     }
