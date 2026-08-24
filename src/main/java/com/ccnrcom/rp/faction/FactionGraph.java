@@ -70,6 +70,12 @@ public final class FactionGraph {
             groups.put(g.id(), g);
         }
 
+        // 命名空间冲突检查（阵营与组共享 id 命名空间）
+        for (String id : factions.keySet()) {
+            if (groups.containsKey(id)) {
+                errors.add("id '" + id + "' 同时是阵营与组");
+            }
+        }
         List<RelationRule> rules = new ArrayList<>(ruleList);
         for (int i = 0; i < ruleList.size(); i++) {
             RelationRule r = ruleList.get(i);
@@ -77,18 +83,10 @@ public final class FactionGraph {
                 errors.add("relations[" + i + "]: 无效类型 null");
                 continue;
             }
-            boolean fromFaction = factions.containsKey(r.from());
-            boolean toFaction = factions.containsKey(r.to());
-            boolean fromGroup = groups.containsKey(r.from());
-            boolean toGroup = groups.containsKey(r.to());
-            boolean sameGroup = r.from().equals(r.to()) && fromGroup;
-            if (sameGroup) {
-                continue; // 组内规则合法
-            }
-            if ((!fromFaction || !toFaction) && (!fromGroup || !toGroup)) {
+            boolean fromOk = factions.containsKey(r.from()) || groups.containsKey(r.from());
+            boolean toOk = factions.containsKey(r.to()) || groups.containsKey(r.to());
+            if (!fromOk || !toOk) {
                 errors.add("relations[" + i + "]: 未知的 from/to（'" + r.from() + "' 或 '" + r.to() + "'）");
-            } else if (fromFaction != toFaction || fromGroup != toGroup) {
-                errors.add("relations[" + i + "]: from 与 to 类型不一致（阵营×组 组合不支持）");
             }
         }
         if (!errors.isEmpty()) {
@@ -123,32 +121,26 @@ public final class FactionGraph {
         // 1) 单点声明（阵营×阵营）
         for (int i = rules.size() - 1; i >= 0; i--) {
             RelationRule r = rules.get(i);
-            if (matchesPair(r, a, b) && !groups.containsKey(r.from())) {
+            if (matchesPair(r, a, b) && !groups.containsKey(r.from()) && !groups.containsKey(r.to())) {
                 return r.type();
             }
         }
-        // 2) 组×组（覆盖双向往返）
+        // 2) 组/混合规则：任一侧为组即按成员展开（覆盖双向往返；组内规则天然归此层）
         for (int i = rules.size() - 1; i >= 0; i--) {
             RelationRule r = rules.get(i);
-            if (groups.containsKey(r.from())
-                    && groups.containsKey(r.to())
-                    && !r.from().equals(r.to())) {
-                if (inGroup(r.from(), a) && inGroup(r.to(), b)) {
+            if (groups.containsKey(r.from()) || groups.containsKey(r.to())) {
+                if (sideMatches(r.from(), a) && sideMatches(r.to(), b)
+                        || sideMatches(r.from(), b) && sideMatches(r.to(), a)) {
                     return r.type();
                 }
-                if (inGroup(r.from(), b) && inGroup(r.to(), a)) {
-                    return r.type();
-                }
-            }
-        }
-        // 3) 组内
-        for (int i = rules.size() - 1; i >= 0; i--) {
-            RelationRule r = rules.get(i);
-            if (r.from().equals(r.to()) && inGroup(r.from(), a) && inGroup(r.from(), b)) {
-                return r.type();
             }
         }
         return RelationType.NEUTRAL;
+    }
+
+    /** 侧匹配：直接命中或作为组成员命中。 */
+    private boolean sideMatches(String side, String id) {
+        return side.equals(id) || inGroup(side, id);
     }
 
     private boolean matchesPair(RelationRule r, String a, String b) {
