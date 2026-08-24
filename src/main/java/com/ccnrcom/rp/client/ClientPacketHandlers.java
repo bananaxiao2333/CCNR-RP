@@ -53,6 +53,14 @@ public final class ClientPacketHandlers {
         CharacterManagementScreen.refreshIfOpen();
     }
 
+    public static void onCinematic(String payload) {
+        try {
+            CinematicController.start(com.ccnrcom.rp.util.JsonUtil.GSON.fromJson(payload, JsonObject.class));
+        } catch (Exception ignored) {
+            // 数据异常直接跳过电影
+        }
+    }
+
     public static void onError(String messageKey, String[] args) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player != null) {

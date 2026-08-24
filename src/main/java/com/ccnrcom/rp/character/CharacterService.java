@@ -120,6 +120,55 @@ public final class CharacterService {
             return;
         }
         service().sendError(player, "ccnr_rp.spawn.deployed", charId);
+        // 部署成功 → 客户端入场电影（黑屏→阵营图标→打字档案→淡出）
+        service().sendCinematic(player, charId);
+    }
+
+    /** 组装部署入场数据：名字/职业/阵营(图标+等级)/简历/阵营关系（图谱 resolve，非中立才列出）。 */
+    private void sendCinematic(ServerPlayer player, String charId) {
+        Optional<CharacterData> c = store.find(charId);
+        if (c.isEmpty()) {
+            return;
+        }
+        CharacterData data = c.get();
+        JsonObject en = new JsonObject();
+        en.addProperty("name", data.name());
+        String profName = data.professionId();
+        if (CCNRRPMod.factions != null) {
+            var profDef = CCNRRPMod.factions.findProfession(data.professionId()).orElse(null);
+            if (profDef != null) {
+                profName = com.ccnrcom.rp.faction.FactionProfessions.idsSafeName(profDef);
+            }
+            var graph = CCNRRPMod.factions.graph();
+            var f = graph.factions().get(data.factionId());
+            if (f != null) {
+                en.addProperty("factionName", f.name());
+                en.addProperty("icon", f.icon());
+                en.addProperty("tier", f.tier());
+                JsonArray rel = new JsonArray();
+                for (var other : graph.factions().values()) {
+                    if (other.id().equals(f.id())) {
+                        continue;
+                    }
+                    var type = graph.resolve(f.id(), other.id());
+                    if (type != null && type != com.ccnrcom.rp.faction.RelationType.NEUTRAL) {
+                        JsonObject o = new JsonObject();
+                        o.addProperty("name", other.name());
+                        o.addProperty("type", type.name().toLowerCase(java.util.Locale.ROOT));
+                        rel.add(o);
+                    }
+                }
+                en.add("relations", rel);
+            }
+        }
+        en.addProperty("professionName", profName);
+        if (!en.has("factionName")) {
+            en.addProperty("factionName", data.factionId());
+            en.addProperty("icon", "hex");
+            en.addProperty("tier", 2);
+        }
+        en.addProperty("background", data.background() == null ? "" : data.background());
+        RpChannels.sendTo(player, new RpPackets.CinematicS2C(en.toString()));
     }
 
     public static void onObserve(ServerPlayer player, String charId) {

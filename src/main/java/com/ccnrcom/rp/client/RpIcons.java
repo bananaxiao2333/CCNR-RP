@@ -109,6 +109,19 @@ public final class RpIcons {
         g.fill(cx + r - n - 1, cy + r - n - 1, cx + r, cy + r, ring);
     }
 
+    /** 大号阵营徽章（入场电影）：外晕 + 等级色环 + 全息同心环 + 大图形 + 刻度。alpha 0..255。 */
+    public static void bigBadge(GuiGraphics g, int cx, int cy, int r, String icon, int tier, int alpha) {
+        int ring = RpTheme.tierColor(tier);
+        circle(g, cx, cy, r + 3, RpTheme.alphaBlend(ring, alpha * 2 / 5));
+        circle(g, cx, cy, r + 1, RpTheme.alphaBlend(ring, alpha));
+        ring(g, cx, cy, r, RpTheme.alphaBlend(ring, alpha), RpTheme.alphaBlend(0xFF10181E, alpha));
+        int inner = Math.max(4, r * 2 / 3);
+        circle(g, cx, cy, inner, RpTheme.alphaBlend(ring, alpha * 2 / 5));
+        polygon(g, cx, cy, r - 1, icon, RpTheme.alphaBlend(RpTheme.CYAN, alpha), RpTheme.alphaBlend(0xFF10181E, alpha));
+        int n = Math.max(3, r / 3);
+        g.fill(cx + r - n - 1, cy + r - n - 1, cx + r, cy + r, RpTheme.alphaBlend(ring, alpha));
+    }
+
     /** 战术装备槽图标（头/胸/腿/背）。 */
     public static void slot(GuiGraphics g, int x1, int y1, int size, String name, int color) {
         RpRoundRect.outlined(g, x1, y1, x1 + size, y1 + size, 4f, RpTheme.PANEL_BORDER, 0xFF10161B);

@@ -69,6 +69,10 @@ class AnimationModelsTest {
     void parameterInjection() {
         assertEquals("hello ${name}", AnimationEngine.inject("hello ${name}", Map.of()));
         assertEquals("keep ${missing}", AnimationEngine.inject("keep ${missing}", Map.of("name", "x")));
+        // 真实替换：${key} 与 {key} 两种写法都要生效（v1.0.8 修复字面量 bug）
+        assertEquals("角色已部署: 111", AnimationEngine.inject("角色已部署: ${name}", Map.of("name", "111")));
+        assertEquals("等级 7", AnimationEngine.inject("等级 {level}", Map.of("level", "7")));
+        assertEquals("A=1 和 B=2", AnimationEngine.inject("A=${a} 和 B={b}", Map.of("a", "1", "b", "2")));
     }
 
     @Test

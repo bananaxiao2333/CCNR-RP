@@ -87,6 +87,11 @@ public final class RpChannels {
                 .decoder(RpPackets.SkinSyncS2C::new)
                 .consumerNetworkThread(RpPackets.SkinSyncS2C::handle)
                 .add();
+        CHANNEL.messageBuilder(RpPackets.CinematicS2C.class, id++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(RpPackets.CinematicS2C::encode)
+                .decoder(RpPackets.CinematicS2C::new)
+                .consumerNetworkThread(RpPackets.CinematicS2C::handle)
+                .add();
         CHANNEL.messageBuilder(RpPackets.AnimationPlayS2C.class, id++, NetworkDirection.PLAY_TO_CLIENT)
                 .encoder(RpPackets.AnimationPlayS2C::encode)
                 .decoder(RpPackets.AnimationPlayS2C::new)

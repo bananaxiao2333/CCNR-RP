@@ -383,6 +383,31 @@ public final class RpPackets {
         }
     }
 
+    /** 部署入场电影（S2C）：JSON（名字/职业/阵营/图标/等级/简历/阵营关系）。 */
+    public static final class CinematicS2C {
+        public final String payload;
+
+        public CinematicS2C(String payload) {
+            this.payload = payload;
+        }
+
+        public CinematicS2C(FriendlyByteBuf buf) {
+            this(buf.readUtf(65536));
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(payload, 65536);
+        }
+
+        public static void handle(CinematicS2C msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(
+                            net.minecraftforge.api.distmarker.Dist.CLIENT,
+                            () -> () -> com.ccnrcom.rp.client.ClientPacketHandlers.onCinematic(msg.payload)));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
     /** 招募 offer（S2C）。 */
     public static final class RecruitOfferS2C {
         public final String offerId;
