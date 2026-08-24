@@ -1127,6 +1127,7 @@ public class RpAdminScreen extends Screen {
                     true);
             g.drawString(font, str(item, "id"), fx, b[1] + 11, sel ? 0xFFFFFFFF : RpTheme.TEXT_DIM, true);
         }
+        RpScrollbar.draw(g, listX2 - 6, listY1, listY2, items.size(), maxVisible, off);
     }
 
     private String currentSelId() {

@@ -234,12 +234,7 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
         if (c.status() == CharacterStatus.ALIVE) {
             return false;
         }
-        if (c.status() == CharacterStatus.DEAD && c.cooldownUntil() > System.currentTimeMillis()) {
-            if (!recruited) {
-                // 招募路径的候选人一定是观察者；冷却未到的死者跳过
-                return false;
-            }
-        }
+        // 复活冷却只锁「自己职业自部署」（deploySelf 校验）；复活波/强制抽取/招募无视冷却
         ServerPlayer p = server.getPlayerList().getPlayer(java.util.UUID.fromString(c.playerUuid()));
         if (p == null) {
             return false;
@@ -279,7 +274,7 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
         p.setGameMode(GameType.SURVIVAL);
     }
 
-    /** 自刷新（GUI 部署按钮/命令）。 */
+    /** 自刷新（GUI 部署按钮/命令）：自己职业需复活冷却结束（复活波/强制抽取无视冷却）。 */
     public boolean deploySelf(ServerPlayer player, String charId) {
         CharacterService svc = CCNRRPMod.characters;
         if (svc == null) {
@@ -291,6 +286,9 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
         }
         if (c.status() != CharacterStatus.OBSERVING || !isSelfDeployable(c)) {
             return false;
+        }
+        if (c.cooldownUntil() > System.currentTimeMillis()) {
+            return false; // 自己职业复活冷却中；等待冷却结束或复活波强制复活
         }
         // 找用于部署的刷新波（SELF_DEPLOY/BOTH 且职业匹配）；无匹配默认世界原点
         Wave wave = waves.stream()

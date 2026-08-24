@@ -53,6 +53,7 @@
   "ccnr_rp.character.error.ownership": "This character is not yours",
   "ccnr_rp.character.error.status": "Status does not allow: %s -> %s",
   "ccnr_rp.character.error.alive_exists": "You already have an alive character (%s)",
+  "ccnr_rp.character.error.cooldown": "%s revive cooldown (~%s min) - only auto resurrection wave can force-pick; self deploy available after cooldown",
   "ccnr_rp.character.error.not_found": "Character not found: %s",
   "ccnr_rp.character.error.skin": "Skin upload failed: %s",
   "ccnr_rp.character.info": "%s | faction %s | profession %s | status %s | cooldown %d min",
