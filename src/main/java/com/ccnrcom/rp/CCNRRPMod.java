@@ -113,6 +113,7 @@ public class CCNRRPMod {
                 CCNRRPMod.users.save();
             }
             characters.sendList(player);
+            characters.broadcastPlayerTags();
             // 素材同步：音乐/阵营图标由服务器中央下发，客户端异步下载（左上角「同步数据中」提示）；
             // 同步完成确认前禁用部署/复活（有通道才需要同步）
             if (com.ccnrcom.rp.network.RpChannels.hasChannel(player.connection.connection)) {
@@ -138,6 +139,10 @@ public class CCNRRPMod {
             // 离服：取消其全部招募邀请（含已接受）并视同拒绝
             if (spawnFramework != null) {
                 spawnFramework.recruit().onPlayerDisconnect(player.getUUID().toString());
+            }
+            // 其余在线玩家头顶标签刷新（去掉离服者）
+            if (characters != null) {
+                characters.broadcastPlayerTags();
             }
         }
     }

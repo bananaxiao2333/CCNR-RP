@@ -602,6 +602,10 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
                 professionId,
                 factionId,
                 wave.id());
+        // 部署后刷新全服头顶标签（职位/阵营/等级可能变化）
+        if (CCNRRPMod.characters != null) {
+            CCNRRPMod.characters.broadcastPlayerTags();
+        }
         return true;
     }
 

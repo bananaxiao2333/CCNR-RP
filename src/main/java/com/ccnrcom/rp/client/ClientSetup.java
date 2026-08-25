@@ -72,5 +72,7 @@ public final class ClientSetup {
             }
         });
         event.registerAboveAll("ccnr_rp_cinematic", (gui, gfx, partial, w, h) -> CinematicController.render(gfx, w, h));
+        // 玩家头顶标签（旁观者视角：阵营徽章 + 职业名 + 玩家名 + 等级）
+        event.registerAboveAll("ccnr_rp_nametag", (gui, gfx, partial, w, h) -> PlayerNametagRenderer.render(gfx, w, h));
     }
 }
