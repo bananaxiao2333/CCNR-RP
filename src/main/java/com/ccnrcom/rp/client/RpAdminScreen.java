@@ -372,6 +372,9 @@ public class RpAdminScreen extends Screen {
         descBox = mkBox(x, y, bw2, "职业ID(逗号)", csv(wv, "professionIds"), false);
         musicBox = mkBox(x + bw2 + 4, y, bw2, "阵营ID(逗号)", csv(wv, "factionIds"), false);
         y += 30;
+        // CMDCam 出场场景（可选）：部署入场电影播完黑屏转场播放该摄像机场景（补全提示见 renderCamSceneSuggestions）
+        camSceneBox =
+                mkBox(x, y, w, "ccnr_rp.gui.admin.field.cam_scene", wv == null ? "" : str(wv, "cmdcamScene"), false);
         y += 30;
         actionRow(x, y, w, edit);
         // 管理快捷操作：手动召唤复活波
@@ -441,6 +444,7 @@ public class RpAdminScreen extends Screen {
                 p.addProperty("unlockLevel", intOf(unlockLevelBox.getValue(), 0));
                 p.addProperty("music", musicBox.getValue());
                 p.addProperty("profile", profileBox.getValue());
+                p.addProperty("cmdcamScene", camSceneBox == null ? "" : camSceneBox.getValue());
                 yield p;
             }
             case TAB_FACTION -> {
@@ -529,6 +533,7 @@ public class RpAdminScreen extends Screen {
                 p.add("teamIds", csvArray(colorBox.getValue()));
                 p.add("professionIds", csvArray(descBox.getValue()));
                 p.add("factionIds", csvArray(musicBox.getValue()));
+                p.addProperty("cmdcamScene", camSceneBox == null ? "" : camSceneBox.getValue());
                 if (src != null && src.has("sequence")) {
                     p.add("sequence", src.getAsJsonArray("sequence"));
                 }
@@ -654,6 +659,10 @@ public class RpAdminScreen extends Screen {
         y += 30;
         profileBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.profile", prof == null ? "" : str(prof, "profile"), false);
         y += 30;
+        // CMDCam 出场场景（可选）：部署入场电影播完黑屏转场播放该摄像机场景（补全提示见 renderCamSceneSuggestions）
+        camSceneBox = mkBox(
+                x, y, w, "ccnr_rp.gui.admin.field.cam_scene", prof == null ? "" : str(prof, "cmdcamScene"), false);
+        y += 30;
         int bw3 = Math.max(60, w / 4);
         addRenderableWidget(RpButton.primary(
                 x, y, bw3, 20, Component.translatable("ccnr_rp.gui.admin.crud.save"), b -> saveProfession(edit)));
@@ -722,6 +731,7 @@ public class RpAdminScreen extends Screen {
         p.addProperty("unlockLevel", intOf(unlockLevelBox.getValue(), 0));
         p.addProperty("music", musicBox.getValue());
         p.addProperty("profile", profileBox.getValue());
+        p.addProperty("cmdcamScene", camSceneBox == null ? "" : camSceneBox.getValue());
         requestCrud("profession", edit ? "update" : "create", p);
     }
 

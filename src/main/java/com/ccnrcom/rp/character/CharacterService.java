@@ -249,11 +249,12 @@ public final class CharacterService {
                 int unlockLevel = com.ccnrcom.rp.faction.FactionProfessions.unlockLevel(p);
                 String music = str(p, "music", "");
                 String profile = str(p, "profile", "");
+                String cmdcamScene = str(p, "cmdcamScene", "");
                 if ("delete".equals(action)) {
                     errors = CCNRRPMod.factions.deleteProfession(id);
                 } else {
                     errors = CCNRRPMod.factions.upsertProfession(
-                            id, name, factionId, selfDeploy, unlockLevel, null, music, profile);
+                            id, name, factionId, selfDeploy, unlockLevel, null, music, profile, cmdcamScene);
                 }
             }
             case "faction" -> {
@@ -828,6 +829,7 @@ public final class CharacterService {
                     o.addProperty("unlockLevel", com.ccnrcom.rp.faction.FactionProfessions.unlockLevel(def));
                     o.addProperty("music", com.ccnrcom.rp.faction.FactionProfessions.music(def));
                     o.addProperty("profile", com.ccnrcom.rp.faction.FactionProfessions.profile(def));
+                    o.addProperty("cmdcamScene", com.ccnrcom.rp.faction.FactionProfessions.cmdcamScene(def));
                     o.add("loadout", com.ccnrcom.rp.faction.FactionProfessions.loadout(def));
                     pa.add(o);
                 });

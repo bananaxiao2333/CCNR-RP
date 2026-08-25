@@ -383,12 +383,16 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
             en.addProperty("name", name);
             en.addProperty("professionName", professionId);
             String music = "";
+            // CMDCam 出场场景三级来源（覆盖优先级：阵营 < 刷新波 < 职业，职业最高）
+            String profScene = "";
+            String facScene = "";
             com.google.gson.JsonArray relations = new com.google.gson.JsonArray();
             if (CCNRRPMod.factions != null) {
                 var profDef = CCNRRPMod.factions.findProfession(professionId).orElse(null);
                 if (profDef != null) {
                     en.addProperty("professionName", FactionProfessions.idsSafeName(profDef));
                     music = FactionProfessions.music(profDef);
+                    profScene = FactionProfessions.cmdcamScene(profDef);
                 }
                 var graph = CCNRRPMod.factions.graph();
                 var f = graph.factions().get(factionId);
@@ -397,7 +401,7 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
                     en.addProperty("icon", f.icon());
                     en.addProperty("tier", f.tier());
                     en.addProperty("factionMusic", f.music());
-                    en.addProperty("cmdcamScene", f.cmdcamScene() == null ? "" : f.cmdcamScene());
+                    facScene = f.cmdcamScene() == null ? "" : f.cmdcamScene();
                     for (var other : graph.factions().values()) {
                         if (other.id().equals(f.id())) {
                             continue;
@@ -412,6 +416,15 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
                     }
                 }
             }
+            String cmdcamScene = facScene;
+            if (wave != null
+                    && wave.cmdcamScene() != null
+                    && !wave.cmdcamScene().isBlank()) {
+                cmdcamScene = wave.cmdcamScene();
+            }
+            if (!profScene.isBlank()) {
+                cmdcamScene = profScene;
+            }
             if (!en.has("factionName")) {
                 en.addProperty("factionName", factionId);
                 en.addProperty("icon", "hex");
@@ -420,9 +433,7 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
             if (!en.has("factionMusic")) {
                 en.addProperty("factionMusic", "");
             }
-            if (!en.has("cmdcamScene")) {
-                en.addProperty("cmdcamScene", "");
-            }
+            en.addProperty("cmdcamScene", cmdcamScene);
             en.addProperty("music", musicOn ? music : "");
             en.add("relations", relations);
             en.addProperty("background", background == null ? "" : background);
@@ -631,6 +642,7 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
                                 w.z(),
                                 w.dim(),
                                 w.recruitTimeoutSeconds(),
+                                w.cmdcamScene(),
                                 w.steps()));
                 return true;
             }
