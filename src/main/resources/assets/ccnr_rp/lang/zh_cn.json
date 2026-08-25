@@ -194,6 +194,8 @@
   "ccnr_rp.gui.admin.setting.open_panel.desc": "入服自动打开角色管理终端（K），方便选择角色或部署",
   "ccnr_rp.gui.admin.setting.force_retain": "强制保留角色",
   "ccnr_rp.gui.admin.setting.force_retain.desc": "转生/弃演或离开服务器时，角色直接判定死亡并留下遗体，档案不删除",
+  "ccnr_rp.gui.admin.setting.recruit_invite_alive": "向在场人员发招募邀请",
+  "ccnr_rp.gui.admin.setting.recruit_invite_alive.desc": "支援波是否向「存活（在场）」人员发送招募邀请（关=只邀观察者）",
   "ccnr_rp.gui.admin.setting.hud_enabled": "右下角状态栏",
   "ccnr_rp.gui.admin.setting.hud_enabled.desc": "显示 HUD（职位/阵营/血量 三行）",
   "ccnr_rp.gui.admin.setting.hud_profession": "职位条模式",

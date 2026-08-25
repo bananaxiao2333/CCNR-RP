@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.5.0（管理面板设置全量程序化：settings.json 全部开关可改，含招募邀请/右下角状态栏）
+- 管理面板「设置」标签重构：settings.json 的全部开关（forceObserving / openPanelOnJoin / forceRetain /
+  recruitInviteAlive / hudEnabled / hudProfessionText / hudFactionText / hudHealthText）程序化生成开关行（点按切换），
+  不再硬编码 6 个；补齐此前缺失的 recruitInviteAlive 与 hudEnabled 两个开关。
+- 开关行与 serverconfig 数值设定合并为统一滚动区；开关默认值按 ManagerSettings 逐键取值（与服务端一致）。
+- ManagerSettings.keys() 补全 hudEnabled；语言包新增 recruit_invite_alive 键（zh/en 同步）。
+- 构建：compileJava / spotlessCheck / test -PrunTests 全绿。
+
 ## 2.4.0（K 面板 3D 人物预览关闭名字板：只显示人物模型 + 职位装备）
 - CharacterPreview 的 PreviewPlayer 在创建时 setCustomNameVisible(false) + setCustomName(null)，
   K 面板职位详情的 3D 预览不再显示玩家名（bananaxiao2333）名字板，只显示人物模型 + 职位装备。

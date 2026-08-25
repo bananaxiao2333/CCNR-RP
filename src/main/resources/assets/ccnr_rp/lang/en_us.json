@@ -194,6 +194,8 @@
   "ccnr_rp.gui.admin.setting.open_panel.desc": "Auto-open the character terminal (K) on join for selection/deployment",
   "ccnr_rp.gui.admin.setting.force_retain": "Force retain characters",
   "ccnr_rp.gui.admin.setting.force_retain.desc": "Reincarnate/abandon or leaving server judges the character DEAD with a corpse; record kept",
+  "ccnr_rp.gui.admin.setting.recruit_invite_alive": "Invite alive (on-duty) players",
+  "ccnr_rp.gui.admin.setting.recruit_invite_alive.desc": "Whether support waves may send recruit invites to alive (on-duty) players (OFF=observers only)",
   "ccnr_rp.gui.admin.setting.hud_enabled": "Bottom-right status HUD",
   "ccnr_rp.gui.admin.setting.hud_enabled.desc": "Show HUD (profession/faction/health rows)",
   "ccnr_rp.gui.admin.setting.hud_profession": "Profession row mode",
