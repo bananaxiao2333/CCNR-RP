@@ -103,13 +103,14 @@ public final class ManagerSettings {
         return bool("hudHealthText", false);
     }
 
-    /** 设置项键列表（管理面板展示顺序）。 */
+    /** 设置项键列表（管理面板展示顺序，程序化生成开关 UI 用）。 */
     public static List<String> keys() {
         return List.of(
                 "forceObserving",
                 "openPanelOnJoin",
                 "forceRetain",
                 "recruitInviteAlive",
+                "hudEnabled",
                 "hudProfessionText",
                 "hudFactionText",
                 "hudHealthText");

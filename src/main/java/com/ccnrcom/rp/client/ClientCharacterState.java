@@ -371,6 +371,11 @@ public final class ClientCharacterState {
         return bool(key, def);
     }
 
+    /** 管理面板开关键列表（程序化渲染用；键来自服务端 settings.json 下发）。 */
+    public static synchronized List<String> settingKeys() {
+        return com.ccnrcom.rp.config.ManagerSettings.keys();
+    }
+
     public static synchronized boolean isAdmin() {
         return isAdmin;
     }

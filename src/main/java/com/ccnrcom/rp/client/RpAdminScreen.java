@@ -168,10 +168,11 @@ public class RpAdminScreen extends Screen {
             rowBounds.add(new int[] {x, py1 + 42, x + tabW, py1 + 62});
         }
         if (tab == TAB_SETTINGS) {
+            // 开关行（settings.json 键，程序化生成）：渲染在 serverconfig 数值区上方
             int y = py1 + 80;
-            for (int i = 0; i < 6; i++) {
-                rowBounds.add(new int[] {px1 + 12, y, px2 - 12, y + 40});
-                y += 44;
+            for (int i = 0; i < ClientCharacterState.settingKeys().size(); i++) {
+                rowBounds.add(new int[] {px1 + 12, y, px2 - 12, y + 26});
+                y += 30;
             }
         } else {
             List<JsonObject> items = listItems();
@@ -219,19 +220,23 @@ public class RpAdminScreen extends Screen {
         }
     }
 
-    /** serverconfig 程序化设定：为每个配置项生成一个数字输入框 + 保存按钮。 */
+    /** serverconfig 程序化设定：为每个配置项生成一个数字输入框 + 保存按钮（开关行之后）。 */
     private void buildSettingsForm() {
         cfgBoxes.clear();
         // 「设定」标签无左侧列表：表单占满面板宽度
         int x = px1 + 12;
         int w = px2 - 12 - x;
-        int y = py1 + 80;
+        java.util.List<String> switches = ClientCharacterState.settingKeys();
+        int y = py1 + 80 + switches.size() * 30; // 数值区起点 = 开关行之后
         int yMax = py2 - 70;
         JsonObject cfg = ClientCharacterState.serverConfig();
         java.util.List<String> keys = com.ccnrcom.rp.config.CCNRRPConfig.keys();
         int maxVisible = Math.max(1, (yMax - y) / 30);
-        settingsScroll = Math.max(0, Math.min(settingsScroll, Math.max(0, keys.size() - maxVisible)));
-        for (int i = settingsScroll; i < keys.size(); i++) {
+        // 滚动偏移 = 总行数（开关+数值）中滚过的部分，输入框只对应数值行
+        int totalRows = switches.size() + keys.size();
+        settingsScroll = Math.max(0, Math.min(settingsScroll, Math.max(0, totalRows - maxVisible)));
+        int cfgStart = Math.max(0, settingsScroll - switches.size());
+        for (int i = cfgStart; i < keys.size(); i++) {
             String key = keys.get(i);
             String cur = cfg.has(key) ? cfg.get(key).getAsString() : "";
             cfgBoxes.put(key, mkBox(x + 210, y, w - 210, "", cur, false));
@@ -1203,8 +1208,23 @@ public class RpAdminScreen extends Screen {
         impactOpen = true;
     }
 
+    /** 开关当前值（缺省按 ManagerSettings 默认值，与服务端一致）。 */
     private boolean value(String key) {
-        return ClientCharacterState.settingBool(key, true);
+        return ClientCharacterState.settingBool(key, settingDefault(key));
+    }
+
+    /** settings.json 键默认值（与服务端 ManagerSettings.defaults() 保持一致）。 */
+    private static boolean settingDefault(String key) {
+        return switch (key) {
+            case "forceObserving",
+                    "openPanelOnJoin",
+                    "forceRetain",
+                    "recruitInviteAlive",
+                    "hudEnabled",
+                    "hudProfessionText" -> true;
+            case "hudFactionText", "hudHealthText" -> false;
+            default -> true;
+        };
     }
 
     @Override
@@ -1226,8 +1246,10 @@ public class RpAdminScreen extends Screen {
         if (!ClientCharacterState.isAdmin()) {
             return super.mouseClicked(mx, my, button);
         }
-        // 设定（serverconfig）滚动条
+        // 设定（开关 + serverconfig）滚动条
         if (tab == TAB_SETTINGS) {
+            int totalRows = ClientCharacterState.settingKeys().size()
+                    + com.ccnrcom.rp.config.CCNRRPConfig.keys().size();
             int ns = RpScrollbar.clickV(
                     (int) mx,
                     (int) my,
@@ -1235,20 +1257,12 @@ public class RpAdminScreen extends Screen {
                     px2 - 9,
                     py1 + 76,
                     py2 - 70,
-                    com.ccnrcom.rp.config.CCNRRPConfig.keys().size(),
+                    totalRows,
                     settingsMaxVisible(),
                     settingsScroll,
                     7);
             if (ns >= 0) {
-                settingsScroll = (int) Math.max(
-                        0,
-                        Math.min(
-                                ns,
-                                Math.max(
-                                        0,
-                                        com.ccnrcom.rp.config.CCNRRPConfig.keys()
-                                                        .size()
-                                                - settingsMaxVisible())));
+                settingsScroll = (int) Math.max(0, Math.min(ns, Math.max(0, totalRows - settingsMaxVisible())));
                 rebuild();
                 return true;
             }
@@ -1320,8 +1334,13 @@ public class RpAdminScreen extends Screen {
                                 .getString();
                         return true;
                     }
-                    String key = SETTING_KEYS[i - 6];
-                    RpChannels.sendToServer(new RpPackets.ManagerSetC2S(key, String.valueOf(!value(key))));
+                    // 开关行（settings.json 全部键，程序化）：i-6 映射到 settingKeys()
+                    int swIdx = i - 6;
+                    java.util.List<String> switches = ClientCharacterState.settingKeys();
+                    if (swIdx >= 0 && swIdx < switches.size()) {
+                        String key = switches.get(swIdx);
+                        RpChannels.sendToServer(new RpPackets.ManagerSetC2S(key, String.valueOf(!value(key))));
+                    }
                 } else {
                     JsonObject item = visibleItem(i - 6);
                     if (item != null) {
@@ -1412,26 +1431,6 @@ public class RpAdminScreen extends Screen {
         rebuild();
     }
 
-    private static final String[] SETTING_KEYS = {
-        "forceObserving", "openPanelOnJoin", "forceRetain", "hudProfessionText", "hudFactionText", "hudHealthText"
-    };
-    private static final String[] SETTING_TITLES = {
-        "ccnr_rp.gui.admin.setting.force_observing",
-        "ccnr_rp.gui.admin.setting.open_panel",
-        "ccnr_rp.gui.admin.setting.force_retain",
-        "ccnr_rp.gui.admin.setting.hud_profession",
-        "ccnr_rp.gui.admin.setting.hud_faction",
-        "ccnr_rp.gui.admin.setting.hud_health"
-    };
-    private static final String[] SETTING_DESCS = {
-        "ccnr_rp.gui.admin.setting.force_observing.desc",
-        "ccnr_rp.gui.admin.setting.open_panel.desc",
-        "ccnr_rp.gui.admin.setting.force_retain.desc",
-        "ccnr_rp.gui.admin.setting.hud_profession.desc",
-        "ccnr_rp.gui.admin.setting.hud_faction.desc",
-        "ccnr_rp.gui.admin.setting.hud_health.desc"
-    };
-
     private JsonObject visibleProfession(int i) {
         List<JsonObject> profs = ClientCharacterState.professions();
         int rowH = 20;
@@ -1485,7 +1484,9 @@ public class RpAdminScreen extends Screen {
             scroll = (int) Math.max(0, scroll - delta / 8);
             rebuild();
         } else if (tab == TAB_SETTINGS) {
-            int max = Math.max(0, com.ccnrcom.rp.config.CCNRRPConfig.keys().size() - settingsMaxVisible());
+            int totalRows = ClientCharacterState.settingKeys().size()
+                    + com.ccnrcom.rp.config.CCNRRPConfig.keys().size();
+            int max = Math.max(0, totalRows - settingsMaxVisible());
             settingsScroll = (int) Math.max(0, Math.min(settingsScroll - delta, max));
             rebuild();
         }
@@ -1791,17 +1792,44 @@ public class RpAdminScreen extends Screen {
     }
 
     private void renderSettings(GuiGraphics g, int mouseX, int mouseY) {
-        // serverconfig 程序化设定：占满面板宽度，右侧数字输入框（renderFieldLabels 已画标签），支持滚动。
+        // 设置标签 = 程序化开关（settings.json 全部键，可点切换）+ serverconfig 数值设定（滚动），统一滚动区。
         int x = px1 + 12;
         int w = px2 - 12 - x;
-        int y = py1 + 80;
+        int yTop = py1 + 80;
         int yMax = py2 - 70;
+        java.util.List<String> switches = ClientCharacterState.settingKeys();
+        java.util.List<String> cfgKeys = com.ccnrcom.rp.config.CCNRRPConfig.keys();
+        int totalRows = switches.size() + cfgKeys.size();
+        int maxVisible = Math.max(1, (yMax - yTop) / 30);
+        settingsScroll = Math.max(0, Math.min(settingsScroll, Math.max(0, totalRows - maxVisible)));
+        int y = yTop;
+        int row = 0;
+        int start = settingsScroll;
+        // 开关行（程序化生成，标签/描述来自语言包）
+        for (int i = 0; i < switches.size(); i++, row++) {
+            if (row < start) {
+                continue;
+            }
+            if (y > yMax) {
+                break;
+            }
+            String key = switches.get(i);
+            boolean on = value(key);
+            RpRoundRect.outlined(g, x, y, x + w, y + 22, 4f, RpTheme.PANEL_BORDER, RpTheme.PANEL_BG);
+            drawSwitch(g, x + w - 12, y + 4, on);
+            g.drawString(font, settingLabel(key), x + 8, y + 6, RpTheme.TEXT_PRIMARY, true);
+            y += 30;
+        }
+        // serverconfig 数值设定（程序化生成）
         JsonObject cfg = ClientCharacterState.serverConfig();
-        java.util.List<String> keys = com.ccnrcom.rp.config.CCNRRPConfig.keys();
-        int maxVisible = Math.max(1, (yMax - y) / 30);
-        int start = Math.min(settingsScroll, Math.max(0, keys.size() - maxVisible));
-        for (int i = start; i < keys.size(); i++) {
-            String key = keys.get(i);
+        for (int i = 0; i < cfgKeys.size(); i++, row++) {
+            if (row < start) {
+                continue;
+            }
+            if (y > yMax) {
+                break;
+            }
+            String key = cfgKeys.get(i);
             String cur = cfg.has(key) ? cfg.get(key).getAsString() : "";
             RpRoundRect.outlined(g, x, y, x + w, y + 22, 4f, RpTheme.PANEL_BORDER, RpTheme.PANEL_BG);
             g.drawString(font, cfgLabel(key), x + 6, y + 6, RpTheme.TEXT_PRIMARY, true);
@@ -1811,8 +1839,31 @@ public class RpAdminScreen extends Screen {
                 break;
             }
         }
-        // 设定标签滚动条（可拖拽）
-        RpScrollbar.draw(g, px2 - 14, py1 + 76, yMax, keys.size(), maxVisible, start);
+        // 设置标签滚动条（可拖拽）
+        RpScrollbar.draw(g, px2 - 14, py1 + 76, yMax, totalRows, maxVisible, start);
+    }
+
+    /** 开关行标签（settings.json 键 → 语言包翻译键；缺省回退原始键）。 */
+    private static String settingLabel(String key) {
+        return switch (key) {
+            case "forceObserving" -> Component.translatable("ccnr_rp.gui.admin.setting.force_observing")
+                    .getString();
+            case "openPanelOnJoin" -> Component.translatable("ccnr_rp.gui.admin.setting.open_panel")
+                    .getString();
+            case "forceRetain" -> Component.translatable("ccnr_rp.gui.admin.setting.force_retain")
+                    .getString();
+            case "recruitInviteAlive" -> Component.translatable("ccnr_rp.gui.admin.setting.recruit_invite_alive")
+                    .getString();
+            case "hudEnabled" -> Component.translatable("ccnr_rp.gui.admin.setting.hud_enabled")
+                    .getString();
+            case "hudProfessionText" -> Component.translatable("ccnr_rp.gui.admin.setting.hud_profession")
+                    .getString();
+            case "hudFactionText" -> Component.translatable("ccnr_rp.gui.admin.setting.hud_faction")
+                    .getString();
+            case "hudHealthText" -> Component.translatable("ccnr_rp.gui.admin.setting.hud_health")
+                    .getString();
+            default -> key;
+        };
     }
 
     private static String cfgLabel(String key) {
