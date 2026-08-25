@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
+import java.util.UUID;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -48,6 +49,17 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
     private final Map<String, Boolean> teamTriggered = new HashMap<>();
     private final RecruitManager recruit;
     private long pollCounter = 0;
+
+    /**
+     * 落位超时：客户端未在期限内通知（掉线/动画中断/场景时长超预期）时兜底传送，防卡暂存点。
+     * 120s 覆盖「HUD 电影 + CMDCam 场景」完整动画时长；正常路径客户端播完即落位，超时仅兜底。
+     */
+    private static final long LANDING_TIMEOUT_MS = 120_000L;
+
+    /** 待落位部署（入场动画播放期间暂存：落位出生点来源 wave+factionId，动画完再传）。 */
+    private record PendingLanding(Wave wave, String factionId, long deadline) {}
+
+    private final Map<UUID, PendingLanding> pendingLandings = new HashMap<>();
 
     public SpawnFramework(MinecraftServer server) {
         this.server = server;
@@ -267,6 +279,7 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
         if (event.phase != TickEvent.Phase.END) {
             return;
         }
+        checkPendingLandings(); // 部署落位超时兜底（每 tick，开销可忽略）
         int interval = Math.max(1, CCNRRPConfig.SPAWN_POLL_TICKS.get());
         if (++pollCounter < interval) {
             return;
@@ -375,24 +388,38 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
                 LoadoutManager.apply(p, FactionProfessions.loadout(def));
             });
         }
-        teleport(p, wave, factionId);
-        p.setGameMode(GameType.SURVIVAL);
+        // 入场 CMDCam 场景（覆盖优先级：阵营 < 刷新波 < 职业，职业最高）
+        String cmdcamScene = resolveCmdcamScene(factionId, wave, professionId);
+        // 时序（用户确认）：
+        // - 已设定 CMDCam（场景名非空且 CMDCam 已装）→ 完整入场动画：强制旁观者 + 电影 HUD 与 CMDCam 场景同一时刻播放
+        //   → 全部播完（客户端检测 HUD 结束 + 场景结束）发 DeployLandC2S → 移动玩家到部署点 → 设置生存；
+        // - 未设定 CMDCam（无场景名 / 未装 CMDCam）或 SKIP_CINEMATIC → 开局直接落位切生存（不播动画、不等待）。
+        boolean deferred = cinematic && !cmdcamScene.isBlank() && com.ccnrcom.rp.cmdcam.CamSceneBridge.available();
+        if (deferred) {
+            p.setGameMode(GameType.SPECTATOR); // 动画全程强制旁观者（不可见/不可交互/不可被打）
+            pendingLandings.put(
+                    p.getUUID(), new PendingLanding(wave, factionId, System.currentTimeMillis() + LANDING_TIMEOUT_MS));
+            LOGGER.info(
+                    "[CCNR-RP] 部署入场动画（旁观者 + 同刻播电影/场景）: {} → 场景 {}", p.getName().getString(), cmdcamScene);
+        } else {
+            teleport(p, wave, factionId); // 开局直接落位：移动玩家到部署点 + 切生存（teleport 内含 SURVIVAL）
+            LOGGER.info(
+                    "[CCNR-RP] 部署直接落位（未设定 CMDCam/跳过动画）: {} → 场景 {}",
+                    p.getName().getString(),
+                    cmdcamScene.isBlank() ? "（无）" : cmdcamScene);
+        }
         // 入场电影（统一组装：名字/职业/阵营/关系推导/背景）
         try {
             com.google.gson.JsonObject en = new com.google.gson.JsonObject();
             en.addProperty("name", name);
             en.addProperty("professionName", professionId);
             String music = "";
-            // CMDCam 出场场景三级来源（覆盖优先级：阵营 < 刷新波 < 职业，职业最高）
-            String profScene = "";
-            String facScene = "";
             com.google.gson.JsonArray relations = new com.google.gson.JsonArray();
             if (CCNRRPMod.factions != null) {
                 var profDef = CCNRRPMod.factions.findProfession(professionId).orElse(null);
                 if (profDef != null) {
                     en.addProperty("professionName", FactionProfessions.idsSafeName(profDef));
                     music = FactionProfessions.music(profDef);
-                    profScene = FactionProfessions.cmdcamScene(profDef);
                 }
                 var graph = CCNRRPMod.factions.graph();
                 var f = graph.factions().get(factionId);
@@ -401,7 +428,6 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
                     en.addProperty("icon", f.icon());
                     en.addProperty("tier", f.tier());
                     en.addProperty("factionMusic", f.music());
-                    facScene = f.cmdcamScene() == null ? "" : f.cmdcamScene();
                     for (var other : graph.factions().values()) {
                         if (other.id().equals(f.id())) {
                             continue;
@@ -416,15 +442,6 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
                     }
                 }
             }
-            String cmdcamScene = facScene;
-            if (wave != null
-                    && wave.cmdcamScene() != null
-                    && !wave.cmdcamScene().isBlank()) {
-                cmdcamScene = wave.cmdcamScene();
-            }
-            if (!profScene.isBlank()) {
-                cmdcamScene = profScene;
-            }
             if (!en.has("factionName")) {
                 en.addProperty("factionName", factionId);
                 en.addProperty("icon", "hex");
@@ -437,11 +454,89 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
             en.addProperty("music", musicOn ? music : "");
             en.add("relations", relations);
             en.addProperty("background", background == null ? "" : background);
-            if (cinematic) {
+            if (deferred) {
+                // 电影 HUD 与 CMDCam 场景同一时刻开始播放（场景在目标维度查取）
                 RpChannels.sendTo(p, new RpPackets.CinematicS2C(en.toString()));
+                if (!cmdcamScene.isBlank()) {
+                    com.ccnrcom.rp.cmdcam.CamSceneBridge.playScene(resolveDeployLevel(wave, factionId), cmdcamScene, p);
+                }
             }
         } catch (Exception ex) {
             LOGGER.warn("[CCNR-RP] 入场电影数据异常，跳过动画", ex);
+            if (deferred) {
+                // 兜底：电影数据异常 → 直接落位（防卡在暂存点）
+                pendingLandings.remove(p.getUUID());
+                teleport(p, wave, factionId);
+            }
+        }
+    }
+
+    /** 入场 CMDCam 场景（覆盖优先级：阵营 < 刷新波 < 职业，职业最高）；未配置返回空串。 */
+    private static String resolveCmdcamScene(String factionId, Wave wave, String professionId) {
+        String profScene = "";
+        String facScene = "";
+        if (CCNRRPMod.factions != null) {
+            var profDef = CCNRRPMod.factions.findProfession(professionId).orElse(null);
+            if (profDef != null) {
+                profScene = FactionProfessions.cmdcamScene(profDef);
+            }
+            var f = CCNRRPMod.factions.graph().factions().get(factionId);
+            if (f != null) {
+                facScene = f.cmdcamScene() == null ? "" : f.cmdcamScene();
+            }
+        }
+        String scene = facScene;
+        if (wave != null && wave.cmdcamScene() != null && !wave.cmdcamScene().isBlank()) {
+            scene = wave.cmdcamScene();
+        }
+        if (!profScene.isBlank()) {
+            scene = profScene;
+        }
+        return scene;
+    }
+
+    /**
+     * 客户端全部动画播完（DeployLandC2S，HUD 电影 + CMDCam 场景均已结束）：
+     * 移动玩家到部署点 → 设置生存（teleport 内部先传送后设 SURVIVAL）。
+     * CMDCam 场景已在部署时与电影同步播放，此处不再触发。
+     */
+    public void onDeployLand(ServerPlayer player) {
+        PendingLanding landing = pendingLandings.remove(player.getUUID());
+        if (landing == null) {
+            return; // 非待落位（重复/过期通知）忽略
+        }
+        teleport(player, landing.wave(), landing.factionId());
+        LOGGER.info("[CCNR-RP] 部署落位完成: {}", player.getName().getString());
+    }
+
+    /** 落位超时兜底（每 tick 调用）：动画期间掉线/中断不卡状态，超时直接落位。 */
+    private void checkPendingLandings() {
+        if (pendingLandings.isEmpty()) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        var it = pendingLandings.entrySet().iterator();
+        while (it.hasNext()) {
+            var e = it.next();
+            if (e.getValue().deadline() > now) {
+                continue;
+            }
+            UUID uuid = e.getKey();
+            PendingLanding landing = e.getValue();
+            it.remove();
+            ServerPlayer p = server.getPlayerList().getPlayer(uuid);
+            if (p != null) {
+                teleport(p, landing.wave(), landing.factionId());
+                LOGGER.warn("[CCNR-RP] 部署落位超时兜底（动画未完成通知）: {}", p.getName().getString());
+            }
+        }
+    }
+
+    /** 掉线清理：入场动画期间掉线移除待落位（离线判死流程接管，防残留）。 */
+    @SubscribeEvent
+    public void onPlayerLoggedOut(net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player) {
+            pendingLandings.remove(player.getUUID());
         }
     }
 
@@ -451,6 +546,20 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
         for (int i = 0; i < 41; i++) { // 0-35 背包 + 36-39 护甲 + 40 副手
             inv.setItem(i, net.minecraft.world.item.ItemStack.EMPTY);
         }
+    }
+
+    /** 部署目标维度：阵营出生点维度优先，否则 wave.dim，再否则主世界（与 teleport 落位一致）。 */
+    private ServerLevel resolveDeployLevel(Wave wave, String factionId) {
+        if (CCNRRPMod.factions != null && factionId != null && !factionId.isBlank()) {
+            com.ccnrcom.rp.faction.FactionManager.FactionSpawn spawn = CCNRRPMod.factions.factionSpawn(factionId);
+            if (spawn != null && !spawn.points().isEmpty()) {
+                ServerLevel level = spawnLevel(spawn.points().get(0).dim());
+                if (level != null) {
+                    return level;
+                }
+            }
+        }
+        return spawnLevel(wave.dim() == null ? "minecraft:overworld" : wave.dim());
     }
 
     private void teleport(ServerPlayer p, Wave wave, String factionId) {
@@ -475,8 +584,8 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
                 }
             }
         }
-        // 回退：wave deployAt / 世界出生点
-        ServerLevel level = spawnLevel(wave.dim() == null ? "minecraft:overworld" : wave.dim());
+        // 回退：wave deployAt / 世界出生点（目标维度与 resolveDeployLevel 一致）
+        ServerLevel level = resolveDeployLevel(wave, factionId);
         net.minecraft.core.BlockPos pos = "POS".equals(wave.deployAtType())
                 ? new net.minecraft.core.BlockPos((int) wave.x(), (int) wave.y(), (int) wave.z())
                 : level.getSharedSpawnPos();

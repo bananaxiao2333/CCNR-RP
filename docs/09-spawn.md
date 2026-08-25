@@ -35,8 +35,14 @@
    recruitTimeoutSeconds 内接受→部署；拒绝或超时→移除并尝试顺位下一位；全员无响应→公告"波次招募失败"。
 
 ## 4. 部署链路（两通道共用）
-校验（角色状态/冷却/波开关）→ LoadoutManager.apply（P2 装备，含 NBT）→ 传送 deployAt →
-状态 OBSERVING/DEAD → ALIVE → 触发 player_spawn 动画（P7）→ 状态广播。
+校验（角色状态/冷却/波开关）→ LoadoutManager.apply（P2 装备，含 NBT）→ 状态 OBSERVING/DEAD → ALIVE。
+时序（2.14.0 起「先播后落位」）：
+- 已设定 CMDCam 场景：部署触发 → 强制旁观者 + 电影 HUD（黑屏/图标/文字）与 CMDCam 场景【同一时刻开始播放】
+  → 全部动画播完（客户端检测 HUD 结束 + CMDCamClient.isPlaying 场景结束）→ 发 DeployLandC2S
+  → 移动玩家到部署点（优先级：阵营出生点 → wave deployAt → 世界出生点）→ 设置生存；
+  落位兜底：HUD 播完后再等 20s（场景异常）自动落位；服务端 120s 超时；动画期间掉线清理待落位状态。
+- 未设定 CMDCam（无场景名 / 未装 CMDCam）或 SKIP_CINEMATIC：开局直接落位切生存（不播动画、不等待）。
+→ 触发 player_spawn 动画（P7）→ 状态广播。
 
 ## 5. 命令（OP≥2 或 ccnnrp.admin.spawn）
 /rp spawn list、/rp spawn trigger <id>（强制触发一次，复活波通道，幂等忽略 RUNNING）、
