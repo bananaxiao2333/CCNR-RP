@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.13.0（刷新波与职业支持自定义 cmdcamScene，部署覆盖优先级：阵营 < 刷新波 < 职业）
+- 职业（factions.json professions）与刷新波（spawn_waves.json waves）数据模型新增 cmdcamScene 字段：FactionProfessions.upsert / SpawnModels.Wave 解析回读，管理面板职业/刷新波表单新增输入项（复用 CMDCam 场景补全提示）。
+- SpawnFramework.applyDeployCore 部署时按「阵营 → 刷新波 → 职业」低到高覆盖取最终 cmdcamScene 下发入场电影：职业最高，空值回退刷新波，再回退阵营；自部署/刷人/复活波/征召路径一致生效。
+- 服务端 sendList 职业 JSON 补 cmdcamScene 字段，客户端编辑职业时回显保留。
+- 新增 SpawnModelsTest / FactionProfessionsTest 覆盖 cmdcamScene 解析与 upsert 回读。
+- 版本号 2.12.0 → 2.13.0。
+- 构建：compileJava / spotlessCheck / test -PrunTests 全绿。
+
 ## 2.12.0（CMDCam 场景保存回显修复 + 管理面板场景名补全提示）
 - 修复：阵营编辑器 CMDCam 出场场景（cmdcamScene）保存后消失——根因是服务端下发角色列表（sendList）的阵营 JSON 漏掉 cmdcamScene 字段，客户端回显永远读到空；现补上该字段，保存后输入框保留值。
 - 新增：服务端反射读取 CMDCam 已保存场景名（CMDCamServer.getSavedPaths）随 ManagerStateS2C 下发（camScenes），管理面板 CMDCam 场景输入项聚焦时按输入过滤下拉补全（点击/上下键/回车选中，Esc 关闭）；CMDCam 未装或读取失败时安全降级为无提示。

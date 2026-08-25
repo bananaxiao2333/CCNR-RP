@@ -233,10 +233,10 @@ public final class FactionManager {
             boolean selfDeploy,
             int unlockLevel,
             com.google.gson.JsonObject loadout) {
-        return upsertProfession(id, name, factionId, selfDeploy, unlockLevel, loadout, "", "");
+        return upsertProfession(id, name, factionId, selfDeploy, unlockLevel, loadout, "", "", "");
     }
 
-    /** 职业定义管理（含出场音乐与项目简历）。 */
+    /** 职业定义管理（含出场音乐、项目简历与 CMDCam 出场场景）。 */
     public List<String> upsertProfession(
             String id,
             String name,
@@ -245,11 +245,21 @@ public final class FactionManager {
             int unlockLevel,
             com.google.gson.JsonObject loadout,
             String music,
-            String profile) {
+            String profile,
+            String cmdcamScene) {
         JsonObject candidate = root.deepCopy();
         List<String> errors = FactionProfessions.upsert(
-                candidate, id, name, factionId, selfDeploy, unlockLevel, loadout, music, profile, f -> graph.factions()
-                        .containsKey(f));
+                candidate,
+                id,
+                name,
+                factionId,
+                selfDeploy,
+                unlockLevel,
+                loadout,
+                music,
+                profile,
+                cmdcamScene,
+                f -> graph.factions().containsKey(f));
         if (!errors.isEmpty()) {
             return errors;
         }

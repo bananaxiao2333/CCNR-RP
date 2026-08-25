@@ -45,6 +45,7 @@ public final class FactionProfessions {
             JsonObject loadout,
             String music,
             String profile,
+            String cmdcamScene,
             java.util.function.Predicate<String> factionExists) {
         List<String> errors = new ArrayList<>();
         if (id == null || id.isBlank()) {
@@ -88,6 +89,11 @@ public final class FactionProfessions {
             picked.addProperty("profile", profile);
         } else {
             picked.remove("profile");
+        }
+        if (cmdcamScene != null && !cmdcamScene.isBlank()) {
+            picked.addProperty("cmdcamScene", cmdcamScene);
+        } else {
+            picked.remove("cmdcamScene");
         }
         return List.of();
     }
@@ -138,6 +144,11 @@ public final class FactionProfessions {
     /** 项目简历（可选）：职业档案简介，入场电影/档案卡展示用。 */
     public static String profile(JsonObject def) {
         return str(def, "profile", "");
+    }
+
+    /** CMDCam 出场场景（可选）：部署入场电影播完黑屏转场播放该摄像机场景；空串=无（阵营/刷新波默认值回退）。 */
+    public static String cmdcamScene(JsonObject def) {
+        return str(def, "cmdcamScene", "");
     }
 
     public static JsonObject loadout(JsonObject def) {

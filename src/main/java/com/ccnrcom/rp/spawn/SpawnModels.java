@@ -43,6 +43,7 @@ public final class SpawnModels {
             double z,
             String dim,
             int recruitTimeoutSeconds,
+            String cmdcamScene,
             List<JsonObject> steps) {
 
         public Wave(
@@ -75,6 +76,7 @@ public final class SpawnModels {
                     z,
                     dim,
                     recruitTimeoutSeconds,
+                    "",
                     List.of());
         }
 
@@ -160,6 +162,7 @@ public final class SpawnModels {
                     num(d, "z", 0),
                     str(d, "dim", "minecraft:overworld"),
                     (int) num(o, "recruitTimeoutSeconds", 60),
+                    str(o, "cmdcamScene", ""),
                     parseSteps(o)));
         }
 
