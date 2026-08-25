@@ -5,9 +5,7 @@
 package com.ccnrcom.rp.command;
 
 import com.ccnrcom.rp.CCNRRPMod;
-import com.ccnrcom.rp.config.CCNRRPConfig;
 import com.ccnrcom.rp.status.CharacterStatus;
-import com.ccnrcom.rp.status.StatusMachine;
 import com.ccnrcom.rp.util.Permissions;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.tree.LiteralCommandNode;
@@ -77,17 +75,12 @@ final class StateCommand {
             source.sendSuccess(() -> Component.translatable("ccnr_rp.status.error.no_alive"), false);
             return 0;
         }
-        // 状态机校验：ALIVE → DEAD（同状态视为成功；非法迁移拒绝）。
-        String rejected = StatusMachine.transition(CharacterStatus.ALIVE, CharacterStatus.DEAD)
-                .orElse(null);
-        if (rejected != null) {
-            source.sendSuccess(() -> Component.translatable("ccnr_rp.status.error.no_alive"), false);
-            return 0;
-        }
-        CCNRRPMod.users.setStatus(uuid, CharacterStatus.DEAD);
-        CCNRRPMod.users.setCooldown(
-                uuid, System.currentTimeMillis() + CCNRRPConfig.DEATH_COOLDOWN_MINUTES.get() * 60000L);
-        CCNRRPMod.users.save();
+        // 统一退场（与 killCommand 同一入口）：状态迁移 + 冷却 + 遗体 + 结算 + 逐行
+        com.ccnrcom.rp.status.StatusManager.retire(
+                uuid,
+                target,
+                "command",
+                com.ccnrcom.rp.status.RetireFlag.of(com.ccnrcom.rp.status.RetireFlag.SPAWN_CORPSE));
         source.sendSuccess(
                 () -> Component.translatable(
                         "ccnr_rp.status.killed.command", target.getName().getString()),

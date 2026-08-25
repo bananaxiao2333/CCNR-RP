@@ -347,7 +347,8 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
     private int deployCandidates(List<Candidate> toDeploy, Wave wave, boolean recruited) {
         int deployed = 0;
         for (Candidate cand : toDeploy) {
-            if (deployAsPosition(cand.playerUuid(), cand.name(), cand.professionId(), cand.factionId(), wave)) {
+            ServerPlayer p = server.getPlayerList().getPlayer(java.util.UUID.fromString(cand.playerUuid()));
+            if (p != null && deploy(p, cand.professionId(), wave, DeployFlag.of())) {
                 deployed++;
             }
         }
@@ -365,7 +366,8 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
             String factionId,
             String background,
             Wave wave,
-            boolean cinematic) {
+            boolean cinematic,
+            boolean musicOn) {
         if (CCNRRPMod.factions != null) {
             CCNRRPMod.factions.findProfession(professionId).ifPresent(def -> {
                 LoadoutManager.apply(p, FactionProfessions.loadout(def));
@@ -415,7 +417,7 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
             if (!en.has("factionMusic")) {
                 en.addProperty("factionMusic", "");
             }
-            en.addProperty("music", music);
+            en.addProperty("music", musicOn ? music : "");
             en.add("relations", relations);
             en.addProperty("background", background == null ? "" : background);
             if (cinematic) {
@@ -488,7 +490,7 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
                 .filter(w -> w.matchesProfession(professionId, factionId))
                 .findFirst()
                 .orElse(createDefaultSelfWave());
-        return deployAsPosition(uuid, player.getName().getString(), professionId, factionId, wave);
+        return deploy(player, professionId, wave, DeployFlag.of());
     }
 
     private Wave createDefaultSelfWave() {
@@ -509,33 +511,78 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
                 60);
     }
 
-    /** 用户级部署核心：装备 → 传送 → 状态 ALIVE（部署 = 新一局开始：重置疏散裁定）。 */
-    public boolean deployAsPosition(String uuid, String name, String professionId, String factionId, Wave wave) {
-        ServerPlayer p = server.getPlayerList().getPlayer(java.util.UUID.fromString(uuid));
-        if (p == null || CCNRRPMod.users == null) {
+    /**
+     * 唯一部署核心：自部署 / 管理员刷人 / 复活波 / 强制征召 / 手动部署全部汇入此入口。
+     * 行为差异一律由 {@link DeployFlag} 控制（SKIP_CINEMATIC / FORCE_DEPLOY / NO_MUSIC / QUIET / TEMP），
+     * 不定义预设与来源：装备 → 传送 → 生存 → 入场电影（按 SKIP/NO_MUSIC）→ 状态/角色（按 TEMP）→ 广播（按 QUIET）→ evac 重置。
+     */
+    public boolean deploy(ServerPlayer player, String professionId, Wave wave, Set<DeployFlag> flags) {
+        if (player == null
+                || professionId == null
+                || wave == null
+                || CCNRRPMod.users == null
+                || CCNRRPMod.factions == null) {
             return false;
         }
-        // 单在场守卫：已有存活身份或以征召兵在场时拒绝
-        if (CCNRRPMod.users.isAlive(uuid) || com.ccnrcom.rp.sequence.SequenceEngine.isConscripted(uuid)) {
+        String uuid = player.getUUID().toString();
+        boolean force = flags != null && flags.contains(DeployFlag.FORCE_DEPLOY);
+        boolean temp = flags != null && flags.contains(DeployFlag.TEMP);
+        boolean quiet = flags != null && flags.contains(DeployFlag.QUIET);
+        // 素材同步完成前禁用部署/复活（客户端异步下载中）
+        if (!com.ccnrcom.rp.assets.AssetLibrary.isSynced(player)) {
+            RpChannels.sendTo(player, new RpPackets.ErrorS2C("ccnr_rp.gui.asset.syncing"));
             return false;
         }
-        if (!com.ccnrcom.rp.assets.AssetLibrary.isSynced(p)) {
-            RpChannels.sendTo(p, new RpPackets.ErrorS2C("ccnr_rp.gui.asset.syncing"));
+        // 单在场守卫（FORCE_DEPLOY 跳过）：已有存活身份或以征召兵在场时拒绝（防双身份）
+        if (!force && (CCNRRPMod.users.isAlive(uuid) || com.ccnrcom.rp.sequence.SequenceEngine.isConscripted(uuid))) {
             return false;
         }
-        applyDeployCore(p, name, professionId, factionId, "", wave, true);
-        CCNRRPMod.users.setRole(uuid, professionId, factionId);
-        CCNRRPMod.users.setEvacuation(uuid, "none");
-        CCNRRPMod.users.setStatus(uuid, CharacterStatus.ALIVE);
-        CCNRRPMod.users.setCooldown(uuid, 0);
-        CCNRRPMod.users.save();
-        if (CCNRRPMod.experience != null) {
-            CCNRRPMod.experience.ledger().setEvacSettled(uuid, false);
-            CCNRRPMod.experience.ledger().save();
+        var def = CCNRRPMod.factions.findProfession(professionId).orElse(null);
+        // 职位定义缺失时按空阵营部署（保持原 deployAsPosition 行为：无装备、传送默认点；pick 波观察者可能无职位）
+        String factionId = def == null ? "" : FactionProfessions.factionId(def);
+        String displayName = def == null ? professionId : FactionProfessions.idsSafeName(def);
+        boolean cinematic = flags == null || !flags.contains(DeployFlag.SKIP_CINEMATIC);
+        boolean musicOn = flags == null || !flags.contains(DeployFlag.NO_MUSIC);
+        applyDeployCore(player, player.getName().getString(), professionId, factionId, "", wave, cinematic, musicOn);
+        if (temp) {
+            // 临时身份（征召兵）：不写用户库，仅推送征召身份给客户端（HUD 显示征召编制）
+            try {
+                com.google.gson.JsonObject st = new com.google.gson.JsonObject();
+                st.addProperty("professionId", professionId);
+                st.addProperty("factionId", factionId);
+                RpChannels.sendTo(player, new RpPackets.ConscriptStateS2C(st.toString()));
+            } catch (Exception ignored) {
+                // 身份推送失败不阻断部署
+            }
+            if (!quiet) {
+                eventBroadcast(
+                        "ccnr_rp.spawn.conscript.deployed", player.getName().getString(), displayName);
+            }
+        } else {
+            // 正式用户：状态 ALIVE + 疏散裁定重置 + 冷却清零（部署 = 新一局开始）
+            CCNRRPMod.users.setRole(uuid, professionId, factionId);
+            CCNRRPMod.users.setEvacuation(uuid, "none");
+            CCNRRPMod.users.setStatus(uuid, CharacterStatus.ALIVE);
+            CCNRRPMod.users.setCooldown(uuid, 0);
+            CCNRRPMod.users.save();
+            if (CCNRRPMod.experience != null) {
+                CCNRRPMod.experience.ledger().setEvacSettled(uuid, false);
+                CCNRRPMod.experience.ledger().save();
+            }
+            if (CCNRRPMod.characters != null) {
+                CCNRRPMod.characters.sendList(player);
+            }
+            if (!quiet) {
+                RpChannels.sendTo(player, new RpPackets.ErrorS2C("ccnr_rp.spawn.deployed", displayName));
+            }
         }
-        if (CCNRRPMod.characters != null) {
-            CCNRRPMod.characters.sendList(p);
-        }
+        LOGGER.info(
+                "[CCNR-RP] 部署 [{}] {} → {}（{}），wave={}",
+                temp ? "TEMP" : "USER",
+                player.getName().getString(),
+                professionId,
+                factionId,
+                wave.id());
         return true;
     }
 
@@ -606,14 +653,20 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
                 continue;
             }
             com.ccnrcom.rp.sequence.SequenceEngine.markDeployed(csId); // 接受部署：待定 → 在场
-            if (deployConscript(csId)) {
+            ServerPlayer owner = server.getPlayerList().getPlayer(java.util.UUID.fromString(cs.playerUuid()));
+            if (owner != null
+                    && deploy(
+                            owner,
+                            cs.professionId(),
+                            defaultConscriptWave(cs.id()),
+                            DeployFlag.of(DeployFlag.FORCE_DEPLOY, DeployFlag.TEMP))) {
                 deployed++;
             }
         }
         LOGGER.info("[CCNR-RP] 征召 {} 部署已加入 {} 人（人满={}）", id, deployed, full);
     }
 
-    /** 部署临时征召兵：装备 + 传送 + 生存模式（不涉及角色库）。 */
+    /** 部署临时征召兵（兼容入口）：路由到唯一部署核心 deploy()（FORCE_DEPLOY + TEMP）。 */
     public boolean deployConscript(String conscriptId) {
         var cs = com.ccnrcom.rp.sequence.SequenceEngine.findConscript(conscriptId);
         if (cs == null) {
@@ -623,33 +676,11 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
         if (p == null) {
             return false;
         }
-        // 素材同步完成前禁用部署/复活（客户端异步下载中）
-        if (!com.ccnrcom.rp.assets.AssetLibrary.isSynced(p)) {
-            RpChannels.sendTo(p, new RpPackets.ErrorS2C("ccnr_rp.gui.asset.syncing"));
-            LOGGER.info("[CCNR-RP] 征召部署拒绝：{} 素材同步未完成", p.getName().getString());
-            return false;
-        }
-        // 统一部署磨子（与普通角色同一套）：装备→传送→生存→入场电影
-        applyDeployCore(
+        return deploy(
                 p,
-                cs.name(),
                 cs.professionId(),
-                cs.factionId(),
-                "临时征召兵（编制 " + cs.professionId() + "）",
                 defaultConscriptWave(cs.id()),
-                true);
-        // 征召兵在场身份推给客户端（HUD 显示征召编制；征召兵不在角色库）
-        try {
-            com.google.gson.JsonObject st = new com.google.gson.JsonObject();
-            st.addProperty("professionId", cs.professionId());
-            st.addProperty("factionId", cs.factionId());
-            RpChannels.sendTo(p, new RpPackets.ConscriptStateS2C(st.toString()));
-        } catch (Exception ignored) {
-            // 身份推送失败不阻断部署
-        }
-        eventBroadcast("ccnr_rp.spawn.conscript.deployed", cs.name(), cs.professionId());
-        LOGGER.info("[CCNR-RP] 征召兵 {} 部署完成（编制 {}）", cs.name(), cs.professionId());
-        return true;
+                DeployFlag.of(DeployFlag.FORCE_DEPLOY, DeployFlag.TEMP));
     }
 
     /** 邀请作废（拒绝/超时）：临时征召兵直接消失（无角色库内容）。 */
@@ -717,12 +748,7 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
             if (target == null) {
                 continue;
             }
-            deployAsPosition(
-                    uuid,
-                    target.getName().getString(),
-                    CCNRRPMod.users.professionId(uuid),
-                    CCNRRPMod.users.factionId(uuid),
-                    wave);
+            deploy(target, CCNRRPMod.users.professionId(uuid), wave, DeployFlag.of());
         }
         LOGGER.info("[CCNR-RP] 复活波 {} 部署已加入 {} 人（人满={}）", waveId, acceptedCharIds.size(), full);
     }
