@@ -847,5 +847,55 @@ public final class CharacterService {
         root.addProperty("factionId", CCNRRPMod.users.factionId(uuid));
         root.addProperty("cooldownUntil", CCNRRPMod.users.cooldownUntil(uuid));
         RpChannels.sendTo(player, new RpPackets.CharacterListS2C(root.toString()));
+        // 全玩家头顶标签数据（旁观者视角显示其他玩家的阵营/职业/等级）
+        sendPlayerTags(player);
+    }
+
+    /** 全玩家档案摘要（头顶标签用）：{uuid: {name, professionId, factionId, level}}。 */
+    private JsonObject playerTagsJson() {
+        JsonObject root = new JsonObject();
+        if (CCNRRPMod.users == null) {
+            return root;
+        }
+        for (String uid : CCNRRPMod.users.uuids()) {
+            JsonObject o = new JsonObject();
+            o.addProperty("name", playerName(uid));
+            o.addProperty("professionId", CCNRRPMod.users.professionId(uid));
+            o.addProperty("factionId", CCNRRPMod.users.factionId(uid));
+            o.addProperty("level", CCNRRPMod.users.level(uid));
+            root.add(uid, o);
+        }
+        return root;
+    }
+
+    private String playerName(String uid) {
+        if (server != null) {
+            net.minecraft.server.level.ServerPlayer p =
+                    server.getPlayerList().getPlayer(java.util.UUID.fromString(uid));
+            if (p != null) {
+                return p.getName().getString();
+            }
+        }
+        return uid.substring(0, Math.min(8, uid.length()));
+    }
+
+    /** 发送全玩家头顶标签给指定玩家。 */
+    public void sendPlayerTags(net.minecraft.server.level.ServerPlayer player) {
+        if (player != null) {
+            RpChannels.sendTo(
+                    player, new RpPackets.PlayerTagsS2C(playerTagsJson().toString()));
+        }
+    }
+
+    /** 广播全玩家头顶标签给所有在线玩家（登录/登出/部署变更后调用）。 */
+    public void broadcastPlayerTags() {
+        if (server == null) {
+            return;
+        }
+        String payload = playerTagsJson().toString();
+        for (net.minecraft.server.level.ServerPlayer p :
+                new java.util.ArrayList<>(server.getPlayerList().getPlayers())) {
+            RpChannels.sendTo(p, new RpPackets.PlayerTagsS2C(payload));
+        }
     }
 }

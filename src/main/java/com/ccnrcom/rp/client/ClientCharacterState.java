@@ -49,8 +49,50 @@ public final class ClientCharacterState {
     // 结算明细逐行（右下角逐行渲染，绿色加分/红色减分）
     private static List<String[]> xpLines = new ArrayList<>();
     private static long xpLinesUntil = 0;
+    // 全玩家头顶标签（uuid -> 档案摘要；旁观者视角渲染其他玩家阵营/职业/等级）
+    private static final java.util.Map<String, PlayerTag> playerTags = new java.util.HashMap<>();
 
     private ClientCharacterState() {}
+
+    /** 其他玩家头顶标签（客户端镜像）。 */
+    public record PlayerTag(String name, String professionId, String factionId, int level) {}
+
+    /** 更新全玩家头顶标签（服务端 PlayerTagsS2C 下发）。 */
+    public static synchronized void setPlayerTags(String payload) {
+        playerTags.clear();
+        if (payload == null || payload.isBlank()) {
+            return;
+        }
+        try {
+            JsonObject root = JsonUtil.GSON.fromJson(payload, JsonObject.class);
+            if (root == null) {
+                return;
+            }
+            for (var e : root.entrySet()) {
+                JsonObject o = e.getValue().getAsJsonObject();
+                playerTags.put(
+                        e.getKey(),
+                        new PlayerTag(
+                                str(o, "name", e.getKey()),
+                                str(o, "professionId", ""),
+                                str(o, "factionId", ""),
+                                o.has("level") && o.get("level").isJsonPrimitive()
+                                        ? o.get("level").getAsInt()
+                                        : 0));
+            }
+        } catch (Exception ignored) {
+            // 标签数据异常仅丢弃本次更新
+        }
+    }
+
+    /** 某玩家头顶标签（无则 null）。 */
+    public static synchronized PlayerTag playerTag(String uuid) {
+        return playerTags.get(uuid);
+    }
+
+    private static String str(JsonObject o, String key, String def) {
+        return o.has(key) && !o.get(key).isJsonNull() ? o.get(key).getAsString() : def;
+    }
 
     public static synchronized void setList(String payload) {
         JsonObject root = JsonUtil.GSON.fromJson(payload, JsonObject.class);
@@ -482,5 +524,6 @@ public final class ClientCharacterState {
     public static synchronized void clear() {
         characters.clear();
         selected = "";
+        playerTags.clear();
     }
 }

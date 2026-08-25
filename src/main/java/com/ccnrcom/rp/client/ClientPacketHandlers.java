@@ -71,6 +71,11 @@ public final class ClientPacketHandlers {
         ClientCharacterState.setManager(payload);
     }
 
+    /** 全玩家头顶标签数据更新。 */
+    public static void onPlayerTags(String payload) {
+        ClientCharacterState.setPlayerTags(payload);
+    }
+
     public static void onMusicList(String payload) {
         ClientCharacterState.setMusicList(payload);
         RpAdminScreen.refreshIfOpen();

@@ -947,6 +947,31 @@ public final class RpPackets {
         }
     }
 
+    /** 全玩家头顶标签数据（S2C）：{uuid: {name, professionId, factionId, level}}，供客户端 nametag 渲染。 */
+    public static final class PlayerTagsS2C {
+        public final String payload;
+
+        public PlayerTagsS2C(String payload) {
+            this.payload = payload;
+        }
+
+        public PlayerTagsS2C(FriendlyByteBuf buf) {
+            this(buf.readUtf(16384));
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(payload, 16384);
+        }
+
+        public static void handle(PlayerTagsS2C msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(
+                            net.minecraftforge.api.distmarker.Dist.CLIENT,
+                            () -> () -> com.ccnrcom.rp.client.ClientPacketHandlers.onPlayerTags(msg.payload)));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
     /** CMDCam 场景播放请求（C2S）：客户端动画步骤 CAMS 或部署电影结束时请求播放已保存场景。 */
     public static final class CamScenePlayC2S {
         public final String scene;
