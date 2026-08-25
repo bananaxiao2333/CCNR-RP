@@ -4,6 +4,8 @@
  */
 package com.ccnrcom.rp.cmdcam;
 
+import java.util.ArrayList;
+import java.util.List;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import net.minecraftforge.fml.ModList;
@@ -46,6 +48,39 @@ public final class CamSceneBridge {
             cmdcamPresent = ok;
         }
         return cmdcamPresent;
+    }
+
+    /**
+     * 已保存场景名列表（按名称不区分大小写排序）；CMDCam 未装/反射失败/无场景时返回空列表
+     * （管理面板补全提示用，调用方安全降级为无提示）。
+     *
+     * @param level 任意服务器世界（CMDCam 场景保存于世界维度数据，取同一 server 即可）
+     * @return 已保存场景名；异常/未安装时空列表
+     */
+    public static List<String> savedSceneNames(Level level) {
+        if (!available() || level == null) {
+            return List.of();
+        }
+        try {
+            Class<?> serverCls = Class.forName(
+                    "team.creative.cmdcam.server.CMDCamServer", true, CamSceneBridge.class.getClassLoader());
+            java.lang.reflect.Method getSavedPaths = serverCls.getMethod("getSavedPaths", Level.class);
+            Object paths = getSavedPaths.invoke(null, level);
+            if (!(paths instanceof java.util.Collection<?> col)) {
+                return List.of();
+            }
+            List<String> out = new ArrayList<>();
+            for (Object o : col) {
+                if (o instanceof String s && !s.isBlank() && !out.contains(s)) {
+                    out.add(s);
+                }
+            }
+            out.sort(String.CASE_INSENSITIVE_ORDER);
+            return out;
+        } catch (Throwable t) {
+            LOGGER.debug("[CCNR-RP] CMDCam 场景名列表读取失败: {}", t.toString());
+            return List.of();
+        }
     }
 
     /**

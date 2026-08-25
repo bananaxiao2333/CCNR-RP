@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.12.0（CMDCam 场景保存回显修复 + 管理面板场景名补全提示）
+- 修复：阵营编辑器 CMDCam 出场场景（cmdcamScene）保存后消失——根因是服务端下发角色列表（sendList）的阵营 JSON 漏掉 cmdcamScene 字段，客户端回显永远读到空；现补上该字段，保存后输入框保留值。
+- 新增：服务端反射读取 CMDCam 已保存场景名（CMDCamServer.getSavedPaths）随 ManagerStateS2C 下发（camScenes），管理面板 CMDCam 场景输入项聚焦时按输入过滤下拉补全（点击/上下键/回车选中，Esc 关闭）；CMDCam 未装或读取失败时安全降级为无提示。
+- 版本号升至 2.12.0。
+- 构建：compileJava / spotlessCheck / test -PrunTests 全绿。
+
 ## 2.11.0（管理器设置页横向溢出修复：开关右对齐面板内边界，无多余横向滚动条）
 - 设置内容区右边界改为 px2-18（滚动条 px2-14 左侧留 4px 间隙），开关右对齐到面板内边界（此前画到 px2-24 起点、46 宽开关越过滚动条导致右侧横向溢出/多余竖向条）。
 - 输入框/开关行/rowBounds 宽度统一以 settingsRight() 为右缘，标签避让开关区。

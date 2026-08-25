@@ -32,6 +32,8 @@ public final class ClientCharacterState {
     private static final List<JsonObject> managerWaves = new ArrayList<>();
     /** 已上传音乐名（管理面板补全提示）。 */
     private static final List<String> musicList = new ArrayList<>();
+    /** CMDCam 已保存场景名（管理面板 CMDCam 场景输入项补全提示；未装/读取失败=空）。 */
+    private static final List<String> camScenes = new ArrayList<>();
 
     private static final List<JsonObject> managerSequences = new ArrayList<>();
     private static final List<String> activeEvents = new ArrayList<>();
@@ -426,6 +428,14 @@ public final class ClientCharacterState {
         copyArray(root, "phases", managerPhases);
         copyArray(root, "waves", managerWaves);
         copyArray(root, "sequences", managerSequences);
+        camScenes.clear();
+        if (root.has("camScenes") && root.get("camScenes").isJsonArray()) {
+            for (JsonElement e : root.getAsJsonArray("camScenes")) {
+                if (e.isJsonPrimitive() && e.getAsJsonPrimitive().isString()) {
+                    camScenes.add(e.getAsString());
+                }
+            }
+        }
         CharacterManagementScreen.refreshIfOpen();
         RpAdminScreen.refreshIfOpen();
     }
@@ -486,6 +496,11 @@ public final class ClientCharacterState {
 
     public static synchronized List<String> musicList() {
         return List.copyOf(musicList);
+    }
+
+    /** CMDCam 已保存场景名列表（管理面板补全提示数据源）。 */
+    public static synchronized List<String> camScenes() {
+        return List.copyOf(camScenes);
     }
 
     /** 激活事件横幅（EventStateS2C）。 */

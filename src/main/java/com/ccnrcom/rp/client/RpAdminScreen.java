@@ -83,6 +83,13 @@ public class RpAdminScreen extends Screen {
     private int musicSugIdx = -1;
     private String lastMusicQuery = null;
     private final List<int[]> musicSugBounds = new ArrayList<>();
+    /** CMDCam 场景补全提示（阵营/职业/刷新波场景输入框共用）：当前过滤列表 / 选中索引 / 命中矩形 / 所属输入框。 */
+    private List<String> camSugItems = new ArrayList<>();
+
+    private int camSugIdx = -1;
+    private String lastCamQuery = null;
+    private final List<int[]> camSugBounds = new ArrayList<>();
+    private EditBox camSugBox;
     private EditBox profileBox;
     private EditBox fld2Box;
     private EditBox fld3Box;
@@ -1248,6 +1255,19 @@ public class RpAdminScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
+        // CMDCam 场景补全提示点击优先（选中项填入场景框）
+        if (!camSugBounds.isEmpty()) {
+            for (int i = 0; i < camSugBounds.size(); i++) {
+                int[] b = camSugBounds.get(i);
+                if (mx >= b[0] && mx <= b[2] && my >= b[1] && my <= b[3]) {
+                    if (camSugBox != null && i < camSugItems.size()) {
+                        camSugBox.setValue(camSugItems.get(i));
+                    }
+                    camSugIdx = -1;
+                    return true;
+                }
+            }
+        }
         // 音乐补全提示点击优先（选中项填入音乐框）
         if (!musicSugBounds.isEmpty()) {
             for (int i = 0; i < musicSugBounds.size(); i++) {
@@ -1517,6 +1537,27 @@ public class RpAdminScreen extends Screen {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (!camSugItems.isEmpty() && camSugBox != null && camSugBox.isFocused()) {
+            if (keyCode == 264) { // Down
+                camSugIdx = (camSugIdx + 1) % camSugItems.size();
+                return true;
+            }
+            if (keyCode == 265) { // Up
+                camSugIdx = (camSugIdx - 1 + camSugItems.size()) % camSugItems.size();
+                return true;
+            }
+            if (keyCode == 257 || keyCode == 335) { // Enter / Numpad Enter
+                if (camSugIdx >= 0 && camSugIdx < camSugItems.size()) {
+                    camSugBox.setValue(camSugItems.get(camSugIdx));
+                }
+                camSugIdx = -1;
+                return true;
+            }
+            if (keyCode == 256) { // Esc
+                camSugIdx = -1;
+                return true;
+            }
+        }
         if (!musicSugItems.isEmpty() && musicBox != null && musicBox.isFocused()) {
             if (keyCode == 264) { // Down
                 musicSugIdx = (musicSugIdx + 1) % musicSugItems.size();
@@ -1609,6 +1650,7 @@ public class RpAdminScreen extends Screen {
             }
             renderFieldLabels(g);
             renderMusicSuggestions(g);
+            renderCamSceneSuggestions(g);
             if (!notice.isBlank()) {
                 g.drawCenteredString(font, "[ 系统 ] " + notice, (px1 + px2) / 2, py2 - 46, RpTheme.RED_LINE);
             }
@@ -1659,6 +1701,48 @@ public class RpAdminScreen extends Screen {
             int yy = sy + i * 12;
             g.drawString(font, musicSugItems.get(i), sx + 4, yy + 2, RpTheme.CYAN, false);
             musicSugBounds.add(new int[] {sx, yy, sx + sw, yy + 12});
+        }
+    }
+
+    /** CMDCam 场景补全提示：场景输入框（camSceneBox）聚焦时按输入过滤服务端已保存场景名并绘制下拉。 */
+    private void renderCamSceneSuggestions(GuiGraphics g) {
+        camSugBounds.clear();
+        camSugBox = null;
+        boolean form = tab == TAB_FACTION || tab == TAB_PROFESSION || tab == TAB_WAVE;
+        if (!form || camSceneBox == null || !camSceneBox.isFocused()) {
+            camSugItems = new ArrayList<>();
+            camSugIdx = -1;
+            lastCamQuery = null;
+            return;
+        }
+        String q = camSceneBox.getValue() == null ? "" : camSceneBox.getValue().toLowerCase(java.util.Locale.ROOT);
+        if (!q.equals(lastCamQuery)) {
+            lastCamQuery = q;
+            camSugIdx = -1;
+        }
+        camSugItems = new ArrayList<>();
+        for (String s : ClientCharacterState.camScenes()) {
+            if (q.isBlank() || s.toLowerCase(java.util.Locale.ROOT).contains(q)) {
+                camSugItems.add(s);
+            }
+        }
+        if (camSugIdx >= camSugItems.size()) {
+            camSugIdx = camSugItems.size() - 1;
+        }
+        if (camSugItems.isEmpty()) {
+            return;
+        }
+        camSugBox = camSceneBox;
+        int sx = camSceneBox.getX();
+        int sy = camSceneBox.getY() + 20;
+        int sw = camSceneBox.getWidth();
+        int n = Math.min(6, camSugItems.size());
+        g.fill(sx - 1, sy - 1, sx + sw + 1, sy + n * 12 + 1, 0xE0323232);
+        g.fill(sx - 1, sy - 1, sx + sw + 1, sy, 0xFF5F5F5F);
+        for (int i = 0; i < n; i++) {
+            int yy = sy + i * 12;
+            g.drawString(font, camSugItems.get(i), sx + 4, yy + 2, RpTheme.CYAN, false);
+            camSugBounds.add(new int[] {sx, yy, sx + sw, yy + 12});
         }
     }
 
