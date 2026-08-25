@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.8.0（CMDCam 联动：阵营/事件/结算可配 SCENE 摄像机出场，黑屏转场）
+- 阵营数据模型增加 cmdcamScene 字段（可编辑），部署入场电影播完 → 渐变黑屏转场 → CMDCam 播放该阵营 SCENE，摄像机从部署点视角走路径，播完回位。
+- 动画序列新增 CAMS 步骤类型（param=scene）：player_spawn/event_start/game_end 等钩子序列可直接引用 CMDCam 场景——事件开局/结算通用。
+- 新增 CamSceneBridge（反射调用，CMDCam/CreativeCore 缺失时安全降级不崩服）+ CamScenePlayC2S 网络包。
+- 默认 animations.json 的 game_end / event_start_alarm 序列加入 CAMS 步骤示例。
+- 构建：compileJava / spotlessCheck / test -PrunTests 全绿。
+
 ## 2.7.0（修复管理面板「设置」标签布局：内容飞出面板 + 数字输入框不可编辑）
 - 设置标签拆成两个独立区域：settings.json 开关行固定顶部（可点切换），serverconfig 数值行在下方独立滚动。
 - 修复 renderSettings 与 buildSettingsForm 对滚动偏移的解读不一致导致的坐标错位（内容飞出面板）；

@@ -197,6 +197,11 @@ public final class RpChannels {
                 .decoder(RpPackets.AssetSyncDoneC2S::new)
                 .consumerNetworkThread(RpPackets.AssetSyncDoneC2S::handle)
                 .add();
+        CHANNEL.messageBuilder(RpPackets.CamScenePlayC2S.class, id++, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(RpPackets.CamScenePlayC2S::encode)
+                .decoder(RpPackets.CamScenePlayC2S::new)
+                .consumerNetworkThread(RpPackets.CamScenePlayC2S::handle)
+                .add();
     }
 
     public static void sendTo(ServerPlayer player, Object msg) {

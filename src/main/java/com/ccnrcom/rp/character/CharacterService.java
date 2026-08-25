@@ -262,7 +262,8 @@ public final class CharacterService {
                             str(p, "description", ""),
                             str(p, "icon", "hex"),
                             tier,
-                            str(p, "music", ""));
+                            str(p, "music", ""),
+                            str(p, "cmdcamScene", ""));
                     case "update" -> errors = CCNRRPMod.factions.updateFaction(
                             id,
                             name,
@@ -270,7 +271,8 @@ public final class CharacterService {
                             str(p, "description", ""),
                             str(p, "icon", "hex"),
                             tier,
-                            str(p, "music", ""));
+                            str(p, "music", ""),
+                            str(p, "cmdcamScene", ""));
                     case "delete" -> errors = CCNRRPMod.factions.deleteFaction(id);
                     default -> errors = List.of("未知操作: " + action);
                 }
