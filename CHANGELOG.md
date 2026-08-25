@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.4.0（K 面板 3D 人物预览关闭名字板：只显示人物模型 + 职位装备）
+- CharacterPreview 的 PreviewPlayer 在创建时 setCustomNameVisible(false) + setCustomName(null)，
+  K 面板职位详情的 3D 预览不再显示玩家名（bananaxiao2333）名字板，只显示人物模型 + 职位装备。
+- 构建：compileJava / spotlessCheck / test -PrunTests 全绿。
+
 ## 2.3.0（观察者拾取拦截：better_looting 等模组绕过旁观模式拾取的修复）
 - StatusManager 新增 EntityItemPickupEvent 监听：观察者（无在场身份的用户）一律取消拾取事件。
   原版旁观者模式本身不能拾取，但 better_looting-1.20.1-forge-2.1.1-hotfix 会绕过游戏模式判断直接给物品；
