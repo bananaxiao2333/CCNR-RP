@@ -110,6 +110,12 @@ public final class ClientForgeEvents {
                 net.minecraft.network.chat.Component.translatable("ccnr_rp.hud.observer_actionbar", keyName), true);
     }
 
+    /** 客户端登录：记录入服时刻（刚入服 5 秒内右下角三状态栏常驻显示）。 */
+    @SubscribeEvent
+    public static void onClientLogin(net.minecraftforge.client.event.ClientPlayerNetworkEvent.LoggingIn event) {
+        StatusHud.markJoin();
+    }
+
     /** 客户端登出：清理过期的招募/征召邀请（防止重进服务器后残留已失效状态）。 */
     @SubscribeEvent
     public static void onClientLogout(net.minecraftforge.client.event.ClientPlayerNetworkEvent.LoggingOut event) {

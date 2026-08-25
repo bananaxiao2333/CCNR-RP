@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.14.1（入服 5 秒状态栏 + 观察者拾取兜底）
+- 刚入服 5 秒：右下角三状态栏（职位/阵营/血量）常驻显示（不管背包是否打开）；其余时间仅背包界面显示。
+  （客户端：ClientPlayerNetworkEvent.LoggingIn 记录入服时刻 → StatusHud.renderJoinOverlay 覆盖层按 5s 门控）
+- 观察者拾取兜底：better_looting 等模组的批拾取直接 Inventory.add（绕过可取消的 EntityItemPickupEvent），
+  观察者仍能拾取物品——在不可取消的 PlayerEvent.ItemPickupEvent（入包后才发）把观察者背包全部丢回地上
+  （含拾取延迟防被立即再次吸走），观察者无法持有任何物品。
+- 版本号 2.14.0 → 2.14.1。
+- 构建：compileJava / spotlessCheck / test -PrunTests 全绿（66 用例 0 失败）。
+
 ## 2.14.0（部署流程：先播 CMDCam 入场动画，动画完毕后再传送到出生点）
 - 时序反转（applyDeployCore，用户确认）：部署触发 → 强制旁观者 + 电影 HUD（黑屏/图标/文字）与 CMDCam 场景
   【同一时刻开始播放】→ 全部动画播完（客户端检测 HUD 结束 + CMDCamClient.isPlaying 场景结束）→ 发 DeployLandC2S（新包）
