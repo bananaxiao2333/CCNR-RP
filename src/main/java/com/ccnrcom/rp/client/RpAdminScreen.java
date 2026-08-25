@@ -183,7 +183,7 @@ public class RpAdminScreen extends Screen {
                 }
                 if (i < swCount) {
                     // 5 元素：x1,y1,x2,y2,absIdx（开关行在设置列表中的绝对下标，供点击映射）
-                    rowBounds.add(new int[] {px1 + 12, y, px2 - 12, y + 22, i});
+                    rowBounds.add(new int[] {px1 + 12, y, settingsRight(), y + 22, i});
                 }
                 y += 30;
             }
@@ -238,7 +238,7 @@ public class RpAdminScreen extends Screen {
         cfgBoxes.clear();
         // 「设定」标签：开关 + serverconfig 数值统一滚动；输入框只对可见数值行生成（与 renderSettings 同一 i/偏移）。
         int x = px1 + 12;
-        int w = px2 - 12 - x;
+        int w = settingsRight() - x;
         int yMax = py2 - 70;
         JsonObject cfg = ClientCharacterState.serverConfig();
         int swCount = ClientCharacterState.settingKeys().size();
@@ -1818,10 +1818,15 @@ public class RpAdminScreen extends Screen {
                 + com.ccnrcom.rp.config.CCNRRPConfig.keys().size();
     }
 
+    /** 设置内容右边界（滚动条 px2-14 左侧留 4px 间隙，防横向溢出）。 */
+    private int settingsRight() {
+        return px2 - 18;
+    }
+
     private void renderSettings(GuiGraphics g, int mouseX, int mouseY) {
         // 设置标签 = 开关（可点切换）+ serverconfig 数值，全部统一滚动（一个滚动条，行高 30）。
         int x = px1 + 12;
-        int w = px2 - 12 - x;
+        int w = settingsRight() - x;
         int yMax = py2 - 70;
         int total = settingsRows();
         int maxVisible = Math.max(1, (yMax - settingsYTop()) / 30);
@@ -1835,11 +1840,12 @@ public class RpAdminScreen extends Screen {
                 break;
             }
             if (i < switches.size()) {
-                // 开关行
+                // 开关行：开关右对齐面板内边界（settingsRight），标签在左避让
                 String key = switches.get(i);
                 boolean on = value(key);
                 RpRoundRect.outlined(g, x, y, x + w, y + 22, 4f, RpTheme.PANEL_BORDER, RpTheme.PANEL_BG);
-                drawSwitch(g, x + w - 12, y + 4, on);
+                int swX = settingsRight() - 50; // 46 宽开关 + 4px 右距，右对齐
+                drawSwitch(g, swX, y + 4, on);
                 g.drawString(font, settingLabel(key), x + 8, y + 6, RpTheme.TEXT_PRIMARY, true);
             } else {
                 // serverconfig 数值行（标签 + 输入框；输入框由 buildSettingsForm 生成并定位）
