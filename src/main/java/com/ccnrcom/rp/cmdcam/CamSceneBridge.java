@@ -111,8 +111,7 @@ public final class CamSceneBridge {
                     Class.forName("team.creative.cmdcam.CMDCam", true, CamSceneBridge.class.getClassLoader());
             java.lang.reflect.Field netField = cmdcamCls.getField("NETWORK");
             Object network = netField.get(null);
-            java.lang.reflect.Method send =
-                    network.getClass().getMethod("sendToClient", packet.getClass(), ServerPlayer.class);
+            java.lang.reflect.Method send = findSendToClient(network.getClass(), packet.getClass());
             send.invoke(network, packet, player);
             LOGGER.info(
                     "[CCNR-RP] CMDCam 场景播放已下发: {} → {}",
@@ -123,5 +122,25 @@ public final class CamSceneBridge {
             LOGGER.warn("[CCNR-RP] CMDCam 场景播放失败（跳过，不阻断）: {}", t.toString());
             return false;
         }
+    }
+
+    /**
+     * 查找 CreativeNetwork.sendToClient(packet, player) 方法。
+     * 参数类型可能声明为基类 CreativePacket（而非具体包类型），getMethod 按声明类型精确匹配会
+     * NoSuchMethodException；这里按方法名 + 参数可赋值性扫描，兼容基类/具体类两种签名。
+     */
+    private static java.lang.reflect.Method findSendToClient(Class<?> networkCls, Class<?> packetCls)
+            throws NoSuchMethodException {
+        for (java.lang.reflect.Method m : networkCls.getMethods()) {
+            if (!m.getName().equals("sendToClient")) {
+                continue;
+            }
+            Class<?>[] pt = m.getParameterTypes();
+            if (pt.length == 2 && pt[0].isAssignableFrom(packetCls) && pt[1].equals(ServerPlayer.class)) {
+                return m;
+            }
+        }
+        throw new NoSuchMethodException(
+                "CreativeNetwork.sendToClient(assignable-from " + packetCls.getName() + ", ServerPlayer)");
     }
 }

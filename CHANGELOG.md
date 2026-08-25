@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.13.1（修复：CMDCam 场景部署时播不出来——CreativeNetwork.sendToClient 反射签名匹配失败）
+- 根因：CamSceneBridge.playScene 用 getMethod("sendToClient", StartPathPacket.class, ServerPlayer.class) 精确匹配，
+  而 CreativeCore 实际声明 sendToClient(CreativePacket, ServerPlayer)（参数为基类），getMethod 按声明类型精确匹配必然
+  NoSuchMethodException，被 catch 静默跳过 → 部署电影播完黑屏转场不播 CMDCam 场景（日志：CMDCam 场景播放失败（跳过，不阻断））。
+- 修复：改为按方法名 + 参数可赋值性扫描（findSendToClient），兼容基类/具体类两种签名；场景存在性与包构造逻辑不变。
+- 版本号 2.13.0 → 2.13.1。
+- 构建：compileJava / spotlessCheck / test -PrunTests 全绿。
+
 ## 2.13.0（刷新波与职业支持自定义 cmdcamScene，部署覆盖优先级：阵营 < 刷新波 < 职业）
 - 职业（factions.json professions）与刷新波（spawn_waves.json waves）数据模型新增 cmdcamScene 字段：FactionProfessions.upsert / SpawnModels.Wave 解析回读，管理面板职业/刷新波表单新增输入项（复用 CMDCam 场景补全提示）。
 - SpawnFramework.applyDeployCore 部署时按「阵营 → 刷新波 → 职业」低到高覆盖取最终 cmdcamScene 下发入场电影：职业最高，空值回退刷新波，再回退阵营；自部署/刷人/复活波/征召路径一致生效。
