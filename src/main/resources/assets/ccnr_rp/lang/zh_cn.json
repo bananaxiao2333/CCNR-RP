@@ -173,6 +173,7 @@
   "ccnr_rp.gui.admin.field.color": "徽章颜色（#RRGGBB）",
   "ccnr_rp.gui.admin.field.desc": "描述",
   "ccnr_rp.gui.admin.field.music": "出场音乐（已上传音乐可直接选择，或填 WAV 路径）",
+  "ccnr_rp.gui.admin.field.cam_scene": "CMDCam 出场场景（可选，填场景名；部署电影播完黑屏转场播放）",
   "ccnr_rp.gui.admin.music.upload": "上传音乐",
   "ccnr_rp.gui.admin.music.path": "音乐文件路径或 URL（.wav）",
   "ccnr_rp.gui.admin.music.need_path": "缺少音乐路径",

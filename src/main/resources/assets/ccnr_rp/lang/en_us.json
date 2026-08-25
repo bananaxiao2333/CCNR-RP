@@ -173,6 +173,7 @@
   "ccnr_rp.gui.admin.field.color": "Badge color (#RRGGBB)",
   "ccnr_rp.gui.admin.field.desc": "Description",
   "ccnr_rp.gui.admin.field.music": "Entrance music (pick an uploaded track, or enter a WAV path)",
+  "ccnr_rp.gui.admin.field.cam_scene": "CMDCam entrance scene (optional; played on deploy cinematic black-fade)",
   "ccnr_rp.gui.admin.music.upload": "Upload music",
   "ccnr_rp.gui.admin.music.path": "Music file path or URL (.wav)",
   "ccnr_rp.gui.admin.music.need_path": "Music path missing",

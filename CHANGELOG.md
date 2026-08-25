@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.9.0（管理面板设置标签统一滚动区修复 + 阵营编辑器 CMDCam 场景配置项）
+- 设置标签：开关 + serverconfig 数值统一进一个滚动区（此前数值区起点过高导致内容飞出去、滚动条失效）；
+  开关行按滚动偏移生成（可点切换），数值输入框与绘制行严格对齐。
+- 阵营编辑器新增「CMDCam 出场场景」输入项（cmdcamScene 字段）：部署入场电影播完黑屏转场播放该场景。
+- 构建：compileJava / spotlessCheck / test -PrunTests 全绿。
+
 ## 2.8.0（CMDCam 联动：阵营/事件/结算可配 SCENE 摄像机出场，黑屏转场）
 - 阵营数据模型增加 cmdcamScene 字段（可编辑），部署入场电影播完 → 渐变黑屏转场 → CMDCam 播放该阵营 SCENE，摄像机从部署点视角走路径，播完回位。
 - 动画序列新增 CAMS 步骤类型（param=scene）：player_spawn/event_start/game_end 等钩子序列可直接引用 CMDCam 场景——事件开局/结算通用。
