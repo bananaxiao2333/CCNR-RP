@@ -209,6 +209,12 @@ public final class CharacterService {
         pay.add("waves", wav);
         // serverconfig 程序化设定（管理面板「设定」标签）
         pay.add("serverConfig", com.ccnrcom.rp.config.CCNRRPConfig.values());
+        // CMDCam 已保存场景名（管理面板 CMDCam 场景输入项补全提示；未装/读取失败=空列表）
+        JsonArray cams = new JsonArray();
+        for (String s : com.ccnrcom.rp.cmdcam.CamSceneBridge.savedSceneNames(player.level())) {
+            cams.add(s);
+        }
+        pay.add("camScenes", cams);
         RpChannels.sendTo(player, new RpPackets.ManagerStateS2C(pay.toString()));
         RpChannels.sendTo(player, new RpPackets.MusicListS2C(musicListJson()));
     }
@@ -802,6 +808,7 @@ public final class CharacterService {
                 o.addProperty("tier", f.tier());
                 o.addProperty("description", f.description());
                 o.addProperty("music", f.music());
+                o.addProperty("cmdcamScene", f.cmdcamScene() == null ? "" : f.cmdcamScene());
                 JsonObject spawn = factionSpawnJson(f.id());
                 if (spawn != null) {
                     o.add("spawn", spawn);
