@@ -4,6 +4,7 @@ plugins {
     id 'maven-publish'
     id 'net.minecraftforge.gradle' version '[6.0,6.2)'
     id 'com.diffplug.spotless' version '6.25.0'
+    id 'org.spongepowered.mixin' version '0.7.38'
 }
 
 version = mod_version
@@ -50,8 +51,15 @@ repositories {
     mavenCentral()
 }
 
+mixin {
+    add sourceSets.main, 'ccnr_rp.refmap.json'
+    config 'ccnr_rp.mixins.json'
+}
+
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+    // Mixin 注解处理器（InventoryObserverMixin：观察者禁止入包）
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
 
     // Corpse（henkelmax，Forge 1.20.1）——可选联动依赖，仅编译期；
     // 运行时玩家可自行安装；未安装时模组降级为原生死亡处理。
