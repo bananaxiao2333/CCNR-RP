@@ -999,4 +999,23 @@ public final class RpPackets {
             ctx.get().setPacketHandled(true);
         }
     }
+
+    /** 部署落位通知（C2S，空载荷）：客户端入场电影播完时发送，服务端据此传送到出生点并播放 CMDCam 出场场景。 */
+    public static final class DeployLandC2S {
+        public DeployLandC2S() {}
+
+        public DeployLandC2S(FriendlyByteBuf buf) {}
+
+        public void encode(FriendlyByteBuf buf) {}
+
+        public static void handle(DeployLandC2S msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get().enqueueWork(() -> {
+                var p = ctx.get().getSender();
+                if (p != null && com.ccnrcom.rp.CCNRRPMod.spawnFramework != null) {
+                    com.ccnrcom.rp.CCNRRPMod.spawnFramework.onDeployLand(p);
+                }
+            });
+            ctx.get().setPacketHandled(true);
+        }
+    }
 }

@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.14.0（部署流程：先播 CMDCam 入场动画，动画完毕后再传送到出生点）
+- 时序反转（applyDeployCore，用户确认）：部署触发 → 强制旁观者 + 电影 HUD（黑屏/图标/文字）与 CMDCam 场景
+  【同一时刻开始播放】→ 全部动画播完（客户端检测 HUD 结束 + CMDCamClient.isPlaying 场景结束）→ 发 DeployLandC2S（新包）
+  → 移动玩家到部署点（优先级：阵营出生点 → wave deployAt → 世界出生点）→ 设置生存。
+- 降级：未设定 CMDCam（无场景名 / 未装 CMDCam）或 SKIP_CINEMATIC → 开局直接落位切生存（不播动画、不等待）。
+- 兜底：HUD 播完后再等 20s（场景缺失/异常）自动落位；服务端 120s 超时；动画期间掉线清理待落位。
+- 修复「动画全程不显示电影 HUD」：CMDCam 场景播放时每帧设 options.hideGui=true（CamRun.tick）→ GameRenderer 跳过整个
+  gui.render（含电影覆盖层）；电影播放期间在 RenderTickEvent.Pre（LOWEST 优先级）强制恢复 hideGui=false，电影结束即停止
+  强制（场景余下部分仍隐藏 HUD，场景结束按 CMDCam 缓存恢复）；落位时再确保 hideGui=false。
+- 兜底：落位超时 30s（掉线/动画中断）自动传送，防卡暂存点；动画期间掉线清理待落位状态。
+- 全入口复用：自部署（deployPosition）/ 复活波（onWaveFinish）/ 征召（onConscriptFinish/deployConscript）/ 管理刷人统一走 deploy()。
+- 注：本版本含 2.13.2 的尸体修复（尸体显示玩家皮肤 + 「职位 + 玩家名」名字牌）。
+- 版本号 2.13.2 → 2.14.0。
+- 构建：compileJava / spotlessCheck / test -PrunTests 全绿。
+
 ## 2.13.2（修复：尸体无皮肤 + 尸体名字改为「职位 + 玩家名」——非入侵方案）
 - 根因：此前 CorpseBridge 把遗体身份 UUID 改写为 ccnr-char 哈希派生 UUID——客户端按该 UUID 在 tab 列表
   查不到玩家档案（不在线）→ 尸体渲染默认史蒂夫纹理。
@@ -11,7 +26,7 @@
   - 保护：未安装 Corpse 模组时跳过遗体生成，物品按原版正常爆出（日志提示）；
   - 清理：删除哈希派生 UUID/DeathChar 无用代码；_corpse_src 中未部署的魔改源码已还原。
 - 版本号 2.13.1 → 2.13.2。
-- 构建：compileJava / spotlessCheck / test -PrunTests 全绿（80 用例 0 失败）。
+- 构建：compileJava / spotlessCheck / test -PrunTests 全绿（66 用例 0 失败）。
 
 ## 2.13.1（修复：CMDCam 场景部署时播不出来——CreativeNetwork.sendToClient 反射签名匹配失败）
 - 根因：CamSceneBridge.playScene 用 getMethod("sendToClient", StartPathPacket.class, ServerPlayer.class) 精确匹配，

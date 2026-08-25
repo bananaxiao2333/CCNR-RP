@@ -23,6 +23,7 @@ public final class ClientForgeEvents {
         }
         ClientAnimationPlayer.tick();
         CameraEffect.tick();
+        CinematicController.tickLanding(); // 部署落位：HUD 电影 + CMDCam 场景全部播完才发 DeployLandC2S
         ClientAssetCache.tick(); // 素材下载请求超时看门狗（防卡死）
         RecruitOverlayHud.prune(); // 过期邀请清理（防残留弹窗死锁）
         tickObserverActionbar(); // 观察者常驻提示（观察中，按键部署）
@@ -53,6 +54,22 @@ public final class ClientForgeEvents {
         }
         while (ClientSetup.OPEN_CHARACTERS.consumeClick()) {
             openCharacterPanel(false);
+        }
+    }
+
+    /**
+     * 渲染 tick（Pre，LOWEST 优先级最后执行）：CMDCam 场景播放时会每帧设置 options.hideGui=true
+     * （CamRun.tick），GameRenderer 会因此跳过整个 gui.render（含本模组电影 HUD 覆盖层）——
+     * 电影播放期间在此强制恢复 hideGui=false，使黑屏/图标/文字正常渲染；电影结束即停止强制，
+     * 场景余下部分仍由 CMDCam 保持 HUD 隐藏，场景结束 CMDCam 按缓存恢复。
+     */
+    @SubscribeEvent(priority = net.minecraftforge.eventbus.api.EventPriority.LOWEST)
+    public static void onRenderTick(TickEvent.RenderTickEvent event) {
+        if (event.phase != TickEvent.Phase.START) {
+            return;
+        }
+        if (CinematicController.active()) {
+            Minecraft.getInstance().options.hideGui = false;
         }
     }
 

@@ -31,10 +31,18 @@ public final class CinematicController {
 
     private static JsonObject data;
     private static long startMs;
-    /** 部署电影结束（黑屏转场）后待播放的阵营 CMDCam 场景名（空=不播）。 */
+
+    /** 部署电影数据里的 CMDCam 场景名（空=本次部署无场景，HUD 播完即落位）。 */
     private static String pendingScene = "";
 
-    private static boolean sceneRequested = false;
+    /** 待落位：HUD 电影播完且（有场景时）CMDCam 场景也播完后发 DeployLandC2S。 */
+    private static boolean landingArmed = false;
+    /** CMDCam 场景是否已开始播放过（短场景可能在 HUD 结束前就播完，需记录）。 */
+    private static boolean sceneSeen = false;
+    /** HUD 播完时刻（用于场景未启动/未结束时的安全兜底）。 */
+    private static long landWaitStart = 0;
+    /** 安全兜底：HUD 播完后若场景始终未启动/未结束，最多再等这么久即落位。 */
+    private static final long LAND_SAFETY_MS = 20_000L;
 
     private CinematicController() {}
 
@@ -45,10 +53,41 @@ public final class CinematicController {
     public static void start(JsonObject payload) {
         data = payload;
         startMs = System.currentTimeMillis();
-        sceneRequested = false;
         pendingScene = payload == null ? "" : str(payload, "cmdcamScene");
+        landingArmed = false;
+        sceneSeen = false;
         // 音乐传递（高→低）：启动程序指定音乐 > 职业音乐 > 阵营音乐；均未配置则静默跳过
         ClientAudio.playEntrance(resolveMusic(payload));
+    }
+
+    /**
+     * 客户端每 tick 调用：跟踪 CMDCam 场景播放状态，HUD 与场景全部播完后触发落位。
+     * 场景与 HUD 由服务端同一时刻下发——若场景未配置，HUD 播完即落位。
+     */
+    public static void tickLanding() {
+        boolean playing = CamSceneClient.playing();
+        if (playing) {
+            sceneSeen = true;
+        }
+        if (!landingArmed) {
+            return;
+        }
+        if (pendingScene.isBlank()) {
+            return; // 无场景：HUD 结束分支已直接落位
+        }
+        long now = System.currentTimeMillis();
+        // 场景已开始并已结束 → 落位；场景始终未开始/未结束（缺失/异常）→ 安全兜底落位
+        if ((sceneSeen && !playing) || now - landWaitStart > LAND_SAFETY_MS) {
+            landNow();
+        }
+    }
+
+    /** 全部动画播完 → 通知服务端落位（移动玩家到部署点 + 设置生存）。 */
+    private static void landNow() {
+        landingArmed = false;
+        // 确保落位后 HUD 恢复（防 CMDCam 场景结束恢复值异常导致 HUD 持续隐藏）
+        net.minecraft.client.Minecraft.getInstance().options.hideGui = false;
+        com.ccnrcom.rp.network.RpChannels.sendToServer(new com.ccnrcom.rp.network.RpPackets.DeployLandC2S());
     }
 
     /** 按优先级取第一个非空的音乐路径（payload 为 null 时全部为空）。 */
@@ -152,11 +191,11 @@ public final class CinematicController {
             g.fill(0, 0, w, h, 0x00000000 | a);
         }
         if (blackA <= 0.01f && textA <= 0.01f) {
-            // 部署动画完毕 → 渐变黑屏转场 → 播放阵营 CMDCam 场景（若配置），摄像机从部署点视角走 SCENE
-            if (!sceneRequested && !pendingScene.isBlank()) {
-                sceneRequested = true;
-                com.ccnrcom.rp.network.RpChannels.sendToServer(
-                        new com.ccnrcom.rp.network.RpPackets.CamScenePlayC2S(pendingScene));
+            // HUD 电影播完：有 CMDCam 场景则等场景播完再落位；无场景立即落位
+            landingArmed = true;
+            landWaitStart = System.currentTimeMillis();
+            if (pendingScene.isBlank()) {
+                landNow();
             }
             data = null;
             return;
