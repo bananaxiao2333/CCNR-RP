@@ -1869,8 +1869,6 @@ public class RpAdminScreen extends Screen {
     private static String cfgLabel(String key) {
         return switch (key) {
             case "deathCooldownMinutes" -> "死亡冷却(分钟)";
-            case "maxCharactersPerPlayer" -> "最大角色数/人";
-            case "createCooldownSeconds" -> "创建冷却(秒)";
             case "offlineGraceSeconds" -> "离线判死宽限(秒)";
             case "offlinePollSeconds" -> "离线判死轮询(秒)";
             case "evalIntervalTicks" -> "事件求值间隔(tick)";

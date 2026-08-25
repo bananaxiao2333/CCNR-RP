@@ -40,8 +40,8 @@ public final class StatusManager {
 
     private final MinecraftServer server;
     private static final Map<UUID, DeathSpot> deathSpots = new HashMap<>();
-    /** 待生成遗体（延迟 2 tick）：玩家 + 死亡显示名 + 皮肤哈希（皮肤已移除，恒为 ""——尸体显示玩家名）。 */
-    private record PendingCorpse(ServerPlayer player, String charName, String skinHash) {}
+    /** 待生成遗体（延迟 2 tick）：玩家 + 死亡显示名（尸体显示玩家名）。 */
+    private record PendingCorpse(ServerPlayer player, String charName) {}
 
     private static final Map<UUID, PendingCorpse> pendingCorpsePlayers = new HashMap<>();
 
@@ -94,10 +94,7 @@ public final class StatusManager {
             var e = it.next();
             it.remove();
             try {
-                CorpseBridge.spawnCorpse(
-                        e.getValue().player(),
-                        e.getValue().charName(),
-                        e.getValue().skinHash());
+                CorpseBridge.spawnCorpse(e.getValue().player(), e.getValue().charName());
             } catch (Throwable t) {
                 LOGGER.error("[CCNR-RP] 遗体生成失败（保留原生死亡）", t);
             }
@@ -357,7 +354,7 @@ public final class StatusManager {
         if (spawnCorpse && playerOrNull != null && CorpseBridge.available()) {
             pendingCorpsePlayers.put(
                     playerOrNull.getUUID(),
-                    new PendingCorpse(playerOrNull, charName, "")); // 延迟 2 tick 生成（实体移除时序安全），尸体保留在原地
+                    new PendingCorpse(playerOrNull, charName)); // 延迟 2 tick 生成（实体移除时序安全），尸体保留在原地
         }
         // 服务器侧结算 + 玩家侧显示经验明细（离线挂起，上线补发）——同一结算函数 + 同一逐行绿/红
         if (CCNRRPMod.experience != null && !skipSettle) {

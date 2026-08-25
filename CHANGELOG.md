@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.6.0（修复管理面板「刷给自己」不赋予身份 + 清理角色库/皮肤/角色上限死代码）
+- **修复管理面板「刷给自己：当前角色改为所选职业」**：原实现只发装备+切生存，不写用户身份，
+  导致「资源给予了但人物身份没有被赋予」。改为走统一部署入口 deploy()（FORCE_DEPLOY + SKIP_CINEMATIC + NO_MUSIC + QUIET），
+  完整赋予职位/阵营/ALIVE 状态/冷却清零/疏散重置，并同步客户端档案。
+- **清理角色库系统残留**：删除废弃 CreateCharacterModal；移除 UserService.createRemainingMs/markCreated、
+  ClientCharacterState.createRemainingMs/createCooldownUntil/maxCharacters（v2 无角色上限/创建冷却概念）；
+  CorpseBridge/StatusManager 移除 skinHash（皮肤系统已删，恒空串）；CCNRRPConfig 移除 maxCharactersPerPlayer/createCooldownSeconds 死配置。
+- **清理无用语言键**：admin.profession.gear / count_limit / create_cooldown / character.error.create_cooldown（zh/en 同步移除）。
+- 构建：compileJava / spotlessCheck / test -PrunTests 全绿。
+
 ## 2.5.0（管理面板设置全量程序化：settings.json 全部开关可改，含招募邀请/右下角状态栏）
 - 管理面板「设置」标签重构：settings.json 的全部开关（forceObserving / openPanelOnJoin / forceRetain /
   recruitInviteAlive / hudEnabled / hudProfessionText / hudFactionText / hudHealthText）程序化生成开关行（点按切换），

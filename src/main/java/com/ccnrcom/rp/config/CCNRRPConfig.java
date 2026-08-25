@@ -14,10 +14,6 @@ public final class CCNRRPConfig {
 
     /** 角色死亡后冷却时长（分钟）。 */
     public static final ConfigValue<Integer> DEATH_COOLDOWN_MINUTES;
-    /** 每用户最大角色数。 */
-    public static final ConfigValue<Integer> MAX_CHARACTERS_PER_PLAYER;
-    /** 用户创建角色冷却（秒，防利用新角色跳过复活冷却）。 */
-    public static final ConfigValue<Integer> CREATE_COOLDOWN_SECONDS;
     /** 掉线判死兜底：角色 alive 但玩家离线超过该秒数补判死。 */
     public static final ConfigValue<Integer> OFFLINE_GRACE_SECONDS;
     /** 掉线判死兜底轮询间隔（秒）。 */
@@ -49,8 +45,6 @@ public final class CCNRRPConfig {
         ForgeConfigSpec.Builder b = new ForgeConfigSpec.Builder();
         b.push("character");
         DEATH_COOLDOWN_MINUTES = b.comment("角色死亡后的冷却时长（分钟）").define("deathCooldownMinutes", 30);
-        MAX_CHARACTERS_PER_PLAYER = b.comment("每个用户可创建的最大角色数").define("maxCharactersPerPlayer", 5);
-        CREATE_COOLDOWN_SECONDS = b.comment("用户创建角色的冷却（秒，防止利用新角色跳过复活冷却等机制）").define("createCooldownSeconds", 120);
         b.pop();
         b.push("status");
         OFFLINE_GRACE_SECONDS = b.comment("角色 alive 但玩家离线超过该秒数（轮询兜底）补判死").define("offlineGraceSeconds", 10);
@@ -86,8 +80,6 @@ public final class CCNRRPConfig {
     public static java.util.List<String> keys() {
         return java.util.List.of(
                 "deathCooldownMinutes",
-                "maxCharactersPerPlayer",
-                "createCooldownSeconds",
                 "offlineGraceSeconds",
                 "offlinePollSeconds",
                 "evalIntervalTicks",
@@ -107,8 +99,6 @@ public final class CCNRRPConfig {
     public static JsonObject values() {
         JsonObject o = new JsonObject();
         o.addProperty("deathCooldownMinutes", DEATH_COOLDOWN_MINUTES.get());
-        o.addProperty("maxCharactersPerPlayer", MAX_CHARACTERS_PER_PLAYER.get());
-        o.addProperty("createCooldownSeconds", CREATE_COOLDOWN_SECONDS.get());
         o.addProperty("offlineGraceSeconds", OFFLINE_GRACE_SECONDS.get());
         o.addProperty("offlinePollSeconds", OFFLINE_POLL_SECONDS.get());
         o.addProperty("evalIntervalTicks", EVENT_EVAL_INTERVAL_TICKS.get());
@@ -130,8 +120,6 @@ public final class CCNRRPConfig {
         try {
             switch (key) {
                 case "deathCooldownMinutes" -> DEATH_COOLDOWN_MINUTES.set(Integer.parseInt(value.trim()));
-                case "maxCharactersPerPlayer" -> MAX_CHARACTERS_PER_PLAYER.set(Integer.parseInt(value.trim()));
-                case "createCooldownSeconds" -> CREATE_COOLDOWN_SECONDS.set(Integer.parseInt(value.trim()));
                 case "offlineGraceSeconds" -> OFFLINE_GRACE_SECONDS.set(Integer.parseInt(value.trim()));
                 case "offlinePollSeconds" -> OFFLINE_POLL_SECONDS.set(Integer.parseInt(value.trim()));
                 case "evalIntervalTicks" -> EVENT_EVAL_INTERVAL_TICKS.set(Integer.parseInt(value.trim()));
