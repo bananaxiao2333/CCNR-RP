@@ -325,11 +325,10 @@ public final class StatusManager {
             CCNRRPMod.users.setCooldown(playerUuid, System.currentTimeMillis() + cooldownMs);
             CCNRRPMod.users.setStatus(playerUuid, CharacterStatus.OBSERVING);
             CCNRRPMod.users.save();
-            // 自然死亡（reason=death）：Corpse 模组会自动生成遗体（默认用玩家 UUID/姓名）。
-            // 在 LivingDeathEvent 阶段捕获身份，供 CorpseBridge 的 PlayerDeathEvent 钩子改写遗体身份
-            // （角色显示名 + 皮肤哈希派生 UUID）——尸体显示玩家名；皮肤已移除，哈希恒为 ""。
+            // 自然死亡（reason=death）：Corpse 模组会自动生成遗体。在 LivingDeathEvent 阶段标记该死亡，
+            // 供 CorpseBridge 的 PlayerDeathEvent 钩子改写遗体身份：玩家真实 UUID（皮肤）+ 「职位 + 玩家名」。
             if (playerOrNull != null && "death".equals(reason) && CorpseBridge.available()) {
-                CorpseBridge.captureDeathChar(playerOrNull.getUUID(), charName);
+                CorpseBridge.captureDeath(playerOrNull.getUUID());
             }
         } else {
             // 观察者退役（下班）：只加复活冷却，保持观察模式
@@ -351,10 +350,17 @@ public final class StatusManager {
                                 playerOrNull.getXRot()));
             }
         }
-        if (spawnCorpse && playerOrNull != null && CorpseBridge.available()) {
-            pendingCorpsePlayers.put(
-                    playerOrNull.getUUID(),
-                    new PendingCorpse(playerOrNull, charName)); // 延迟 2 tick 生成（实体移除时序安全），尸体保留在原地
+        if (spawnCorpse && playerOrNull != null) {
+            if (CorpseBridge.available()) {
+                pendingCorpsePlayers.put(
+                        playerOrNull.getUUID(),
+                        new PendingCorpse(playerOrNull, charName)); // 延迟 2 tick 生成（实体移除时序安全），尸体保留在原地
+            } else {
+                // 保护：未安装 Corpse 模组时跳过遗体生成，物品按原版正常爆出
+                LOGGER.info(
+                        "[CCNR-RP] 未安装 Corpse 模组：跳过遗体生成，{} 的物品按原版爆出",
+                        playerOrNull.getGameProfile().getName());
+            }
         }
         // 服务器侧结算 + 玩家侧显示经验明细（离线挂起，上线补发）——同一结算函数 + 同一逐行绿/红
         if (CCNRRPMod.experience != null && !skipSettle) {

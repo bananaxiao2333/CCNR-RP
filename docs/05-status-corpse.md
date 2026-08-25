@@ -28,6 +28,10 @@ DEAD 归一化为观察者（保留冷却标记）。两路双保险保证死亡
     → 可搜刮（Corpse 原生逻辑），同时置 DEAD + 冷却。
   - 正常死亡：忠实记录到 Corpse 遗体（若玩家装 Corpse）。`CorpseApi.getCorpse(level, uuid)` 用于查询/联动任务。
 - 缺失 → 降级：原生死亡掉落（不掉线场景）+ 状态机照常记录；控制台 INFO 提示"未检测到 Corpse，使用原生死亡"。
+- 遗体身份（非入侵，不改 corpse 模组本体/jar）：PlayerDeathEvent 保持玩家真实 UUID（客户端按 tab 列表解析玩家皮肤，LittleSkin 纹理）
+  并改写 playerName 为「职位 + 玩家名」；遗体加入世界时（EntityJoinLevelEvent）把 corpseName 移到 customName + 置可见——
+  1.20.1 名字牌仅 customNameVisible 渲染，头顶名字与搜尸 GUI 标题一致显示「职位 + 玩家名」（无 "Corpse of " 前缀）。
+  限制：玩家离线后旧遗体因 tab 列表无其档案而回退默认皮肤（死亡当场观察正常）。
 - 1.20.1 API 以实际 jar 为准（`libs/corpse-forge-1.20.1-1.0.5.jar`，scripts/fetch-corpse.sh 获取）；桥接类单测用 Fake。
 
 ## 4. 命令
