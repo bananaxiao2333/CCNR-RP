@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.7.0（修复管理面板「设置」标签布局：内容飞出面板 + 数字输入框不可编辑）
+- 设置标签拆成两个独立区域：settings.json 开关行固定顶部（可点切换），serverconfig 数值行在下方独立滚动。
+- 修复 renderSettings 与 buildSettingsForm 对滚动偏移的解读不一致导致的坐标错位（内容飞出面板）；
+- 数字输入框与数值行对齐（mkBox 改为按行定位，值不再双绘），可正常点击编辑。
+- 构建：compileJava / spotlessCheck / test -PrunTests 全绿。
+
 ## 2.6.0（修复管理面板「刷给自己」不赋予身份 + 清理角色库/皮肤/角色上限死代码）
 - **修复管理面板「刷给自己：当前角色改为所选职业」**：原实现只发装备+切生存，不写用户身份，
   导致「资源给予了但人物身份没有被赋予」。改为走统一部署入口 deploy()（FORCE_DEPLOY + SKIP_CINEMATIC + NO_MUSIC + QUIET），

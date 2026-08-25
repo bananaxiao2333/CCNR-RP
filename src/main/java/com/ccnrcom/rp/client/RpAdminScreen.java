@@ -223,23 +223,20 @@ public class RpAdminScreen extends Screen {
     /** serverconfig 程序化设定：为每个配置项生成一个数字输入框 + 保存按钮（开关行之后）。 */
     private void buildSettingsForm() {
         cfgBoxes.clear();
-        // 「设定」标签无左侧列表：表单占满面板宽度
+        // 「设定」标签：开关行固定顶部，serverconfig 数值行在下方独立滚动（输入框与 renderSettings 同一 y 起点/偏移）。
         int x = px1 + 12;
         int w = px2 - 12 - x;
-        java.util.List<String> switches = ClientCharacterState.settingKeys();
-        int y = py1 + 80 + switches.size() * 30; // 数值区起点 = 开关行之后
         int yMax = py2 - 70;
         JsonObject cfg = ClientCharacterState.serverConfig();
         java.util.List<String> keys = com.ccnrcom.rp.config.CCNRRPConfig.keys();
+        int y = settingsYTop();
         int maxVisible = Math.max(1, (yMax - y) / 30);
-        // 滚动偏移 = 总行数（开关+数值）中滚过的部分，输入框只对应数值行
-        int totalRows = switches.size() + keys.size();
-        settingsScroll = Math.max(0, Math.min(settingsScroll, Math.max(0, totalRows - maxVisible)));
-        int cfgStart = Math.max(0, settingsScroll - switches.size());
-        for (int i = cfgStart; i < keys.size(); i++) {
+        settingsScroll = Math.max(0, Math.min(settingsScroll, Math.max(0, keys.size() - maxVisible)));
+        for (int i = settingsScroll; i < keys.size(); i++) {
             String key = keys.get(i);
             String cur = cfg.has(key) ? cfg.get(key).getAsString() : "";
-            cfgBoxes.put(key, mkBox(x + 210, y, w - 210, "", cur, false));
+            int bw = Math.max(80, w - 126); // 标签区右侧至面板边（留滚动条间距）
+            cfgBoxes.put(key, mkBox(x + 120, y + 2, bw, "", cur, false));
             y += 30;
             if (y > yMax) {
                 break;
@@ -1248,21 +1245,20 @@ public class RpAdminScreen extends Screen {
         }
         // 设定（开关 + serverconfig）滚动条
         if (tab == TAB_SETTINGS) {
-            int totalRows = ClientCharacterState.settingKeys().size()
-                    + com.ccnrcom.rp.config.CCNRRPConfig.keys().size();
+            java.util.List<String> cfgKeys = com.ccnrcom.rp.config.CCNRRPConfig.keys();
             int ns = RpScrollbar.clickV(
                     (int) mx,
                     (int) my,
                     px2 - 14,
                     px2 - 9,
-                    py1 + 76,
+                    settingsYTop(),
                     py2 - 70,
-                    totalRows,
+                    cfgKeys.size(),
                     settingsMaxVisible(),
                     settingsScroll,
                     7);
             if (ns >= 0) {
-                settingsScroll = (int) Math.max(0, Math.min(ns, Math.max(0, totalRows - settingsMaxVisible())));
+                settingsScroll = (int) Math.max(0, Math.min(ns, Math.max(0, cfgKeys.size() - settingsMaxVisible())));
                 rebuild();
                 return true;
             }
@@ -1484,17 +1480,17 @@ public class RpAdminScreen extends Screen {
             scroll = (int) Math.max(0, scroll - delta / 8);
             rebuild();
         } else if (tab == TAB_SETTINGS) {
-            int totalRows = ClientCharacterState.settingKeys().size()
-                    + com.ccnrcom.rp.config.CCNRRPConfig.keys().size();
-            int max = Math.max(0, totalRows - settingsMaxVisible());
+            int cfgCount = com.ccnrcom.rp.config.CCNRRPConfig.keys().size();
+            int max = Math.max(0, cfgCount - settingsMaxVisible());
             settingsScroll = (int) Math.max(0, Math.min(settingsScroll - delta, max));
             rebuild();
         }
         return true;
     }
 
+    /** 数值区可见行数（serverconfig 行；开关行固定在上方不计入）。 */
     private int settingsMaxVisible() {
-        int y = py1 + 80;
+        int y = settingsYTop();
         int yMax = py2 - 70;
         return Math.max(1, (yMax - y) / 30);
     }
@@ -1791,56 +1787,49 @@ public class RpAdminScreen extends Screen {
         };
     }
 
+    /** serverconfig 数值区起点 y（开关行固定在其上方）。 */
+    private int settingsYTop() {
+        return py1 + 80 + ClientCharacterState.settingKeys().size() * 30;
+    }
+
     private void renderSettings(GuiGraphics g, int mouseX, int mouseY) {
-        // 设置标签 = 程序化开关（settings.json 全部键，可点切换）+ serverconfig 数值设定（滚动），统一滚动区。
+        // 设置标签 = 程序化开关（固定，可点切换）+ serverconfig 数值设定（独立滚动）。
         int x = px1 + 12;
         int w = px2 - 12 - x;
-        int yTop = py1 + 80;
         int yMax = py2 - 70;
         java.util.List<String> switches = ClientCharacterState.settingKeys();
-        java.util.List<String> cfgKeys = com.ccnrcom.rp.config.CCNRRPConfig.keys();
-        int totalRows = switches.size() + cfgKeys.size();
-        int maxVisible = Math.max(1, (yMax - yTop) / 30);
-        settingsScroll = Math.max(0, Math.min(settingsScroll, Math.max(0, totalRows - maxVisible)));
-        int y = yTop;
-        int row = 0;
-        int start = settingsScroll;
-        // 开关行（程序化生成，标签/描述来自语言包）
-        for (int i = 0; i < switches.size(); i++, row++) {
-            if (row < start) {
-                continue;
-            }
-            if (y > yMax) {
+        // —— 开关行（固定顶部，不滚动）——
+        int y = py1 + 80;
+        for (String key : switches) {
+            if (y + 22 > yMax) {
                 break;
             }
-            String key = switches.get(i);
             boolean on = value(key);
             RpRoundRect.outlined(g, x, y, x + w, y + 22, 4f, RpTheme.PANEL_BORDER, RpTheme.PANEL_BG);
             drawSwitch(g, x + w - 12, y + 4, on);
             g.drawString(font, settingLabel(key), x + 8, y + 6, RpTheme.TEXT_PRIMARY, true);
             y += 30;
         }
-        // serverconfig 数值设定（程序化生成）
+        // —— serverconfig 数值行（在开关区下方独立滚动）——
+        int nyTop = settingsYTop();
+        java.util.List<String> cfgKeys = com.ccnrcom.rp.config.CCNRRPConfig.keys();
+        int maxVisible = Math.max(1, (yMax - nyTop) / 30);
+        settingsScroll = Math.max(0, Math.min(settingsScroll, Math.max(0, cfgKeys.size() - maxVisible)));
         JsonObject cfg = ClientCharacterState.serverConfig();
-        for (int i = 0; i < cfgKeys.size(); i++, row++) {
-            if (row < start) {
-                continue;
-            }
-            if (y > yMax) {
+        int ny = nyTop;
+        for (int i = settingsScroll; i < cfgKeys.size(); i++) {
+            if (ny + 22 > yMax) {
                 break;
             }
             String key = cfgKeys.get(i);
             String cur = cfg.has(key) ? cfg.get(key).getAsString() : "";
-            RpRoundRect.outlined(g, x, y, x + w, y + 22, 4f, RpTheme.PANEL_BORDER, RpTheme.PANEL_BG);
-            g.drawString(font, cfgLabel(key), x + 6, y + 6, RpTheme.TEXT_PRIMARY, true);
-            g.drawString(font, cur, x + 6 + font.width(cfgLabel(key)) + 10, y + 7, RpTheme.TEXT_DIM);
-            y += 30;
-            if (y > yMax) {
-                break;
-            }
+            RpRoundRect.outlined(g, x, ny, x + w, ny + 22, 4f, RpTheme.PANEL_BORDER, RpTheme.PANEL_BG);
+            g.drawString(font, cfgLabel(key), x + 6, ny + 6, RpTheme.TEXT_PRIMARY, true);
+            // 数值不在此绘制（由输入框承载，避免与输入框重叠双显）
+            ny += 30;
         }
-        // 设置标签滚动条（可拖拽）
-        RpScrollbar.draw(g, px2 - 14, py1 + 76, yMax, totalRows, maxVisible, start);
+        // 数值区滚动条（可拖拽；仅 serverconfig 行范围）
+        RpScrollbar.draw(g, px2 - 14, settingsYTop(), yMax, cfgKeys.size(), maxVisible, settingsScroll);
     }
 
     /** 开关行标签（settings.json 键 → 语言包翻译键；缺省回退原始键）。 */
