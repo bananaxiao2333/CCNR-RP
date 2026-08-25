@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.1.0（统一部署/退场/结算管道：一个函数 + 行为 flag，删除征召分支文案）
+- **唯一部署入口 deploy()**：自部署 / 管理员刷人 / 复活波 / 强制征召 / 手动部署全部收敛为 SpawnFramework.deploy(player, professionId, wave, Set<DeployFlag>)；
+  行为差异由 DeployFlag 控制（SKIP_CINEMATIC 取消开局黑屏 / FORCE_DEPLOY 强制部署不论存活 / NO_MUSIC 关闭部署音乐 / QUIET 不刷提示 / TEMP 临时征召身份），
+  流程固定：读职位→门控(按 FORCE)→loadout→传送→cinematic(按 SKIP)→音乐(按 NO_MUSIC)→状态/角色(按 TEMP)→广播(按 QUIET)→evac 重置。
+- **唯一退场入口 retire()**：普通死亡 / 判死(命令/掉线/轮询兜底) / 下班(退役) / 征召结束全部收敛为 StatusManager.retire(uuid, player, reason, Set<RetireFlag>)；
+  行为差异由 RetireFlag 控制（SPAWN_CORPSE 生成遗体 / OFFLINE 离线结算挂起 / SKIP_SETTLE 不结算），共用同一状态迁移 + 同一结算函数（settleUserDown）+ 同一逐行绿/红。
+- **删除征召分支文案**：ccnr_rp.spawn.conscript.kia（征召兵阵亡，编制结束）与 ccnr_rp.xp.settle.conscript 从语言包移除；
+  settleConscriptDeath 独立分支删除，征召执勤时长并入用户档案后走统一结算。
+- 命令 /rp state kill 改为走统一 retire（原来手动置 DEAD 不结算）。
+- 构建：compileJava / spotlessCheck / test -PrunTests 全绿。
+
 ## 2.0.0（v2 重构：删除角色实体，改为职位选择 + 等级解锁门控）
 - 删除角色实体/角色库：玩家身份（在场/阴间/观察）+ 当前职位 + 复活冷却 + 执勤/任务/疏散全部上移到用户层。
 - K 面板改为职位选择器：左机构过滤 / 中职位列表（需求等级达标绿 Lv N、未达标红）/ 右详情 + 部署按钮；未达等级/非观察/冷却中置红禁用并显示「需要等级 Lv N」；选中即部署。

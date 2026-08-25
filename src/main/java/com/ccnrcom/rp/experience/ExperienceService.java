@@ -204,17 +204,6 @@ public final class ExperienceService {
         return sb.toString();
     }
 
-    /** 征召兵死亡结算：与普通用户死亡走同一流程（settleUserDown）。只把征召执勤时长并入用户档案执勤，交给统一结算函数。 */
-    public void settleConscriptDeath(String playerUuid, ServerPlayer ownerOrNull, long conscriptDuty) {
-        if (CCNRRPMod.users == null || conscriptDuty <= 0) {
-            return;
-        }
-        // 征召执勤时长并入用户档案，随后与普通死亡完全相同的流程（同函数、同逐行绿/红链路）
-        long duty = CCNRRPMod.users.dutySeconds(playerUuid) + conscriptDuty;
-        CCNRRPMod.users.setXpDuty(playerUuid, CCNRRPMod.users.userXp(playerUuid), duty);
-        settleUserDown(playerUuid, ownerOrNull, "ccnr_rp.xp.settle.death");
-    }
-
     /** 死亡/断联/退役落定：结算该用户并把明细发给拥有者（离线则挂起，上线补发）。 */
     public void settleUserDown(String playerUuid, ServerPlayer ownerOrNull, String resultKey) {
         SettleSummary s = settleUser(playerUuid, true);

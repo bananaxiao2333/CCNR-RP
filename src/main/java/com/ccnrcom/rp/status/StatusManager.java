@@ -11,6 +11,7 @@ import com.ccnrcom.rp.network.RpChannels;
 import com.ccnrcom.rp.network.RpPackets;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
@@ -67,7 +68,7 @@ public final class StatusManager {
             return; // 未开启“强制保留角色”：离服不自动判死
         }
         if (CCNRRPMod.users.isAlive(uuid)) {
-            kill(uuid, player, "offline");
+            retire(uuid, player, "offline", RetireFlag.of(RetireFlag.SPAWN_CORPSE, RetireFlag.OFFLINE));
         }
     }
 
@@ -136,22 +137,21 @@ public final class StatusManager {
         String uuid = player.getUUID().toString();
         long conscriptDuty = com.ccnrcom.rp.sequence.SequenceEngine.conscriptDutySeconds(uuid);
         boolean wasConscript = com.ccnrcom.rp.sequence.SequenceEngine.removeConscriptFor(uuid);
-        if (wasConscript) {
-            RpChannels.sendTo(player, new RpPackets.ErrorS2C("ccnr_rp.spawn.conscript.kia"));
-            LOGGER.info("[CCNR-RP] 征召兵阵亡，临时编制结束：{}", player.getName().getString());
+        // 征召执勤时长并入用户档案（统一结算：征召结束与普通死亡同一函数、同一逐行绿/红）
+        if (wasConscript && conscriptDuty > 0 && CCNRRPMod.users != null) {
+            long duty = CCNRRPMod.users.dutySeconds(uuid) + conscriptDuty;
+            CCNRRPMod.users.setXpDuty(uuid, CCNRRPMod.users.userXp(uuid), duty);
+            CCNRRPMod.users.save();
         }
-        // 统一：清除客户端征召身份（幂等）、记录尸体视角。
+        // 统一：清除客户端征召身份（幂等）。
         // 注意：不在死亡瞬间切旁观者——否则打断原版掉落与 Corpse 尸体生成；重生时由 onPlayerRespawn 切旁观并传回尸体旁。
         RpChannels.sendTo(player, new RpPackets.ConscriptStateS2C(""));
-        deathSpots.put(
-                player.getUUID(),
-                new DeathSpot(
-                        (ServerLevel) player.level(), player.blockPosition(), player.getYRot(), player.getXRot()));
         if (CCNRRPMod.users != null && CCNRRPMod.users.isAlive(uuid)) {
-            markDead(uuid, player, false, "death");
+            // 正式用户死亡：统一退场（状态迁移 + 冷却 + 结算 + 逐行；遗体由 Corpse 模组自动生成，不 SPAWN_CORPSE）
+            retire(uuid, player, "death", RetireFlag.of());
         } else if (wasConscript && CCNRRPMod.experience != null) {
-            // 无在场用户：只给玩家加分（征召兵值班时长）——用户状态非 ALIVE 则跳过角色结算
-            CCNRRPMod.experience.settleConscriptDeath(uuid, player, conscriptDuty);
+            // 征召兵死亡（用户本身非在场，状态 OBSERVING）：同一结算函数 + 同一逐行绿/红（执勤时长已并入档案）
+            CCNRRPMod.experience.settleUserDown(uuid, player, "ccnr_rp.xp.settle.death");
         }
     }
 
@@ -183,7 +183,7 @@ public final class StatusManager {
                 // 损坏 uuid：跳过该用户，不打断轮询
             }
             if (player == null) {
-                markDead(uuid, null, false, "offline-late");
+                retire(uuid, null, "offline-late", RetireFlag.of(RetireFlag.OFFLINE));
             }
         }
     }
@@ -257,7 +257,7 @@ public final class StatusManager {
         }
     }
 
-    // ---------- 判死 ----------
+    // ---------- 退场（统一 retire 核心） ----------
 
     /** 管理命令：处决玩家（在线则生成遗体）。 */
     public static void killCommand(ServerPlayer player) {
@@ -266,82 +266,89 @@ public final class StatusManager {
             RpChannels.sendTo(player, new RpPackets.ErrorS2C("ccnr_rp.status.error.no_alive"));
             return;
         }
-        kill(uuid, player, "command");
+        retire(uuid, player, "command", RetireFlag.of(RetireFlag.SPAWN_CORPSE));
         RpChannels.sendTo(
                 player,
                 new RpPackets.ErrorS2C(
                         "ccnr_rp.status.killed.command", player.getName().getString()));
     }
 
-    /** 强制保留（转生/弃演）：用户直接判定死亡；在线存活时在最后位置落下遗体。档案保留不删除。 */
+    /** 强制保留（转生/弃演）：统一退场入口（reason=retire，不结算、在线落遗体）。档案保留不删除。 */
     public static void retire(String playerUuid, ServerPlayer playerOrNull) {
+        retire(
+                playerUuid,
+                playerOrNull,
+                "retire",
+                playerOrNull != null
+                        ? RetireFlag.of(RetireFlag.SPAWN_CORPSE, RetireFlag.SKIP_SETTLE)
+                        : RetireFlag.of(RetireFlag.SKIP_SETTLE));
+    }
+
+    /**
+     * 唯一退场核心：普通死亡 / 判死 / 下班(退役) / 征召结束全部汇入此入口。
+     * 行为差异一律由 {@link RetireFlag} 控制（SPAWN_CORPSE / OFFLINE / SKIP_SETTLE），
+     * 共用同一状态迁移 + 同一结算函数（settleUserDown）+ 同一逐行绿/红。
+     */
+    public static void retire(String playerUuid, ServerPlayer playerOrNull, String reason, Set<RetireFlag> flags) {
         if (CCNRRPMod.users == null) {
             return;
         }
+        boolean spawnCorpse = flags != null && flags.contains(RetireFlag.SPAWN_CORPSE);
+        boolean offline = flags != null && flags.contains(RetireFlag.OFFLINE);
+        boolean skipSettle = flags != null && flags.contains(RetireFlag.SKIP_SETTLE);
         CharacterStatus st = CCNRRPMod.users.status(playerUuid);
-        if (st == CharacterStatus.ALIVE) {
-            markDead(playerUuid, playerOrNull, playerOrNull != null, "retire");
+        boolean alive = st == CharacterStatus.ALIVE;
+        boolean observingRetire = st == CharacterStatus.OBSERVING && "retire".equals(reason);
+        // 状态迁移（幂等）：仅 ALIVE 判死生效；观察者退役只加冷却；其余（DEAD 残留由轮询兜底）跳过
+        if (!alive && !observingRetire) {
             return;
         }
-        if (st == CharacterStatus.DEAD) {
-            return;
-        }
+        String charName = playerOrNull != null ? playerOrNull.getName().getString() : "";
         long cooldownMs = CCNRRPConfig.DEATH_COOLDOWN_MINUTES.get() * 60000L;
-        CCNRRPMod.users.setCooldown(playerUuid, System.currentTimeMillis() + cooldownMs);
-        CCNRRPMod.users.setStatus(playerUuid, CharacterStatus.OBSERVING);
-        CCNRRPMod.users.save();
-        LOGGER.info("[CCNR-RP] 退役 [retire] {} 用户（观察模式 + 复活冷却）", playerUuid);
-    }
-
-    /** 掉线判死：状态 + 冷却 + 遗体 + 同步（幂等：仅 ALIVE 生效）。 */
-    private static void kill(String playerUuid, ServerPlayer player, String reason) {
-        markDead(playerUuid, player, true, reason);
-    }
-
-    private static void markDead(String playerUuid, ServerPlayer player, boolean spawnCorpse, String reason) {
-        if (CCNRRPMod.users == null || CCNRRPMod.users.status(playerUuid) != CharacterStatus.ALIVE) {
-            return; // 幂等：仅存活用户可判死（观察模式下重复触发不再处理）
+        if (alive) {
+            // 死亡/判死 → 观察模式（OBSERVING）+ 复活冷却标记：不可自部署，等冷却结束或复活波/FORCE_PICK 强制复活
+            CCNRRPMod.users.setCooldown(playerUuid, System.currentTimeMillis() + cooldownMs);
+            CCNRRPMod.users.setStatus(playerUuid, CharacterStatus.OBSERVING);
+            CCNRRPMod.users.save();
+            // 自然死亡（reason=death）：Corpse 模组会自动生成遗体（默认用玩家 UUID/姓名）。
+            // 在 LivingDeathEvent 阶段捕获身份，供 CorpseBridge 的 PlayerDeathEvent 钩子改写遗体身份
+            // （角色显示名 + 皮肤哈希派生 UUID）——尸体显示玩家名；皮肤已移除，哈希恒为 ""。
+            if (playerOrNull != null && "death".equals(reason) && CorpseBridge.available()) {
+                CorpseBridge.captureDeathChar(playerOrNull.getUUID(), charName);
+            }
+        } else {
+            // 观察者退役（下班）：只加复活冷却，保持观察模式
+            CCNRRPMod.users.setCooldown(playerUuid, System.currentTimeMillis() + cooldownMs);
+            CCNRRPMod.users.save();
         }
-        String charName = player != null ? player.getName().getString() : "";
-        // 自然死亡（reason=death）：Corpse 模组会自动生成遗体（默认用玩家 UUID/姓名）。
-        // 在 LivingDeathEvent 阶段捕获身份，供 CorpseBridge 的 PlayerDeathEvent 钩子改写遗体身份
-        // （角色显示名 + 皮肤哈希派生 UUID）——尸体显示玩家名；皮肤已移除，哈希恒为 ""。
-        if (player != null && "death".equals(reason) && CorpseBridge.available()) {
-            CorpseBridge.captureDeathChar(player.getUUID(), charName);
-        }
-        // 征召兵为临时内容（不在用户库），阵亡由 onLivingDeath 处理；此处仅处理正式用户
-        long cooldownMs = CCNRRPConfig.DEATH_COOLDOWN_MINUTES.get() * 60000L;
-        // 死亡/判死 → 观察模式（OBSERVING）+ 复活冷却标记：不可自部署，等冷却结束或复活波/FORCE_PICK 强制复活
-        CCNRRPMod.users.setCooldown(playerUuid, System.currentTimeMillis() + cooldownMs);
-        CCNRRPMod.users.setStatus(playerUuid, CharacterStatus.OBSERVING);
-        CCNRRPMod.users.save();
-        if (player != null) {
+        if (playerOrNull != null && alive) {
             if (CCNRRPMod.characters != null) {
-                CCNRRPMod.characters.sendList(player); // 立即刷新用户档案列表（观察模式；K 面板可打开）
+                CCNRRPMod.characters.sendList(playerOrNull); // 立即刷新用户档案列表（观察模式；K 面板可打开）
             }
             // 不在死亡瞬间切旁观者（防打断掉落与 Corpse 尸体生成）；重生时由 onPlayerRespawn 切旁观并传回尸体旁
             if ("death".equals(reason)) {
                 deathSpots.put(
-                        player.getUUID(),
+                        playerOrNull.getUUID(),
                         new DeathSpot(
-                                (ServerLevel) player.level(),
-                                player.blockPosition(),
-                                player.getYRot(),
-                                player.getXRot()));
+                                (ServerLevel) playerOrNull.level(),
+                                playerOrNull.blockPosition(),
+                                playerOrNull.getYRot(),
+                                playerOrNull.getXRot()));
             }
         }
-        if (spawnCorpse && player != null && CorpseBridge.available()) {
+        if (spawnCorpse && playerOrNull != null && CorpseBridge.available()) {
             pendingCorpsePlayers.put(
-                    player.getUUID(), new PendingCorpse(player, charName, "")); // 延迟 2 tick 生成（实体移除时序安全），尸体保留在原地
+                    playerOrNull.getUUID(),
+                    new PendingCorpse(playerOrNull, charName, "")); // 延迟 2 tick 生成（实体移除时序安全），尸体保留在原地
         }
-        // 服务器侧结算 + 玩家侧显示经验明细（离线挂起，上线补发）
-        if (CCNRRPMod.experience != null && !"retire".equals(reason)) {
-            boolean offline = reason.startsWith("offline");
-            String resultKey = offline ? "ccnr_rp.xp.settle.offline" : "ccnr_rp.xp.settle.death";
-            CCNRRPMod.experience.settleUserDown(playerUuid, offline ? null : player, resultKey);
+        // 服务器侧结算 + 玩家侧显示经验明细（离线挂起，上线补发）——同一结算函数 + 同一逐行绿/红
+        if (CCNRRPMod.experience != null && !skipSettle) {
+            boolean isOffline = offline || reason.startsWith("offline");
+            String resultKey = isOffline ? "ccnr_rp.xp.settle.offline" : "ccnr_rp.xp.settle.death";
+            CCNRRPMod.experience.settleUserDown(playerUuid, isOffline ? null : playerOrNull, resultKey);
         }
         LOGGER.info(
-                "[CCNR-RP] 判死 [{}] {} 用户 {}（原因={} → 观察模式，复活冷却 {} 分钟）",
+                "[CCNR-RP] 退场 [{}] {} 用户 {}（原因={} → 观察模式，复活冷却 {} 分钟）",
                 reason,
                 playerUuid,
                 charName,
