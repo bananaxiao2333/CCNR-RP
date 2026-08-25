@@ -326,18 +326,6 @@ public final class UserService {
         return java.util.Set.copyOf(profiles.keySet());
     }
 
-    // ---------- 创建频率限制（保留） ----------
-
-    /** 距下次可再创建一个角色还有多少毫秒（0 = 可创建）。 */
-    public long createRemainingMs(String playerUuid) {
-        // 角色库已删除；保留字段以防旧存档/未来复用
-        return 0;
-    }
-
-    public void markCreated(String playerUuid) {
-        // 角色库已删除；无操作
-    }
-
     // ---------- 支援身份开关 ----------
 
     public boolean anySupportRevive(String playerUuid) {
@@ -348,11 +336,6 @@ public final class UserService {
         UserProfile p = profile(playerUuid);
         profiles.put(playerUuid, p.withAnySupport(on));
         save();
-    }
-
-    /** 用户角色上限（保留字段）。 */
-    public int maxCharacters() {
-        return 1;
     }
 
     private static long num(JsonObject o, String key, long def) {

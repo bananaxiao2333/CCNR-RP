@@ -83,17 +83,16 @@ public final class CorpseBridge {
 
     /**
      * 在玩家当前位置生成遗体（复制背包/护甲/副手）。用于非自然死亡（命令/退役/离线），
-     * 此时 Corpse 模组不会自动生成，由本桥补位。charName=死亡角色名（尸体名字 tag 显示）；
-     * skinHash=角色皮肤哈希（派生 UUID 写入尸体，客户端按「哈希派生 UUID → 角色皮肤」直接展示）。
+     * 此时 Corpse 模组不会自动生成，由本桥补位。charName=死亡角色名（尸体名字 tag 显示）。
      *
      * @return true=遗体已生成；false=未安装 Corpse 或生成失败（调用方降级）
      */
-    public static boolean spawnCorpse(ServerPlayer player, String charName, String skinHash) {
+    public static boolean spawnCorpse(ServerPlayer player, String charName) {
         if (!available()) {
             return false;
         }
         try {
-            CorpseSpawner.spawn(player, charName == null ? "" : charName, skinHash == null ? "" : skinHash);
+            CorpseSpawner.spawn(player, charName == null ? "" : charName);
             return true;
         } catch (Throwable t) {
             LOGGER.error("[CCNR-RP] 遗体生成失败（降级为原生死亡）", t);
@@ -106,7 +105,7 @@ public final class CorpseBridge {
      * 可被捕获——避免"未装 Corpse 模组时 NoClassDefFoundError 逃逸崩服"。
      */
     private static final class CorpseSpawner {
-        static void spawn(ServerPlayer player, String charName, String skinHash) {
+        static void spawn(ServerPlayer player, String charName) {
             if (!(player.level() instanceof ServerLevel level)) {
                 return;
             }
@@ -118,17 +117,11 @@ public final class CorpseBridge {
                 // 自定义名字：DataWatcher 随实体数据包同步到客户端 → 尸体头顶显示角色名
                 corpse.setCustomName(net.minecraft.network.chat.Component.literal(charName));
             }
-            if (!skinHash.isBlank()) {
-                // 皮肤按哈希写入：派生 UUID 进尸体数据（持久化），客户端按同一派生规则直接查角色皮肤
-                corpse.setCorpseUUID(
-                        UUID.nameUUIDFromBytes(("ccnr-skin:" + skinHash).getBytes(StandardCharsets.UTF_8)));
-            }
             level.addFreshEntity(corpse);
             LOGGER.info(
-                    "[CCNR-RP] 已生成遗体: {}（角色 {}，皮肤哈希 {}） @ {}",
+                    "[CCNR-RP] 已生成遗体: {}（角色 {}） @ {}",
                     player.getGameProfile().getName(),
                     charName,
-                    skinHash.substring(0, Math.min(12, skinHash.length())),
                     player.blockPosition());
         }
     }

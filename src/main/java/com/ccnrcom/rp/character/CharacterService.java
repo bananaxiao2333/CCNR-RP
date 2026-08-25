@@ -575,7 +575,7 @@ public final class CharacterService {
         return o.has(key) && !o.get(key).isJsonNull() ? o.get(key).getAsString() : def;
     }
 
-    /** 管理端操作「刷给自己」：只把所选职业的装备刷给执行者（不改变用户状态）。 */
+    /** 管理端操作「刷给自己」：把所选职业的装备与人物身份一起赋予执行者（含阵营/状态/疏散重置）。 */
     public static void onAdminSelfProfession(ServerPlayer player, String professionId) {
         if (player == null || CCNRRPMod.factions == null) {
             return;
@@ -589,14 +589,31 @@ public final class CharacterService {
             service().sendError(player, "ccnr_rp.character.error.profession", professionId);
             return;
         }
-        com.ccnrcom.rp.profession.LoadoutManager.apply(player, com.ccnrcom.rp.faction.FactionProfessions.loadout(def));
-        player.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);
+        if (CCNRRPMod.spawnFramework == null || CCNRRPMod.users == null) {
+            service().sendError(player, "ccnr_rp.error.invalid_argument", "部署框架未就绪");
+            return;
+        }
+        // 统一部署入口（FORCE_DEPLOY 强制部署不论存活；SKIP_CINEMATIC/NO_MUSIC 不播入场动画与音乐；QUIET 不广播）
+        // 会完成：装备发放 + 传送 + 用户身份（职位/阵营/ALIVE/冷却清零/evac 重置）+ 客户端档案刷新
+        boolean ok = CCNRRPMod.spawnFramework.deploy(
+                player,
+                professionId,
+                CCNRRPMod.spawnFramework.defaultSelfWave(),
+                com.ccnrcom.rp.spawn.DeployFlag.of(
+                        com.ccnrcom.rp.spawn.DeployFlag.FORCE_DEPLOY,
+                        com.ccnrcom.rp.spawn.DeployFlag.SKIP_CINEMATIC,
+                        com.ccnrcom.rp.spawn.DeployFlag.NO_MUSIC,
+                        com.ccnrcom.rp.spawn.DeployFlag.QUIET));
+        if (!ok) {
+            service().sendError(player, "ccnr_rp.spawn.error.self_deploy");
+            return;
+        }
         service()
                 .sendError(
                         player,
-                        "ccnr_rp.admin.profession.gear",
-                        professionId,
-                        player.getName().getString());
+                        "ccnr_rp.admin.profession.applied",
+                        com.ccnrcom.rp.faction.FactionProfessions.idsSafeName(def),
+                        com.ccnrcom.rp.faction.FactionProfessions.factionId(def));
     }
 
     /** 管理端操作「全量保存职业装备」：把管理员当前背包/护甲/副手（含 NBT）存为所选职业的 loadout。 */
@@ -827,7 +844,6 @@ public final class CharacterService {
         root.addProperty("professionId", CCNRRPMod.users.professionId(uuid));
         root.addProperty("factionId", CCNRRPMod.users.factionId(uuid));
         root.addProperty("cooldownUntil", CCNRRPMod.users.cooldownUntil(uuid));
-        root.addProperty("maxCharacters", CCNRRPMod.users.maxCharacters());
         RpChannels.sendTo(player, new RpPackets.CharacterListS2C(root.toString()));
     }
 }

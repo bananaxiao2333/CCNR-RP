@@ -503,6 +503,11 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
         return deploy(player, professionId, wave, DeployFlag.of());
     }
 
+    /** 默认自部署波（世界出生点；管理刷人/无匹配波时用）。 */
+    public Wave defaultSelfWave() {
+        return createDefaultSelfWave();
+    }
+
     private Wave createDefaultSelfWave() {
         return new Wave(
                 "_default",

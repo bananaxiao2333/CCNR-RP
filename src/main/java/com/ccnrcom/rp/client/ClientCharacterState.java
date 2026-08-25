@@ -35,12 +35,10 @@ public final class ClientCharacterState {
 
     private static final List<JsonObject> managerSequences = new ArrayList<>();
     private static final List<String> activeEvents = new ArrayList<>();
-    // 用户维度（经验随用户走 / 创建冷却 / 支援开关 / 角色上限）
+    // 用户维度（经验随用户走 / 支援开关）
     private static long userXp = 0;
     private static int userLevel = 0;
     private static boolean anySupportRevive = false;
-    private static long createCooldownUntil = 0;
-    private static int maxCharacters = 5;
     /** 是否已在本连接内武装过入服自动开面板（每登录一次，防每次列表同步反复弹面板）。 */
     private static boolean autoOpenArmed = false;
     // 用户级身份（v2：删除角色实体后唯一身份）
@@ -83,12 +81,6 @@ public final class ClientCharacterState {
         }
         anySupportRevive =
                 root.has("anySupportRevive") && root.get("anySupportRevive").getAsBoolean();
-        createCooldownUntil = root.has("createCooldownUntil")
-                ? root.get("createCooldownUntil").getAsLong()
-                : 0;
-        if (root.has("maxCharacters")) {
-            maxCharacters = root.get("maxCharacters").getAsInt();
-        }
         if (root.has("status")) {
             userStatus = CharacterStatus.parse(root.get("status").getAsString());
         }
@@ -166,15 +158,6 @@ public final class ClientCharacterState {
 
     public static synchronized boolean anySupportRevive() {
         return anySupportRevive;
-    }
-
-    /** 创建角色冷却剩余毫秒（0 = 可创建）。 */
-    public static synchronized long createRemainingMs() {
-        return Math.max(0, createCooldownUntil - System.currentTimeMillis());
-    }
-
-    public static synchronized int maxCharacters() {
-        return maxCharacters;
     }
 
     /** 服务端同步的等级曲线基数（仅展示换算用）。 */
