@@ -121,6 +121,9 @@ public final class CharacterPreview {
             gp = new GameProfile(UUID.nameUUIDFromBytes(("ccnr-rp:" + id).getBytes(StandardCharsets.UTF_8)), name);
         }
         PreviewPlayer p = new PreviewPlayer(level, gp);
+        // K 面板 3D 预览只显示人物模型 + 职位装备，不显示玩家名名字板
+        p.setCustomNameVisible(false);
+        p.setCustomName(null);
         equipFromLoadout(p, loadout);
         cached = p;
         return p;
