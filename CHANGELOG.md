@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.14.2（观察者拾取真正禁止：Inventory.add mixin）
+- 上版（2.14.1）用 PlayerEvent.ItemPickupEvent 事后取回——better_looting 忽略 add 返回值、批拾取每次都会
+  触发物理化模组（ItemPhysic）动画，反复拾取/掉落导致物品在地上「跳舞」。
+- 本版改为【入口拦截】：新增 org.spongepowered.mixin（0.7.38）+ InventoryObserverMixin，在
+  Inventory.add(ILnet/minecraft/world/item/ItemStack;)Z 入口拦截——观察者（无在场身份的用户/征召兵）
+  一律返回 false 拒绝入包；better_looting 忽略返回值 → 按「未添加」处理 → 原物品实体保持完整原地不动
+  （不消失、不重复、无物理动画）；移除 2.14.1 的事后取回逻辑。
+- 构建：compileJava（含 Mixin 注解处理器校验）/ spotlessCheck / test -PrunTests 全绿（66 用例 0 失败）。
+
 ## 2.14.1（入服 5 秒状态栏 + 观察者拾取兜底）
 - 刚入服 5 秒：右下角三状态栏（职位/阵营/血量）常驻显示（不管背包是否打开）；其余时间仅背包界面显示。
   （客户端：ClientPlayerNetworkEvent.LoggingIn 记录入服时刻 → StatusHud.renderJoinOverlay 覆盖层按 5s 门控）
