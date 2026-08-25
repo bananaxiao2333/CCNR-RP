@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.13.2（修复：尸体无皮肤 + 尸体名字改为「职位 + 玩家名」——非入侵方案）
+- 根因：此前 CorpseBridge 把遗体身份 UUID 改写为 ccnr-char 哈希派生 UUID——客户端按该 UUID 在 tab 列表
+  查不到玩家档案（不在线）→ 尸体渲染默认史蒂夫纹理。
+- 修复（全部在 CCNR-RP 内，不改 corpse 模组本体/jar，不重打尸体）：
+  - 死亡身份注入：PlayerDeathEvent 保持玩家真实 UUID（客户端按 UUID 解析到 LittleSkin 纹理 → 尸体显示玩家本人皮肤），
+    playerName 改写为「职位 + 玩家名」（如「警察 小明」；无职位时仅玩家名）；
+  - 遗体名字牌：EntityJoinLevelEvent 把 corpseName 移到 customName + 置可见（1.20.1 名字牌仅 customNameVisible 渲染），
+    corpseName 置空后 vanilla getDisplayName() 回落 customName——头顶名字与搜尸 GUI 标题一致显示「职位 + 玩家名」，无 "Corpse of " 前缀；
+  - 保护：未安装 Corpse 模组时跳过遗体生成，物品按原版正常爆出（日志提示）；
+  - 清理：删除哈希派生 UUID/DeathChar 无用代码；_corpse_src 中未部署的魔改源码已还原。
+- 版本号 2.13.1 → 2.13.2。
+- 构建：compileJava / spotlessCheck / test -PrunTests 全绿（80 用例 0 失败）。
+
 ## 2.13.1（修复：CMDCam 场景部署时播不出来——CreativeNetwork.sendToClient 反射签名匹配失败）
 - 根因：CamSceneBridge.playScene 用 getMethod("sendToClient", StartPathPacket.class, ServerPlayer.class) 精确匹配，
   而 CreativeCore 实际声明 sendToClient(CreativePacket, ServerPlayer)（参数为基类），getMethod 按声明类型精确匹配必然

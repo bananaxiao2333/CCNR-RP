@@ -82,8 +82,8 @@ public class CCNRRPMod {
                 event.getServer().getWorldPath(new net.minecraft.world.level.storage.LevelResource("ccnr_rp")));
         statusManager = new com.ccnrcom.rp.status.StatusManager(event.getServer());
         MinecraftForge.EVENT_BUS.register(statusManager);
-        // Corpse 联动：注册 PlayerDeathEvent 遗体身份注入钩子（自然死亡时把尸体身份改为死亡角色）
-        com.ccnrcom.rp.corpse.CorpseBridge.registerDeathHook();
+        // Corpse 联动：注册遗体钩子（死亡身份注入 + 名字牌；仅 Corpse 模组存在时生效）
+        com.ccnrcom.rp.corpse.CorpseBridge.registerHooks();
         experience = new com.ccnrcom.rp.experience.ExperienceService(event.getServer());
         MinecraftForge.EVENT_BUS.register(experience);
         spawnFramework = new com.ccnrcom.rp.spawn.SpawnFramework(event.getServer());
