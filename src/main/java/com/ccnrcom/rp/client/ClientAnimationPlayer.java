@@ -85,6 +85,14 @@ public final class ClientAnimationPlayer {
                     remainingTicks);
             case "CAMERA" -> CameraEffect.start(
                     s.paramLong("fovFrom", -1), s.paramLong("fovTo", -1), remainingTicks, s.param("shake", "0"));
+            case "CAMS" -> {
+                // CMDCam 场景：请求服务端播放（服务端反射下发 StartPathPacket；缺失 CMDCam 静默）
+                String scene = s.param("scene", "");
+                if (!scene.isBlank() && mc.player != null) {
+                    com.ccnrcom.rp.network.RpChannels.sendToServer(
+                            new com.ccnrcom.rp.network.RpPackets.CamScenePlayC2S(scene));
+                }
+            }
             case "GROUP" -> {
                 // 子步骤顺序排入队首（并行简化为串行；GROUP.parallel 后续增强）
                 List<Step> children = new ArrayList<>(s.children());

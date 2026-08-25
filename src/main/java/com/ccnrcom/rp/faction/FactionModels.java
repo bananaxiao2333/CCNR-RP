@@ -10,11 +10,18 @@ import java.util.Map;
 /** P1 阵营关系领域模型（无 MC 依赖的纯数据/纯逻辑，可直接 JUnit 测）。 */
 public final class FactionModels {
 
-    /** 阵营。icon 为客户端徽章图形(shield/claw/storm/hex/eye/target...)，tier 1..3 对应金/蓝/青徽章等级；music 为阵营出场音乐（可选）。 */
+    /** 阵营。icon 为客户端徽章图形(shield/claw/storm/hex/eye/target...)，tier 1..3 对应金/蓝/青徽章等级；music 为阵营出场音乐；cmdcamScene 为 CMDCam 出场摄像机场景（可选，空=不用）。 */
     public record Faction(
-            String id, String name, String color, String description, String icon, int tier, String music) {
+            String id,
+            String name,
+            String color,
+            String description,
+            String icon,
+            int tier,
+            String music,
+            String cmdcamScene) {
         public Faction(String id, String name, String color, String description) {
-            this(id, name, color, description, "hex", 2, "");
+            this(id, name, color, description, "hex", 2, "", "");
         }
     }
 

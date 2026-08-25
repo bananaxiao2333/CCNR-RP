@@ -397,6 +397,7 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
                     en.addProperty("icon", f.icon());
                     en.addProperty("tier", f.tier());
                     en.addProperty("factionMusic", f.music());
+                    en.addProperty("cmdcamScene", f.cmdcamScene() == null ? "" : f.cmdcamScene());
                     for (var other : graph.factions().values()) {
                         if (other.id().equals(f.id())) {
                             continue;
@@ -418,6 +419,9 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
             }
             if (!en.has("factionMusic")) {
                 en.addProperty("factionMusic", "");
+            }
+            if (!en.has("cmdcamScene")) {
+                en.addProperty("cmdcamScene", "");
             }
             en.addProperty("music", musicOn ? music : "");
             en.add("relations", relations);

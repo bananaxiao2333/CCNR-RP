@@ -78,6 +78,9 @@ public final class AnimationEngine {
                 playSound(firstTarget(targets), s);
             } else if (s.type().equals("ACTIONBAR")) {
                 sendActionBar(targets, s);
+            } else if (s.type().equals("CAMS")) {
+                // CMDCam 场景（param=scene）：对每个目标独立播放摄像机路径（服务端下发 StartPathPacket）
+                playCamScene(targets, s);
             } else {
                 clientSteps.add(s);
             }
@@ -90,6 +93,23 @@ public final class AnimationEngine {
         }
         LOGGER.info("[CCNR-RP] 动画播放 {} → {} 个目标（客户端步骤 {}）", sequenceId, targets.size(), clientSteps.size());
         return true;
+    }
+
+    /** CMDCam 场景播放：对每个目标独立下发（缺失 CMDCam / 场景不存在时静默跳过）。 */
+    private static void playCamScene(List<ServerPlayer> targets, AnimationModels.Step s) {
+        String scene = s.param("scene", "");
+        if (scene.isBlank() || targets.isEmpty()) {
+            return;
+        }
+        int sent = 0;
+        for (ServerPlayer p : targets) {
+            if (com.ccnrcom.rp.cmdcam.CamSceneBridge.playScene(p.level(), scene, p)) {
+                sent++;
+            }
+        }
+        if (sent > 0) {
+            LOGGER.info("[CCNR-RP] CMDCam 场景播放 {} → {} 个目标", scene, sent);
+        }
     }
 
     private static void sendActionBar(List<ServerPlayer> targets, AnimationModels.Step s) {

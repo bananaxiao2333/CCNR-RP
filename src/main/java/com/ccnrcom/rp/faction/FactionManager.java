@@ -87,7 +87,8 @@ public final class FactionManager {
                     str(o, "description", ""),
                     str(o, "icon", "hex"),
                     Math.max(1, Math.min(3, intOf(o, "tier", 2))),
-                    str(o, "music", "")));
+                    str(o, "music", ""),
+                    str(o, "cmdcamScene", "")));
         }
         List<FactionGroup> groups = new ArrayList<>();
         JsonArray ga = root.has("groups") ? root.getAsJsonArray("groups") : new JsonArray();
@@ -126,6 +127,15 @@ public final class FactionManager {
             o.addProperty("music", music);
         } else {
             o.remove("music");
+        }
+    }
+
+    /** 写入阵营 CMDCam 出场场景：空串=移除字段。 */
+    private static void putCamScene(JsonObject o, String scene) {
+        if (scene != null && !scene.isBlank()) {
+            o.addProperty("cmdcamScene", scene);
+        } else {
+            o.remove("cmdcamScene");
         }
     }
 
@@ -267,9 +277,16 @@ public final class FactionManager {
 
     private static final java.util.regex.Pattern ID_PATTERN = java.util.regex.Pattern.compile("[a-z0-9_]{1,32}");
 
-    /** 创建阵营。music 为空串时不写入（不设阵营音乐）。 */
+    /** 创建阵营。music 为空串时不写入（不设阵营音乐）；cmdcamScene 空串不写入。 */
     public List<String> createFaction(
-            String id, String name, String color, String description, String icon, int tier, String music) {
+            String id,
+            String name,
+            String color,
+            String description,
+            String icon,
+            int tier,
+            String music,
+            String cmdcamScene) {
         if (id == null || !ID_PATTERN.matcher(id).matches()) {
             return List.of("阵营 id 仅允许小写字母/数字/下划线，1-32 字符");
         }
@@ -287,13 +304,21 @@ public final class FactionManager {
         o.addProperty("icon", icon == null || icon.isBlank() ? "hex" : icon);
         o.addProperty("tier", Math.max(1, Math.min(3, tier)));
         putMusic(o, music);
+        putCamScene(o, cmdcamScene);
         fa.add(o);
         return commit(candidate);
     }
 
-    /** 更新阵营。music 为空串时移除阵营音乐字段。 */
+    /** 更新阵营。music 为空串时移除阵营音乐字段；cmdcamScene 空串移除该字段。 */
     public List<String> updateFaction(
-            String id, String name, String color, String description, String icon, int tier, String music) {
+            String id,
+            String name,
+            String color,
+            String description,
+            String icon,
+            int tier,
+            String music,
+            String cmdcamScene) {
         if (!graph.factions().containsKey(id)) {
             return List.of("未找到阵营: " + id);
         }
@@ -308,6 +333,7 @@ public final class FactionManager {
                 o.addProperty("icon", icon == null || icon.isBlank() ? "hex" : icon);
                 o.addProperty("tier", Math.max(1, Math.min(3, tier)));
                 putMusic(o, music);
+                putCamScene(o, cmdcamScene);
                 return commit(candidate);
             }
         }

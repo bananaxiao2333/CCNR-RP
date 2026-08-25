@@ -16,13 +16,13 @@ import java.util.Set;
 
 /**
  * 动画序列模型与解析（纯逻辑，无 MC 依赖）。
- * 步骤类型：TITLE / SUBTITLE(并入 TITLE) / ACTIONBAR / FADE / CAMERA(视场角+抖动) / PARTICLE / SOUND / GROUP(串并行)。
+ * 步骤类型：TITLE / SUBTITLE(并入 TITLE) / ACTIONBAR / FADE / CAMERA(视场角+抖动) / PARTICLE / SOUND / GROUP(串并行) / CAMS(CMDCam 场景，param=scene)。
  * durationTicks 一律 >0 且 ≤ 12000（10 分钟上限），非法值钳制。
  */
 public final class AnimationModels {
 
     public static final Set<String> TYPES =
-            Set.of("TITLE", "ACTIONBAR", "FADE", "CAMERA", "PARTICLE", "SOUND", "GROUP");
+            Set.of("TITLE", "ACTIONBAR", "FADE", "CAMERA", "PARTICLE", "SOUND", "GROUP", "CAMS");
 
     /** 动画步骤。 */
     public record Step(String type, Map<String, String> params, List<Step> children) {

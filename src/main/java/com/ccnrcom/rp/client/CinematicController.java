@@ -31,6 +31,10 @@ public final class CinematicController {
 
     private static JsonObject data;
     private static long startMs;
+    /** 部署电影结束（黑屏转场）后待播放的阵营 CMDCam 场景名（空=不播）。 */
+    private static String pendingScene = "";
+
+    private static boolean sceneRequested = false;
 
     private CinematicController() {}
 
@@ -41,6 +45,8 @@ public final class CinematicController {
     public static void start(JsonObject payload) {
         data = payload;
         startMs = System.currentTimeMillis();
+        sceneRequested = false;
+        pendingScene = payload == null ? "" : str(payload, "cmdcamScene");
         // 音乐传递（高→低）：启动程序指定音乐 > 职业音乐 > 阵营音乐；均未配置则静默跳过
         ClientAudio.playEntrance(resolveMusic(payload));
     }
@@ -146,6 +152,12 @@ public final class CinematicController {
             g.fill(0, 0, w, h, 0x00000000 | a);
         }
         if (blackA <= 0.01f && textA <= 0.01f) {
+            // 部署动画完毕 → 渐变黑屏转场 → 播放阵营 CMDCam 场景（若配置），摄像机从部署点视角走 SCENE
+            if (!sceneRequested && !pendingScene.isBlank()) {
+                sceneRequested = true;
+                com.ccnrcom.rp.network.RpChannels.sendToServer(
+                        new com.ccnrcom.rp.network.RpPackets.CamScenePlayC2S(pendingScene));
+            }
             data = null;
             return;
         }

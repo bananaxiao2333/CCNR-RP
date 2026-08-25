@@ -946,4 +946,32 @@ public final class RpPackets {
             ctx.get().setPacketHandled(true);
         }
     }
+
+    /** CMDCam 场景播放请求（C2S）：客户端动画步骤 CAMS 或部署电影结束时请求播放已保存场景。 */
+    public static final class CamScenePlayC2S {
+        public final String scene;
+
+        public CamScenePlayC2S(String scene) {
+            this.scene = scene == null ? "" : scene;
+        }
+
+        public CamScenePlayC2S(FriendlyByteBuf buf) {
+            this(buf.readUtf(128));
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(scene, 128);
+        }
+
+        public static void handle(CamScenePlayC2S msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> com.ccnrcom.rp.cmdcam.CamSceneBridge.playScene(
+                            ctx.get().getSender() == null
+                                    ? null
+                                    : ctx.get().getSender().level(),
+                            msg.scene,
+                            ctx.get().getSender()));
+            ctx.get().setPacketHandled(true);
+        }
+    }
 }
