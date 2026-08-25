@@ -59,6 +59,9 @@ public final class ClientSetup {
         // 见 ClientForgeEvents.onScreenRender
         // 结算明细逐行（右下角红/绿）：常驻覆盖层，非背包内也可见
         event.registerAboveAll("ccnr_rp_xp", (gui, gfx, partial, w, h) -> StatusHud.renderXpOverlay(gfx, w, h));
+        // 刚入服 5 秒：右下角三状态栏（职位/阵营/血量）常驻显示，不管背包是否打开（内部按入服时刻门控）
+        event.registerAboveAll(
+                "ccnr_rp_status_join", (gui, gfx, partial, w, h) -> StatusHud.renderJoinOverlay(gfx, w, h));
         event.registerAboveAll("ccnr_rp_sync", (gui, gfx, partial, w, h) -> {
             // 素材同步中提示（左上角小标签；同步完成前服务端禁用部署）
             if (ClientAssetCache.isSyncing()) {

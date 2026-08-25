@@ -17,7 +17,10 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.player.EntityItemPickupEvent;
@@ -227,6 +230,46 @@ public final class StatusManager {
             if (!deployed) {
                 event.setCanceled(true); // 观察者不可拾取（含 better_looting 等模组的拾取路径）
             }
+        }
+    }
+
+    /**
+     * 观察者拾取兜底（不可取消的事后事件）：better_looting 等模组的批拾取会直接
+     * {@code Inventory.add} 绕过可取消的 {@link EntityItemPickupEvent}——这里在
+     * {@code PlayerEvent.ItemPickupEvent}（入包后才发出）把观察者背包全部丢回地上，
+     * 使观察者无法持有任何物品（观察者在本系统不应携带物品）。
+     */
+    @SubscribeEvent
+    public void onItemPickupAfter(PlayerEvent.ItemPickupEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player) || CCNRRPMod.users == null) {
+            return;
+        }
+        String uuid = player.getUUID().toString();
+        boolean deployed = CCNRRPMod.users.isAlive(uuid) || com.ccnrcom.rp.sequence.SequenceEngine.isConscripted(uuid);
+        if (deployed) {
+            return; // 在场玩家正常拾取
+        }
+        // 观察者：背包不应持有物品——全部丢回物品原位（实体可能已被移除，用其最后位置）
+        ItemEntity original = event.getOriginalEntity();
+        Vec3 pos = original != null ? original.position() : player.position();
+        if (!(player.level() instanceof ServerLevel level)) {
+            return;
+        }
+        int dropped = 0;
+        net.minecraft.world.entity.player.Inventory inv = player.getInventory();
+        for (int i = 0; i < inv.getContainerSize(); i++) {
+            ItemStack s = inv.getItem(i);
+            if (s.isEmpty()) {
+                continue;
+            }
+            ItemEntity e = new ItemEntity(level, pos.x, pos.y, pos.z, s.copy());
+            e.setPickUpDelay(20); // 防被 better_looting 立即再次吸走
+            level.addFreshEntity(e);
+            inv.setItem(i, ItemStack.EMPTY);
+            dropped += e.getItem().getCount();
+        }
+        if (dropped > 0) {
+            LOGGER.info("[CCNR-RP] 观察者拾取兜底：{} 的物品（{} 个）已丢回地上", player.getName().getString(), dropped);
         }
     }
 

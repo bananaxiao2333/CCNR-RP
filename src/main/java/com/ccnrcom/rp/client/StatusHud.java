@@ -19,6 +19,24 @@ public final class StatusHud {
 
     private StatusHud() {}
 
+    /** 入服时刻（ms，0=未入服）：刚入服 5 秒内右下角三状态栏常驻显示（不管背包是否打开）。 */
+    private static long joinMs = 0;
+
+    private static final long JOIN_DISPLAY_MS = 5000L;
+
+    /** 客户端登录时调用：记录入服时刻。 */
+    public static void markJoin() {
+        joinMs = System.currentTimeMillis();
+    }
+
+    /** 刚入服 5 秒常驻覆盖层：仅入服后 5 秒内渲染（其余时间仅背包界面显示，见 onScreenRender）。 */
+    public static void renderJoinOverlay(GuiGraphics g, int w, int h) {
+        if (joinMs == 0 || System.currentTimeMillis() - joinMs > JOIN_DISPLAY_MS) {
+            return;
+        }
+        render(g, w, h);
+    }
+
     /** 常驻覆盖层：右下角逐行结算（绿加/红减），无需打开背包即可见。 */
     public static void renderXpOverlay(GuiGraphics g, int w, int h) {
         if (CinematicController.active() || Minecraft.getInstance().player == null) {
