@@ -18,8 +18,11 @@
 }
 ```
 - 一个玩家可建多个角色；同一时刻只有一个角色为 `alive`，其余 `observing`/`dead`。
-- 皮肤规则：PNG、≤512×512、≤256KB；服务端校验（尺寸/魔数）→ 存 `world/ccnr_rp/skins/<charId>.png`；
-  S2C 广播 → 客户端缓存 `config/ccnr_rp/skins-cache/` 供头像渲染；非法图片拒绝并回显原因。
+- 皮肤规则：PNG、MC 皮肤规格（64×64 或 64×32）、≤256KB；服务端校验（SkinSpec：PNG 魔数/尺寸）→ 按 sha256 哈希去重存 `world/ccnr_rp/skins/<hash>.png`（旧 `<charId>.png` 自动清理/回退兼容）；
+  S2C 广播（含 playerUuid）→ 客户端缓存 `config/ccnr_rp/skins-cache/` 供头像渲染与全服换肤；非法图片拒绝并回显原因。
+- 上传来源：本地文件路径或 http(s) URL（客户端后台拉取后走同一分片协议）。
+- 皮肤回收：无角色引用的皮肤在角色删除/换肤后与服务启动时自动清理（哈希去重 + 引用计数语义，旧式文件迁移期不误删）。
+- 扮演换肤：角色部署/登录时服务端重播皮肤，客户端把正在扮演该角色的玩家渲染为目标角色皮肤（分毫不差）。
 - 冷却：死亡时 `cooldownUntil = now + deathCooldownMinutes`（serverconfig，默认 30）；GUI/命令可查倒计时。
 
 ## 3. 角色管理界面（客户端）

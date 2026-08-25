@@ -30,19 +30,11 @@ public final class ClientPacketHandlers {
         CharacterManagementScreen.refreshIfOpen();
     }
 
-    public static void onSkinSync(String charId, byte[] data, String hash) {
-        SkinCache.store(charId, data, hash);
-        CharacterManagementScreen.refreshIfOpen();
-    }
-
     public static void onRecruitOffer(RpPackets.RecruitOfferS2C msg) {
-        RecruitOverlayHud.add(msg.offerId, msg.charId, msg.charName, msg.professionId, msg.initialTicks, msg.waveId);
-        if (net.minecraft.client.Minecraft.getInstance().screen == null
-                && net.minecraft.client.Minecraft.getInstance().player != null) {
-            net.minecraft.client.Minecraft.getInstance().setScreen(new RecruitPopupScreen());
-        } else {
-            RecruitPopupScreen.refreshIfOpen();
-        }
+        RecruitOverlayHud.add(
+                msg.offerId, msg.charId, msg.charName, msg.professionId, msg.initialTicks, msg.waveId, msg.kind);
+        // 不再强制弹邀请菜单（避免影响战斗）；仅当菜单已打开时刷新。
+        RecruitPopupScreen.refreshIfOpen();
     }
 
     public static void onAnimation(String payload) {
@@ -55,12 +47,43 @@ public final class ClientPacketHandlers {
         CharacterManagementScreen.refreshIfOpen();
     }
 
+    /** 用户经验/等级更新（经验随用户走）。 */
+    public static void onUserXp(long xp, int level) {
+        ClientCharacterState.setUserXp(xp, level);
+        CharacterManagementScreen.refreshIfOpen();
+    }
+
+    /** 结算明细逐行（右下角逐行红/绿显示；每条 sign|value|key|args）。 */
+    public static void onXpLines(String[] lines) {
+        ClientCharacterState.setXpLines(java.util.Arrays.asList(lines.length == 0 ? new String[0] : lines));
+    }
+
+    /** 征召兵身份状态：非空=在场（HUD 显示征召编制），空串=清除（阵亡/结束）。 */
+    public static void onConscriptState(String payload) {
+        ClientCharacterState.setConscript(payload);
+    }
+
     public static void onEventState(String payload) {
         ClientCharacterState.setActiveEvents(payload);
     }
 
     public static void onManagerState(String payload) {
         ClientCharacterState.setManager(payload);
+    }
+
+    public static void onMusicList(String payload) {
+        ClientCharacterState.setMusicList(payload);
+        RpAdminScreen.refreshIfOpen();
+    }
+
+    /** 素材清单（服务器中央下发）：对比本地缓存，缺失/变更自动请求下载。 */
+    public static void onAssetManifest(String payload) {
+        ClientAssetCache.applyManifest(payload);
+    }
+
+    /** 素材分片到达：累积写盘，完成后继续下一个待下载素材。 */
+    public static void onAssetPart(RpPackets.AssetPartS2C msg) {
+        ClientAssetCache.onPart(msg.name, msg.index, msg.total, msg.data);
     }
 
     public static void onManagerImpact(String payload) {

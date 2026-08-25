@@ -7,7 +7,7 @@ package com.ccnrcom.rp.status;
 import java.util.Optional;
 
 /**
- * 角色状态机（纯逻辑，无 MC 依赖）。
+ * 用户状态机（纯逻辑，无 MC 依赖）。
  *
  * <p>合法迁移：
  * <ul>
@@ -38,7 +38,7 @@ public final class StatusMachine {
         };
     }
 
-    /** 自部署资格：仅观察状态的自部署类型可随时从人物管理界面部署（在场/已死不可自刷）。 */
+    /** 部署资格：仅观察状态且职位允许自部署。 */
     public static boolean selfDeployable(CharacterStatus status, boolean professionSelfDeploy) {
         return status == CharacterStatus.OBSERVING && professionSelfDeploy;
     }

@@ -78,7 +78,7 @@ public final class ProfessionJson {
         JsonArray inv = loadout.has("inventory") ? loadout.getAsJsonArray("inventory") : new JsonArray();
         JsonArray armor = loadout.has("armor") ? loadout.getAsJsonArray("armor") : new JsonArray();
         checkSlots(listFromJson(inv, "inventory", errors), 0, 35, "inventory", errors);
-        checkSlots(listFromJson(armor, "armor", errors), 36, 40, "armor", errors);
+        checkSlots(listFromJson(armor, "armor", errors), 36, 39, "armor", errors); // 40 为副手，不入护甲
         if (loadout.has("offhand")) {
             JsonElement oh = loadout.get("offhand");
             if (oh.isJsonNull()) {

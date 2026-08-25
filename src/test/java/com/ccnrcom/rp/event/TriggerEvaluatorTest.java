@@ -54,16 +54,16 @@ class TriggerEvaluatorTest {
     @Test
     void conditionsCompareCorrectly() {
         assertTrue(TriggerEvaluator.evaluate(
-                new Trigger(Type.CONDITION, Map.of("type", "DEAD_COUNT", "op", ">=", "value", "2")),
+                new Trigger(Type.CONDITION, Map.of("cond", "DEAD_COUNT", "op", ">=", "value", "2")),
                 ctx(false, false, "x", "y", 10)));
         assertFalse(TriggerEvaluator.evaluate(
-                new Trigger(Type.CONDITION, Map.of("type", "DEAD_COUNT", "op", "<", "value", "2")),
+                new Trigger(Type.CONDITION, Map.of("cond", "DEAD_COUNT", "op", "<", "value", "2")),
                 ctx(false, false, "x", "y", 10)));
         assertTrue(TriggerEvaluator.evaluate(
-                new Trigger(Type.CONDITION, Map.of("type", "ALIVE_COUNT", "op", "==", "value", "5")),
+                new Trigger(Type.CONDITION, Map.of("cond", "ALIVE_COUNT", "op", "==", "value", "5")),
                 ctx(false, false, "x", "y", 10)));
         assertTrue(TriggerEvaluator.evaluate(
-                new Trigger(Type.CONDITION, Map.of("type", "SCOREBOARD", "objective", "obj", "op", ">", "value", "5")),
+                new Trigger(Type.CONDITION, Map.of("cond", "SCOREBOARD", "objective", "obj", "op", ">", "value", "5")),
                 ctx(false, false, "x", "y", 10)));
     }
 }

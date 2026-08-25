@@ -86,12 +86,35 @@ public final class EventManager {
             EventDefinition def = events.get(i);
             if (def.state() == EventState.RUNNING) {
                 events.set(i, def.withState(EventState.SETTLED));
+                clearEventTasks(def);
                 out.add(def.id());
             }
         }
         resetEvents();
         broadcastState();
         return out;
+    }
+
+    /** 事件结束后清除其任务标记（防 clear 重触发后任务 XP 无限累加）。 */
+    private void clearEventTasks(EventDefinition def) {
+        if (def.tasks().isEmpty() || CCNRRPMod.users == null) {
+            return;
+        }
+        for (String uuid : CCNRRPMod.users.uuids()) {
+            java.util.Map<String, Integer> tasks = new java.util.HashMap<>(CCNRRPMod.users.tasks(uuid));
+            boolean changed = false;
+            for (Task t : def.tasks()) {
+                if (tasks.remove(t.id()) != null) {
+                    changed = true;
+                }
+            }
+            if (changed) {
+                CCNRRPMod.users.setXpDuty(uuid, CCNRRPMod.users.userXp(uuid), CCNRRPMod.users.dutySeconds(uuid));
+                CCNRRPMod.users.tasks(uuid).clear();
+                CCNRRPMod.users.tasks(uuid).putAll(tasks);
+            }
+        }
+        CCNRRPMod.users.save();
     }
 
     public PhaseClock clock() {
@@ -144,14 +167,13 @@ public final class EventManager {
         if (event.phase != TickEvent.Phase.END) {
             return;
         }
-        clock.tick();
         int interval = Math.max(1, CCNRRPConfig.EVENT_EVAL_INTERVAL_TICKS.get());
         if (++evalCounter < interval) {
             return;
         }
         evalCounter = 0;
-        // 阶段迁移（每节流周期判定一次；tick 内迁移即视为本 tick 开始/结束）
-        PhaseClock.Transition tr = clock.tick();
+        // 阶段时钟按节流周期推进（修复重复 tick 导致阶段时长偏短、迁移被丢弃、phase 触发器不触发）
+        PhaseClock.Transition tr = clock.tick(interval);
         evaluateAll(tr);
         autoEndRunnings();
     }
@@ -171,11 +193,14 @@ public final class EventManager {
 
     private void evaluateAll(PhaseClock.Transition tr) {
         runPhaseSteps(tr);
+        long gameDay = server.getLevel(net.minecraft.world.level.Level.OVERWORLD) == null
+                ? 0L
+                : server.getLevel(net.minecraft.world.level.Level.OVERWORLD).getDayTime() / 24000L;
         TriggerContext ctx = new TriggerContext(
                 clock.phaseId(),
                 tr.ended(),
                 clock.ticksInPhase(),
-                0L,
+                gameDay,
                 server.getLevel(net.minecraft.world.level.Level.OVERWORLD) == null
                         ? 0L
                         : server.getLevel(net.minecraft.world.level.Level.OVERWORLD)
@@ -223,10 +248,13 @@ public final class EventManager {
                         def.startSequence(), java.util.Map.of("event", def.id(), "phase", clock.phaseId()));
             }
         }
-        // 任务登记：事件开始时把所有任务标记给当前参与角色（简化：结算时按任务表）
-        if (!def.tasks().isEmpty() && CCNRRPMod.experience != null) {
+        // 任务登记：事件开始时只标记给在场（ALIVE）参与用户，避免未参与者获得任务 XP
+        if (!def.tasks().isEmpty() && CCNRRPMod.users != null) {
+            List<String> participants = CCNRRPMod.users.uuids().stream()
+                    .filter(uuid -> CCNRRPMod.users.status(uuid) == CharacterStatus.ALIVE)
+                    .toList();
             for (Task t : def.tasks()) {
-                CCNRRPMod.characters.store().all().forEach(c -> ExperienceService.markTask(c.id(), t.id(), t.xp()));
+                participants.forEach(uuid -> ExperienceService.markTask(uuid, t.id(), t.xp()));
             }
         }
     }
@@ -300,6 +328,20 @@ public final class EventManager {
         return false;
     }
 
+    /** 管理端手动触发事件（C2S，管理员权限校验）。 */
+    public static void onAdminTrigger(ServerPlayer player, String eventId) {
+        if (player == null || CCNRRPMod.eventManager == null) {
+            return;
+        }
+        if (!com.ccnrcom.rp.util.Permissions.canAdmin(player, com.ccnrcom.rp.util.Permissions.ADMIN_EVENT)) {
+            RpChannels.sendTo(player, new RpPackets.ErrorS2C("ccnr_rp.command.no_permission"));
+            return;
+        }
+        boolean ok = CCNRRPMod.eventManager.triggerEvent(eventId);
+        RpChannels.sendTo(
+                player, new RpPackets.ErrorS2C(ok ? "ccnr_rp.event.triggered" : "ccnr_rp.event.not_runnable", eventId));
+    }
+
     /** 手动结束事件（命令）。 */
     public boolean endEvent(String eventId) {
         for (int i = 0; i < events.size(); i++) {
@@ -314,6 +356,7 @@ public final class EventManager {
     private void endEvent(int index) {
         EventDefinition def = events.get(index);
         events.set(index, def.withState(EventState.SETTLED));
+        clearEventTasks(def);
         LOGGER.info("[CCNR-RP] 事件结束: {} ", def.id());
         List<ServerPlayer> targets = onlinePlayers();
         targets.forEach(p -> RpChannels.sendTo(p, new RpPackets.ErrorS2C("ccnr_rp.event.ended", def.id())));
@@ -325,16 +368,16 @@ public final class EventManager {
 
     /** 游戏结束：自动疏散裁定 + 全员结算 + game_end 动画钩子。 */
     public void gameOver() {
-        if (CCNRRPMod.characters != null) {
-            CCNRRPMod.characters.store().all().forEach(c -> {
+        if (CCNRRPMod.users != null) {
+            for (String uuid : CCNRRPMod.users.uuids()) {
                 com.ccnrcom.rp.experience.SettlementCalcs.EvacuationMethod m =
-                        switch (c.status()) {
+                        switch (CCNRRPMod.users.status(uuid)) {
                             case ALIVE -> com.ccnrcom.rp.experience.SettlementCalcs.EvacuationMethod.SAFE_RESCUE;
                             case DEAD -> com.ccnrcom.rp.experience.SettlementCalcs.EvacuationMethod.DIED;
                             case OBSERVING -> com.ccnrcom.rp.experience.SettlementCalcs.EvacuationMethod.OBSERVING_END;
                         };
-                ExperienceService.setEvacuation(c.id(), m);
-            });
+                ExperienceService.setEvacuation(uuid, m);
+            }
         }
         if (CCNRRPMod.experience != null) {
             CCNRRPMod.experience.settleAll(null);
@@ -343,14 +386,20 @@ public final class EventManager {
     }
 
     private int deadCount() {
-        return (int) CCNRRPMod.characters.store().all().stream()
-                .filter(c -> c.status() == CharacterStatus.DEAD)
+        if (CCNRRPMod.users == null) {
+            return 0;
+        }
+        return (int) CCNRRPMod.users.uuids().stream()
+                .filter(uuid -> CCNRRPMod.users.status(uuid) == CharacterStatus.DEAD)
                 .count();
     }
 
     private int aliveCount() {
-        return (int) CCNRRPMod.characters.store().all().stream()
-                .filter(c -> c.status() == CharacterStatus.ALIVE)
+        if (CCNRRPMod.users == null) {
+            return 0;
+        }
+        return (int) CCNRRPMod.users.uuids().stream()
+                .filter(uuid -> CCNRRPMod.users.status(uuid) == CharacterStatus.ALIVE)
                 .count();
     }
 

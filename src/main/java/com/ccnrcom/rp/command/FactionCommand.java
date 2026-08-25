@@ -30,7 +30,9 @@ final class FactionCommand {
         base.then(Commands.literal("relation")
                 .executes(ctx -> RpCommand.usageHint(ctx.getSource(), "ccnr_rp.command.usage.faction"))
                 .then(Commands.argument("a", StringArgumentType.word())
+                        .suggests(RpSuggest.factions())
                         .then(Commands.argument("b", StringArgumentType.word())
+                                .suggests(RpSuggest.factions())
                                 .executes(ctx -> getRelation(
                                         ctx.getSource(),
                                         StringArgumentType.getString(ctx, "a"),
@@ -58,7 +60,9 @@ final class FactionCommand {
                 .then(Commands.literal("relation")
                         .requires(RpCommand.admin(Permissions.ADMIN_FACTION))
                         .then(Commands.argument("g1", StringArgumentType.word())
+                                .suggests(RpSuggest.factions())
                                 .then(Commands.argument("g2", StringArgumentType.word())
+                                        .suggests(RpSuggest.factions())
                                         .then(Commands.argument("type", StringArgumentType.word())
                                                 .executes(ctx -> setRelation(
                                                         ctx.getSource(),
@@ -141,7 +145,7 @@ final class FactionCommand {
         if (mgr == null) {
             return 0;
         }
-        List<String> members = java.util.Arrays.stream(membersArg.split("\s+"))
+        List<String> members = java.util.Arrays.stream(membersArg.split("\\s+"))
                 .filter(s -> !s.isEmpty())
                 .toList();
         List<String> errors = mgr.createGroup(id, members);

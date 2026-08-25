@@ -10,6 +10,16 @@
        {"type": "COMMAND", "command": "say [CCNR-RP] 撤离警报生效：前往疏散区，危险阶段开始"}
      ],
      "durationSeconds": 0,
+     "settleOnEnd": true},
+    {"id": "qdf_support", "enabled": true,
+     "triggers": [{"type": "ON_PHASE_START", "phase": "danger"}],
+     "sequence": [
+       {"type": "COMMAND", "command": "say [CCNR-RP] QDF支援：强制征召 5 名支援人员，即将部署"},
+       {"type": "WAIT", "seconds": 10},
+       {"type": "FORCE_PICK", "faction": "qdf", "count": 5, "professions": "s4_guard,s3_special", "spawn": true},
+       {"type": "WAVE", "wave": "qdf_reinforce"}
+     ],
+     "durationSeconds": 0,
      "settleOnEnd": true}
   ]
 }

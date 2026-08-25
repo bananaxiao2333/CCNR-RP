@@ -38,6 +38,8 @@ public class CCNRRPMod {
     public static com.ccnrcom.rp.sequence.SequenceEngine sequenceEngine;
     /** 角色服务（P3）。 */
     public static CharacterService characters;
+    /** 用户服务（P9）：经验随用户走、创建冷却、支援开关。 */
+    public static com.ccnrcom.rp.user.UserService users;
     /** 状态管理（P4，注册到 Forge 总线；ServerStopping 注销）。 */
     public static com.ccnrcom.rp.status.StatusManager statusManager;
     /** 经验服务（P5）。 */
@@ -71,11 +73,17 @@ public class CCNRRPMod {
     @SubscribeEvent
     public void onServerAboutToStart(ServerAboutToStartEvent event) {
         managerSettings = new com.ccnrcom.rp.config.ManagerSettings();
+        // 素材库（服务器权威：音乐/阵营图标）——首次启动写入内嵌默认图标
+        com.ccnrcom.rp.assets.AssetLibrary.ensureDefaults();
         factions = new FactionManager();
         factions.load();
         characters = new CharacterService(event.getServer());
+        users = new com.ccnrcom.rp.user.UserService(
+                event.getServer().getWorldPath(new net.minecraft.world.level.storage.LevelResource("ccnr_rp")));
         statusManager = new com.ccnrcom.rp.status.StatusManager(event.getServer());
         MinecraftForge.EVENT_BUS.register(statusManager);
+        // Corpse 联动：注册 PlayerDeathEvent 遗体身份注入钩子（自然死亡时把尸体身份改为死亡角色）
+        com.ccnrcom.rp.corpse.CorpseBridge.registerDeathHook();
         experience = new com.ccnrcom.rp.experience.ExperienceService(event.getServer());
         MinecraftForge.EVENT_BUS.register(experience);
         spawnFramework = new com.ccnrcom.rp.spawn.SpawnFramework(event.getServer());
@@ -86,28 +94,35 @@ public class CCNRRPMod {
         sequenceEngine = new com.ccnrcom.rp.sequence.SequenceEngine(event.getServer());
         MinecraftForge.EVENT_BUS.register(sequenceEngine);
         LOGGER.info(
-                "[CCNR-RP] 服务端运行时就绪：阵营 {} 个 / 组 {} 个 / 角色 {} 个",
+                "[CCNR-RP] 服务端运行时就绪：阵营 {} 个 / 组 {} 个",
                 factions.graph().factions().size(),
-                factions.graph().groups().size(),
-                characters.store().all().size());
+                factions.graph().groups().size());
     }
 
     @SubscribeEvent
     public void onPlayerLoggedIn(net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent event) {
         if (characters != null && event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
-            // 登录归一化：DEAD 且冷却结束 → 立即回观察者（阴间），随后同步列表
+            // 登录归一化：用户级状态 DEAD 且冷却结束 → 立即回观察者（阴间），随后同步档案
             long now = System.currentTimeMillis();
-            for (var c : java.util.List.copyOf(characters.store().all())) {
-                if (c.playerUuid().equals(player.getUUID().toString())
-                        && c.status() == com.ccnrcom.rp.status.CharacterStatus.DEAD
-                        && c.cooldownUntil() <= now) {
-                    var obs = c.withStatus(com.ccnrcom.rp.status.CharacterStatus.OBSERVING)
-                            .withCooldown(0);
-                    characters.store().update(obs);
-                }
+            String uuid = player.getUUID().toString();
+            if (CCNRRPMod.users != null
+                    && CCNRRPMod.users.status(uuid) == com.ccnrcom.rp.status.CharacterStatus.DEAD
+                    && CCNRRPMod.users.cooldownUntil(uuid) <= now) {
+                CCNRRPMod.users.setStatus(uuid, com.ccnrcom.rp.status.CharacterStatus.OBSERVING);
+                CCNRRPMod.users.setCooldown(uuid, 0);
+                CCNRRPMod.users.save();
             }
-            characters.store().save();
             characters.sendList(player);
+            // 素材同步：音乐/阵营图标由服务器中央下发，客户端异步下载（左上角「同步数据中」提示）；
+            // 同步完成确认前禁用部署/复活（有通道才需要同步）
+            if (com.ccnrcom.rp.network.RpChannels.hasChannel(player.connection.connection)) {
+                com.ccnrcom.rp.assets.AssetLibrary.markPending(player);
+                com.ccnrcom.rp.assets.AssetLibrary.sendManifest(player);
+            }
+            // 死亡强制旁观者：登录时若用户处于复活冷却（近期死亡/判死）且无在场 → 旁观者模式（不传送）
+            if (CCNRRPMod.users != null && !CCNRRPMod.users.isAlive(uuid) && CCNRRPMod.users.onCooldown(uuid)) {
+                player.setGameMode(net.minecraft.world.level.GameType.SPECTATOR);
+            }
         }
         // 补发离线期间的结算通知（死亡/断联结算结果）
         if (experience != null && event.getEntity() instanceof net.minecraft.server.level.ServerPlayer p2) {
@@ -116,13 +131,28 @@ public class CCNRRPMod {
     }
 
     @SubscribeEvent
+    public void onPlayerLoggedOut(net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent event) {
+        if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
+            // 清理素材同步待定标记（防映射残留）
+            com.ccnrcom.rp.assets.AssetLibrary.clearPending(player);
+            // 离服：取消其全部招募邀请（含已接受）并视同拒绝
+            if (spawnFramework != null) {
+                spawnFramework.recruit().onPlayerDisconnect(player.getUUID().toString());
+            }
+        }
+    }
+
+    @SubscribeEvent
     public void onServerStopping(ServerStoppingEvent event) {
-        if (characters != null) {
-            characters.store().save();
+        if (users != null) {
+            users.save();
         }
         if (statusManager != null) {
             MinecraftForge.EVENT_BUS.unregister(statusManager);
+            com.ccnrcom.rp.status.StatusManager.clearDeathSpots();
         }
+        com.ccnrcom.rp.corpse.CorpseBridge.clearCaptured(); // 清空未消费的死亡角色身份暂存
+        com.ccnrcom.rp.sequence.SequenceEngine.clearConscripts();
         if (spawnFramework != null) {
             MinecraftForge.EVENT_BUS.unregister(spawnFramework);
         }
@@ -142,6 +172,7 @@ public class CCNRRPMod {
         experience = null;
         statusManager = null;
         characters = null;
+        users = null;
         factions = null;
         managerSettings = null;
         LOGGER.info("[CCNR-RP] 服务端运行时清理完成");

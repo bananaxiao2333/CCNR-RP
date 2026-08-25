@@ -7,6 +7,16 @@ package com.ccnrcom.rp.experience;
 /** 等级曲线（纯逻辑）：xpForLevel(n) = base * n^pow；level(xp) = floor((xp/base)^(1/pow))。 */
 public record LevelCurve(double base, double pow) {
 
+    public LevelCurve {
+        // 配置误配 0/负数时兜底，避免曲线静默失效（全员恒 0 级或 MAX）
+        if (base <= 0) {
+            base = 100.0;
+        }
+        if (pow <= 0) {
+            pow = 2.0;
+        }
+    }
+
     public static final LevelCurve DEFAULT = new LevelCurve(100.0, 2.0);
 
     public long xpForLevel(long level) {

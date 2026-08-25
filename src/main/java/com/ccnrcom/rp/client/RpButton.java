@@ -54,8 +54,8 @@ public final class RpButton extends Button {
                 h,
                 label,
                 onPress,
-                0xB0111A1E,
-                0xD41A2730,
+                0xB0343434,
+                0xD03C3C3C,
                 RpTheme.CYAN_DIM,
                 RpTheme.CYAN,
                 RpTheme.CYAN,
@@ -71,8 +71,8 @@ public final class RpButton extends Button {
                 h,
                 label,
                 onPress,
-                0xA8101418,
-                0xD01A242B,
+                0xA8323232,
+                0xD03A3A3A,
                 RpTheme.PANEL_BORDER_BRIGHT,
                 RpTheme.TEXT_SECONDARY,
                 RpTheme.TEXT_PRIMARY,
@@ -98,7 +98,7 @@ public final class RpButton extends Button {
 
     /** 弹窗内静态绘制按钮（非 widget，交给父屏手动命中）。 */
     public static void draw(GuiGraphics g, int x1, int y1, int x2, int y2, String label, int border, boolean primary) {
-        RpRoundRect.outlined(g, x1, y1, x2, y2, 6f, border, primary ? 0xB0111A1E : 0xA8101418);
+        RpRoundRect.outlined(g, x1, y1, x2, y2, 6f, border, primary ? 0xB0343434 : 0xA8323232);
         Font f2 = Minecraft.getInstance().font;
         int tw = f2.width(label);
         g.drawString(
@@ -126,7 +126,7 @@ public final class RpButton extends Button {
                     5f,
                     RpTheme.alphaBlend(b, 0x26));
         }
-        int color = active ? (isHovered() ? fgHover : fg) : 0xFF3A4A52;
+        int color = active ? (isHovered() ? fgHover : fg) : 0xFF6A6A6A;
         Font f2 = Minecraft.getInstance().font;
         int tw = f2.width(getMessage());
         g.drawString(f2, getMessage(), getX() + (getWidth() - tw) / 2, getY() + (getHeight() - 8) / 2, color, true);

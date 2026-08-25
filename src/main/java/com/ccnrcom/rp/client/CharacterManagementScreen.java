@@ -6,41 +6,38 @@ package com.ccnrcom.rp.client;
 
 import com.ccnrcom.rp.network.RpChannels;
 import com.ccnrcom.rp.network.RpPackets;
+import com.ccnrcom.rp.profession.ItemStackCodec;
+import com.ccnrcom.rp.profession.ProfessionJson;
+import com.ccnrcom.rp.status.CharacterStatus;
 import com.google.gson.JsonObject;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.AbstractWidget;
-import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.ItemStack;
 
 /**
- * 角色管理界面 v3——"SCP:NET 机密终端"三栏网格：
- * 左：机构分类（圆形徽章导航，金/蓝/青按等级区分）｜中：角色档案列表｜右：详细资料 + 真 3D 模型预览 + 战术装备槽(头/胸/腿/背)。
- * 色彩：冷暗金属底 / 青色主色 / 正红选中警戒 / 金色徽章。数据与服务端同步（List→Create→Select→Observe→Activate→Deploy→Delete→Skin）。
+ * K 面板 v2——「职位选择」机密终端（角色库已删除，改为按职位部署）。
+ * 三栏：左＝机构过滤导航｜中＝职位列表（需求等级绿/红）｜右＝职位详情 + 部署按钮（未达等级置红）。
+ * 部署＝选择职位，等级门控由服务端校验；客户端未达等级时部署按钮变红/禁用。
  */
 public class CharacterManagementScreen extends Screen {
 
     private static CharacterManagementScreen open;
 
-    private final List<JsonObject> chars = new ArrayList<>();
+    private final List<JsonObject> professions = new ArrayList<>();
     private final List<JsonObject> factionMeta = new ArrayList<>();
-    private final List<JsonObject> professionMeta = new ArrayList<>();
     private final List<int[]> navBounds = new ArrayList<>();
     private final List<int[]> rowBounds = new ArrayList<>();
 
     private String selectedId = "";
     private String filterFaction = "";
     private int scroll = 0;
-    private EditBox skinPathBox;
+    private int navScroll = 0;
     private String notice = "";
     private long noticeUntil = 0;
-    private int skinLabelX, skinLabelY;
 
     // 布局几何
     private int px1, py1, px2, py2;
@@ -49,8 +46,7 @@ public class CharacterManagementScreen extends Screen {
     private int nlX1, nlX2;
     private int mlX1, mlX2;
     private int rlX1, rlX2;
-    private int pvY1, pvY2, pvX1, pvX2;
-    private int closeX1, closeY1, closeX2, closeY2;
+    private int deployY;
     private int mgrX1, mgrY1, mgrX2, mgrY2;
 
     public CharacterManagementScreen() {
@@ -64,14 +60,11 @@ public class CharacterManagementScreen extends Screen {
         }
     }
 
-    /** 动画/部署开场时关闭角色面板（主线程调用）。 */
     public static void closeIfOpen() {
         if (open != null) {
             open.onClose();
         }
     }
-
-    // ---------- 容器 ----------
 
     @Override
     protected void init() {
@@ -86,58 +79,42 @@ public class CharacterManagementScreen extends Screen {
         bodyY1 = hdrY2 + 26;
         bodyY2 = py2 - 8;
         int innerW = px2 - px1 - 16;
-        int nlw = Math.max(84, Math.min(220, innerW * 24 / 100));
-        int mlw = Math.max(132, Math.min(320, innerW * 30 / 100));
+        int nlw = Math.max(84, Math.min(200, innerW * 22 / 100));
+        int mlw = Math.max(150, Math.min(300, innerW * 30 / 100));
         nlX1 = px1 + 8;
         nlX2 = nlX1 + nlw;
         mlX1 = nlX2 + 8;
         mlX2 = mlX1 + mlw;
         rlX1 = mlX2 + 8;
         rlX2 = px2 - 8;
-        int profileH = 54;
-        int createY1 = Math.max(bodyY2 - 96, bodyY1 + profileH + 8 + 84 + 62);
-        pvX1 = rlX1;
-        pvX2 = rlX2;
-        pvY1 = bodyY1 + profileH + 8;
-        pvY2 = createY1 - 62;
-        if (pvY2 - pvY1 < 84) {
-            pvY2 = pvY1 + 84;
-        }
-        closeX1 = px2 - 28;
-        closeY1 = hdrY1 - 1;
-        closeX2 = px2 - 10;
-        closeY2 = hdrY1 + 17;
-        // 管理按钮置于 CCNR:NET 页眉左侧，避免重叠
-        String net = Component.translatable("ccnr_rp.gui.character.net_header").getString();
-        mgrX2 = px2 - 8 - font.width(net) - 26;
-        mgrX1 = mgrX2 - 46;
+        deployY = bodyY2 - 70;
+        String mgr = Component.translatable("ccnr_rp.gui.character.manage").getString();
+        mgrX2 = px2 - 40;
+        mgrX1 = mgrX2 - font.width(mgr) - 8;
         mgrY1 = hdrY1 - 1;
         mgrY2 = hdrY1 + 17;
         rebuild();
     }
 
     private void reloadData() {
-        chars.clear();
-        chars.addAll(ClientCharacterState.list());
+        professions.clear();
+        professions.addAll(ClientCharacterState.professions());
         factionMeta.clear();
         factionMeta.addAll(ClientCharacterState.factions());
-        professionMeta.clear();
-        professionMeta.addAll(ClientCharacterState.professions());
         if (filterFaction.isEmpty()
                 || factionMeta.stream().noneMatch(f -> f.get("id").getAsString().equals(filterFaction))) {
             filterFaction = "";
         }
-        if (selectedId.isEmpty() || ClientCharacterState.find(selectedId) == null) {
-            selectedId = ClientCharacterState.selected();
+        if (selectedId.isEmpty()
+                || professions.stream().noneMatch(p -> str(p, "id").equals(selectedId))) {
+            selectedId = "";
         }
-        skinPathBox = null;
     }
 
     private void rebuild() {
         clearWidgets();
         navBounds.clear();
         rowBounds.clear();
-        // 左列导航：全部 + 各机构
         int navH = 22;
         int navGap = 4;
         int y = bodyY1 + 2;
@@ -147,9 +124,8 @@ public class CharacterManagementScreen extends Screen {
             navBounds.add(new int[] {nlX1, y, nlX2, y + navH, i});
             y += navH + navGap;
         }
-        // 中列角色行
-        List<JsonObject> visible = filteredChars();
-        int rowH = 40;
+        List<JsonObject> visible = filtered();
+        int rowH = 44;
         int rowGap = 4;
         int listH = bodyY2 - bodyY1 - 2;
         int maxVisible = Math.max(1, (listH + rowGap) / (rowH + rowGap));
@@ -162,151 +138,81 @@ public class CharacterManagementScreen extends Screen {
     }
 
     private void buildRight() {
-        clearWidgets2();
-        JsonObject c = ClientCharacterState.find(selectedId);
+        clearWidgets();
+        JsonObject p = findProfession(selectedId);
         int x = rlX1;
         int w = rlX2 - rlX1;
-        // 操作行
-        int ay = pvY2 + 6;
-        if (c != null) {
-            boolean retain = ClientCharacterState.settingBool("forceRetain", true);
-            int n = retain ? 6 : 5;
-            int bw = Math.max(40, (w - (n - 1) * 4) / n);
-            addW(RpButton.primary(x, ay, bw, 20, Component.translatable("ccnr_rp.gui.character.activate"), b -> {
-                RpChannels.sendToServer(new RpPackets.CharacterActivateC2S(selectedId));
-                notice("");
-            }));
-            addW(RpButton.primary(
-                    x + (bw + 4), ay, bw, 20, Component.translatable("ccnr_rp.gui.character.deploy"), b -> {
-                        RpChannels.sendToServer(new RpPackets.CharacterDeployC2S(selectedId));
+        if (p != null) {
+            int ay = deployY;
+            boolean met = userLevel() >= unlockLevel(p);
+            boolean observing = ClientCharacterState.userStatus() == CharacterStatus.OBSERVING;
+            boolean onCd = ClientCharacterState.userCooldownUntil() > System.currentTimeMillis();
+            boolean canDeploy = met && observing && !onCd;
+            RpButton deploy =
+                    RpButton.primary(x, ay, w, 22, Component.translatable("ccnr_rp.gui.character.deploy"), b -> {
+                        RpChannels.sendToServer(new RpPackets.DeployPositionC2S(selectedId));
                         notice("");
-                    }));
-            addW(RpButton.secondary(
-                    x + (bw + 4) * 2, ay, bw, 20, Component.translatable("ccnr_rp.gui.character.select"), b -> {
-                        RpChannels.sendToServer(new RpPackets.CharacterSelectC2S(selectedId));
-                        notice("");
-                    }));
-            addW(RpButton.secondary(
-                    x + (bw + 4) * 3, ay, bw, 20, Component.translatable("ccnr_rp.gui.character.observe"), b -> {
-                        RpChannels.sendToServer(new RpPackets.CharacterObserveC2S(selectedId));
-                        notice("");
-                    }));
-            addW(RpButton.danger(
-                    x + (bw + 4) * 4, ay, bw, 20, Component.translatable("ccnr_rp.gui.character.delete"), b -> {
-                        RpChannels.sendToServer(new RpPackets.CharacterDeleteC2S(selectedId));
-                        notice("");
-                    }));
-            if (retain) {
-                addW(RpButton.danger(
-                        x + (bw + 4) * 5,
-                        ay,
-                        bw,
-                        20,
-                        Component.translatable("ccnr_rp.gui.character.retire"),
-                        b -> RpChannels.sendToServer(new RpPackets.CharacterRetireC2S(selectedId))));
+                    });
+            deploy.active = canDeploy;
+            if (!met) {
+                // 等级未达标：按钮置红并提示需要等级
+                deploy.setMessage(Component.translatable("ccnr_rp.gui.character.need_level", unlockLevel(p)));
+            } else if (!observing) {
+                // 等级达标但当前已在场/阴间：禁用部署（不误标为等级问题）
+                deploy.setMessage(Component.translatable("ccnr_rp.gui.character.deploy"));
+                deploy.active = false;
             }
-            // 皮肤上传行
-            int sy = ay + 34;
-            skinLabelX = x;
-            skinLabelY = sy - 11;
-            skinPathBox = new EditBox(
-                    font, x, sy, Math.max(90, w - 126), 18, Component.translatable("ccnr_rp.gui.character.skin.path"));
-            skinPathBox.setMaxLength(512);
-            skinPathBox.setTextColor(RpTheme.CYAN);
-            addW(skinPathBox);
-            addW(RpButton.secondary(
-                    x + Math.max(90, w - 126) + 6,
-                    sy,
-                    120,
-                    18,
-                    Component.translatable("ccnr_rp.gui.character.skin.upload"),
-                    b -> uploadSkin()));
+            addRenderableWidget(deploy);
         }
-        // 创建角色（弹窗入口按钮）
-        int createY1 = Math.max(bodyY2 - 74, pvY2 + 62);
-        int fy = createY1 + 8;
-        addW(RpButton.primary(
-                x,
-                fy,
-                w,
-                20,
-                Component.translatable("ccnr_rp.gui.character.create"),
-                b -> net.minecraft.client.Minecraft.getInstance().setScreen(new CreateCharacterModal())));
     }
 
-    private void clearWidgets2() {
-        clearWidgets();
-    }
-
-    private void addW(AbstractWidget w) {
-        addRenderableWidget(w);
-    }
-
-    // ---------- 数据 ----------
-
-    private List<String> factionIds() {
-        return factionMeta.stream().map(f -> f.get("id").getAsString()).toList();
-    }
-
-    private List<JsonObject> filteredChars() {
+    private List<JsonObject> filtered() {
         if (filterFaction.isEmpty()) {
-            return chars;
+            return professions;
         }
-        return chars.stream()
-                .filter(c -> str(c, "factionId").equals(filterFaction))
+        return professions.stream()
+                .filter(p -> str(p, "factionId").equals(filterFaction))
                 .toList();
     }
 
-    private JsonObject majority(String id) {
+    private JsonObject findProfession(String id) {
+        for (JsonObject p : professions) {
+            if (str(p, "id").equals(id)) {
+                return p;
+            }
+        }
+        return null;
+    }
+
+    private JsonObject factionMeta(String id) {
         for (JsonObject f : factionMeta) {
-            if (f.get("id").getAsString().equals(id)) {
+            if (str(f, "id").equals(id)) {
                 return f;
             }
         }
         return null;
     }
 
-    private String factionName(String id) {
-        JsonObject f = majority(id);
-        return f != null ? str(f, "name") : id;
+    private int userLevel() {
+        return ClientCharacterState.userLevel();
     }
 
-    private String professionName(String id) {
-        for (JsonObject p : professionMeta) {
-            if (p.get("id").getAsString().equals(id)) {
-                return str(p, "name");
+    private int unlockLevel(JsonObject p) {
+        try {
+            return p.has("unlockLevel") ? Math.max(0, p.get("unlockLevel").getAsInt()) : 0;
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    private static String factionName(JsonObject p, List<JsonObject> metas) {
+        String fid = str(p, "factionId");
+        for (JsonObject f : metas) {
+            if (str(f, "id").equals(fid)) {
+                return str(f, "name");
             }
         }
-        return id;
-    }
-
-    // ---------- 交互 ----------
-
-    private void uploadSkin() {
-        String path = skinPathBox.getValue();
-        if (path == null || path.isBlank()) {
-            notice("ccnr_rp.gui.character.skin.need_path");
-            return;
-        }
-        byte[] data;
-        try {
-            data = Files.readAllBytes(Path.of(path));
-        } catch (Exception e) {
-            notice("ccnr_rp.gui.character.skin.read_fail");
-            return;
-        }
-        if (data.length > 256 * 1024) {
-            notice("ccnr_rp.gui.character.skin.too_big");
-            return;
-        }
-        int part = 32 * 1024;
-        int total = (data.length + part - 1) / part;
-        for (int i = 0; i < total; i++) {
-            byte[] chunk = java.util.Arrays.copyOfRange(data, i * part, Math.min((i + 1) * part, data.length));
-            RpChannels.sendToServer(new RpPackets.SkinUploadPartC2S(selectedId, i, total, chunk));
-        }
-        RpChannels.sendToServer(new RpPackets.SkinUploadCommitC2S(selectedId, data.length, total));
-        notice("ccnr_rp.gui.character.skin.uploading");
+        return fid;
     }
 
     @Override
@@ -314,29 +220,56 @@ public class CharacterManagementScreen extends Screen {
         if (super.mouseClicked(mx, my, button)) {
             return true;
         }
-        if (mx >= closeX1 && mx <= closeX2 && my >= closeY1 && my <= closeY2) {
-            onClose();
-            return true;
-        }
+        // 管理按钮
         if (mx >= mgrX1 && mx <= mgrX2 && my >= mgrY1 && my <= mgrY2) {
-            net.minecraft.client.Minecraft.getInstance().setScreen(new RpAdminScreen());
+            if (ClientCharacterState.isAdmin()) {
+                net.minecraft.client.Minecraft.getInstance().setScreen(new RpAdminScreen());
+            } else {
+                notice("ccnr_rp.command.no_permission");
+            }
             return true;
         }
-        for (int i = 0; i < navBounds.size(); i++) {
-            int[] b = navBounds.get(i);
+        // 滚动条点击（分类=1，职位列表=2）
+        int navNs = RpScrollbar.clickV(
+                (int) mx, (int) my, nlX2 - 7, nlX2 - 2, bodyY1, bodyY2, navBounds.size(), navVisible(), navScroll, 1);
+        if (navNs >= 0) {
+            navScroll = (int) Math.max(0, Math.min(navNs, Math.max(0, navBounds.size() - navVisible())));
+            return true;
+        }
+        int listNs = RpScrollbar.clickV(
+                (int) mx,
+                (int) my,
+                mlX2 - 7,
+                mlX2 - 2,
+                bodyY1,
+                bodyY2,
+                filtered().size(),
+                maxVisibleRows(),
+                scroll,
+                2);
+        if (listNs >= 0) {
+            scroll = (int) Math.max(0, Math.min(listNs, Math.max(0, filtered().size() - maxVisibleRows())));
+            rebuild();
+            return true;
+        }
+        int navEnd = Math.min(navBounds.size(), navScroll + navVisible());
+        for (int i = navScroll; i < navEnd; i++) {
+            int[] b = navRect(i);
             if (mx >= b[0] && mx <= b[2] && my >= b[1] && my <= b[3]) {
-                filterFaction = b[4] < 0 ? "" : factionMeta.get(b[4]).get("id").getAsString();
+                filterFaction = b[4] < 0 ? "" : str(factionMeta.get(b[4]), "id");
                 scroll = 0;
                 rebuild();
                 return true;
             }
         }
+        int offset = offsetOfRows();
         for (int i = 0; i < rowBounds.size(); i++) {
             int[] b = rowBounds.get(i);
             if (mx >= b[0] && mx <= b[2] && my >= b[1] && my <= b[3]) {
-                int offset = offsetOfRows();
-                List<JsonObject> visible = filteredChars();
-                selectedId = visible.get(offset + i).get("id").getAsString();
+                List<JsonObject> visible = filtered();
+                if (offset + i < visible.size()) {
+                    selectedId = str(visible.get(offset + i), "id");
+                }
                 rebuild();
                 return true;
             }
@@ -344,21 +277,50 @@ public class CharacterManagementScreen extends Screen {
         return false;
     }
 
-    private int offsetOfRows() {
-        int rowH = 40;
-        int gap = 4;
-        int listH = bodyY2 - bodyY1 - 2;
-        int maxVisible = Math.max(1, (listH + gap) / (rowH + gap));
-        return Math.min(scroll, Math.max(0, filteredChars().size() - maxVisible));
+    @Override
+    public boolean mouseDragged(double mx, double my, int b, double dx, double dy) {
+        int ns = RpScrollbar.dragV((int) my);
+        if (ns >= 0) {
+            if (RpScrollbar.dragId() == 1) {
+                navScroll = (int) Math.max(0, Math.min(ns, Math.max(0, navBounds.size() - navVisible())));
+            } else {
+                scroll = (int) Math.max(0, Math.min(ns, Math.max(0, filtered().size() - maxVisibleRows())));
+                rebuild();
+            }
+            return true;
+        }
+        return super.mouseDragged(mx, my, b, dx, dy);
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
-        if (mouseX >= mlX1 && mouseX <= mlX2 && mouseY >= bodyY1 - 4 && mouseY <= bodyY2) {
+    public boolean mouseReleased(double mx, double my, int b) {
+        RpScrollbar.endDrag();
+        return super.mouseReleased(mx, my, b);
+    }
+
+    @Override
+    public boolean mouseScrolled(double mx, double my, double delta) {
+        if (mx >= nlX1 && mx <= nlX2 && my >= bodyY1 - 4 && my <= bodyY2) {
+            navScroll =
+                    (int) Math.max(0, Math.min(navScroll - delta / 10, Math.max(0, navBounds.size() - navVisible())));
+            return true;
+        }
+        if (mx >= mlX1 && mx <= mlX2 && my >= bodyY1 - 4 && my <= bodyY2) {
             scroll = (int) Math.max(0, scroll - delta / 10);
             rebuild();
         }
         return true;
+    }
+
+    private int maxVisibleRows() {
+        int rowH = 44;
+        int gap = 4;
+        int listH = bodyY2 - bodyY1 - 2;
+        return Math.max(1, (listH + gap) / (rowH + gap));
+    }
+
+    private int offsetOfRows() {
+        return Math.min(scroll, Math.max(0, filtered().size() - maxVisibleRows()));
     }
 
     private void notice(String key) {
@@ -370,81 +332,58 @@ public class CharacterManagementScreen extends Screen {
         noticeUntil = System.currentTimeMillis() + 2600;
     }
 
-    // ---------- 渲染 ----------
-
     @Override
-    public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+    public void render(GuiGraphics g, int mx, int my, float partial) {
         renderBackground(g);
         RpTheme.terminalPanel(g, px1, py1, px2, py2, RpTheme.RADIUS_LARGE);
-        RpBg.draw(g, px1 + 4, py1 + 4, px2 - 4, py2 - 4);
-        renderHeader(g, mouseX, mouseY);
+        renderHeader(g, mx, my);
         renderColHeaders(g);
-        renderNav(g, mouseX, mouseY);
-        renderList(g, mouseX, mouseY);
-        renderProfile(g);
-        renderPreview(g, mouseX, mouseY);
-        // 输入框用途标签
-        g.drawString(
-                font,
-                Component.translatable("ccnr_rp.gui.character.skin.field").getString(),
-                skinLabelX,
-                skinLabelY,
-                RpTheme.TEXT_DIM,
-                false);
+        renderNav(g, mx, my);
+        renderList(g, mx, my);
+        renderDetail(g, mx, my);
         renderNotice(g);
-        super.render(g, mouseX, mouseY, partialTick);
+        super.render(g, mx, my, partial);
     }
 
-    private void renderHeader(GuiGraphics g, int mouseX, int mouseY) {
+    private void renderHeader(GuiGraphics g, int mx, int my) {
         int y = hdrY1 + 5;
-        // 左侧：徽章 + 身份数据库
         RpIcons.badge(g, px1 + 17, hdrY1 + 10, 8, "hex", 1, false);
-        g.drawString(
-                font,
-                Component.translatable("ccnr_rp.gui.character.db_header")
-                        .getString()
-                        .toUpperCase(Locale.ROOT),
-                px1 + 30,
-                y,
-                RpTheme.CYAN,
-                true);
-        int tx = px1
-                + 30
-                + font.width(Component.translatable("ccnr_rp.gui.character.db_header")
-                        .getString()
-                        .toUpperCase(Locale.ROOT));
-        g.drawString(font, " v" + versionString(), tx + 6, y + 1, RpTheme.TEXT_DIM);
-        g.fill(px1 + 8, hdrY2 - 1, px2 - 8, hdrY2, RpTheme.CYAN_DIM);
-        // 右侧：CCNR:NET 页眉 + 关闭按钮
-        String net = Component.translatable("ccnr_rp.gui.character.net_header")
+        String head = Component.translatable("ccnr_rp.gui.character.db_header")
                 .getString()
                 .toUpperCase(Locale.ROOT);
-        int nx = px2 - 8 - font.width(net) - 20;
-        g.drawString(font, net, nx, y, RpTheme.CYAN, true);
-        RpTheme.cornerBrackets(g, nx - 6, hdrY1 + 1, nx + font.width(net) + 6, hdrY2 - 1, 4, RpTheme.CYAN_DIM);
-        // 管理（管理员跳转）
-        boolean mgrHover = mouseIn(mouseX, mouseY, mgrX1, mgrY1, mgrX2, mgrY2);
+        g.drawString(font, head, px1 + 30, y, RpTheme.CYAN, true);
+        String statusLabel =
+                switch (ClientCharacterState.userStatus()) {
+                    case ALIVE -> Component.translatable("ccnr_rp.gui.character.status.alive")
+                            .getString();
+                    case DEAD -> Component.translatable("ccnr_rp.gui.character.status.dead")
+                            .getString();
+                    default -> Component.translatable("ccnr_rp.gui.character.status.observing")
+                            .getString();
+                };
+        String lvl = "Lv " + userLevel() + "  " + statusLabel;
+        g.drawString(font, lvl, px1 + 30 + font.width(head) + 40, y, RpTheme.TEXT_SECONDARY, true);
+        g.fill(px1 + 8, hdrY2 - 1, px2 - 8, hdrY2, RpTheme.CYAN_DIM);
+        // 管理按钮（管理员可开管理面板）
+        boolean mgrHover = my >= mgrY1 && my <= mgrY2 && mx >= mgrX1 && mx <= mgrX2;
         if (mgrHover) {
-            g.fill(mgrX1 - 2, mgrY1 - 1, mgrX2 + 2, mgrY2 + 1, 0x60144A5A);
+            g.fill(mgrX1 - 2, mgrY1 - 1, mgrX2 + 2, mgrY2 + 1, 0x605A5A5A);
         }
         g.drawString(
                 font,
                 Component.translatable("ccnr_rp.gui.character.manage").getString(),
-                mgrX1 + 2,
-                hdrY1 + 6,
+                mgrX1 + 4,
+                hdrY1 + 4,
                 ClientCharacterState.isAdmin() ? RpTheme.CYAN : RpTheme.TEXT_DIM,
                 true);
-        // 关闭
-        boolean hover = mouseIn(mouseX, mouseY, closeX1, closeY1, closeX2, closeY2);
+        boolean hover = my >= hdrY1 - 1 && my <= hdrY1 + 17 && mx >= px2 - 28 && mx <= px2 - 10;
         if (hover) {
-            g.fill(closeX1 - 3, closeY1 - 2, closeX2 + 3, closeY2 + 2, 0xE66F1613);
-            g.fill(closeX1 - 3, closeY1 - 2, closeX2 + 2, closeY1 - 1, RpTheme.RED);
-            g.fill(closeX1 - 3, closeY2 + 1, closeX2 + 3, closeY2 + 2, RpTheme.RED);
-            g.fill(closeX1 - 3, closeY1 - 2, closeX1 - 2, closeY2 + 2, RpTheme.RED);
-            g.fill(closeX2 + 2, closeY1 - 2, closeX2 + 3, closeY2 + 2, RpTheme.RED);
+            g.fill(px2 - 30, hdrY1 - 2, px2 - 8, hdrY1 + 18, 0xE66F1613);
         }
-        g.drawString(
-                font, "X", (closeX1 + closeX2) / 2 - 2, closeY1 + 4, hover ? 0xFFFFFFFF : RpTheme.TEXT_SECONDARY, true);
+        g.drawString(font, "X", px2 - 20, hdrY1 + 4, hover ? 0xFFFFFFFF : RpTheme.TEXT_SECONDARY, true);
+        if (hover && mx >= px2 - 28 && mx <= px2 - 10 && my >= hdrY1 - 1 && my <= hdrY1 + 17) {
+            onClose();
+        }
     }
 
     private void renderColHeaders(GuiGraphics g) {
@@ -457,8 +396,8 @@ public class CharacterManagementScreen extends Screen {
                 RpTheme.TEXT_DIM);
         g.drawString(
                 font,
-                RpTheme.tag(Component.translatable("ccnr_rp.gui.character.list_header")
-                                .getString()) + " (" + filteredChars().size() + ")",
+                RpTheme.tag(Component.translatable("ccnr_rp.gui.character.position_list")
+                                .getString()) + " (" + filtered().size() + ")",
                 mlX1,
                 y,
                 RpTheme.TEXT_DIM);
@@ -472,13 +411,22 @@ public class CharacterManagementScreen extends Screen {
         g.fill(nlX1, y + 12, rlX2, y + 13, RpTheme.PANEL_BORDER);
     }
 
-    private void renderNav(GuiGraphics g, int mouseX, int mouseY) {
-        for (int i = 0; i < navBounds.size(); i++) {
-            int[] b = navBounds.get(i);
+    private int[] navRect(int i) {
+        int navH = 22;
+        int gap = 4;
+        int y = bodyY1 + 2 + (i - navScroll) * (navH + gap);
+        int facIdx = navBounds.get(i)[4]; // 存储的阵营索引（-1=全部），非位置下标
+        return new int[] {nlX1, y, nlX2, y + navH, facIdx};
+    }
+
+    private void renderNav(GuiGraphics g, int mx, int my) {
+        int end = Math.min(navBounds.size(), navScroll + navVisible());
+        for (int i = navScroll; i < end; i++) {
+            int[] b = navRect(i);
             JsonObject fac = b[4] < 0 ? null : factionMeta.get(b[4]);
-            String id = fac == null ? "" : fac.get("id").getAsString();
-            boolean sel = !filterFaction.isEmpty() && id.equals(filterFaction);
-            boolean hover = mouseX >= b[0] && mouseX <= b[2] && mouseY >= b[1] && mouseY <= b[3];
+            boolean sel =
+                    !filterFaction.isEmpty() && fac != null && str(fac, "id").equals(filterFaction);
+            boolean hover = mx >= b[0] && mx <= b[2] && my >= b[1] && my <= b[3];
             if (sel) {
                 RpTheme.selectedBar(g, b[0], b[1], b[2], b[3], 6f);
             } else {
@@ -503,12 +451,7 @@ public class CharacterManagementScreen extends Screen {
                         sel ? 0xFFFFFFFF : RpTheme.TEXT_SECONDARY,
                         true);
             } else {
-                int tier = tierOf(fac);
-                String icon = str(fac, "icon");
-                if (icon.isBlank()) {
-                    icon = "hex";
-                }
-                RpIcons.badge(g, b[0] + 12, b[1] + 11, 8, icon, tier, sel);
+                RpIcons.factionBadge(g, b[0] + 12, b[1] + 11, 8, fac, sel);
                 String name = str(fac, "name");
                 int maxW = b[2] - b[0] - 28;
                 if (font.width(name) > maxW) {
@@ -517,25 +460,21 @@ public class CharacterManagementScreen extends Screen {
                 g.drawString(font, name, b[0] + 25, b[1] + 7, sel ? 0xFFFFFFFF : RpTheme.TEXT_SECONDARY, true);
             }
         }
-        // 滚动条（机构导航）
-        int navCount = Math.max(1, (bodyY2 - bodyY1 - 2) / 26);
-        RpScrollbar.draw(g, nlX2 - 7, bodyY1, bodyY2, navBounds.size(), navCount, 0);
     }
 
-    private void renderList(GuiGraphics g, int mouseX, int mouseY) {
+    private void renderList(GuiGraphics g, int mx, int my) {
         RpRoundRect.outlined(g, mlX1 - 3, bodyY1 - 2, mlX2 + 3, bodyY2, 8f, RpTheme.PANEL_BORDER, RpTheme.PANEL_BG);
-        List<JsonObject> visible = filteredChars();
+        List<JsonObject> visible = filtered();
         int offset = offsetOfRows();
-        int rowH = 40;
         for (int i = 0; i < rowBounds.size(); i++) {
             int[] b = rowBounds.get(i);
             int idx = offset + i;
             if (idx >= visible.size()) {
                 break;
             }
-            JsonObject c = visible.get(idx);
-            boolean sel = c.get("id").getAsString().equals(selectedId);
-            boolean hover = mouseX >= b[0] && mouseX <= b[2] && mouseY >= b[1] && mouseY <= b[3];
+            JsonObject p = visible.get(idx);
+            boolean sel = str(p, "id").equals(selectedId);
+            boolean hover = mx >= b[0] && mx <= b[2] && my >= b[1] && my <= b[3];
             if (sel) {
                 RpTheme.selectedBar(g, b[0], b[1], b[2], b[3], 8f);
             } else {
@@ -549,143 +488,198 @@ public class CharacterManagementScreen extends Screen {
                         hover ? RpTheme.PANEL_BORDER_BRIGHT : RpTheme.PANEL_BORDER,
                         hover ? RpTheme.PANEL_BG_ALT : (i % 2 == 0 ? RpTheme.PANEL_BG : RpTheme.PANEL_BG_EVEN));
             }
-            // 头像
-            ResourceLocation tex = SkinCache.textureOrNull(c.get("id").getAsString());
-            int ax = b[0] + 7;
-            int ay = b[1] + 7;
-            if (tex != null) {
-                g.blit(tex, ax, ay, 26, 26, 0, 0, 32, 32, 32, 32);
-                g.fill(ax, ay, ax + 26, ay + 1, RpTheme.PANEL_BORDER);
-                g.fill(ax, ay + 25, ax + 26, ay + 26, RpTheme.PANEL_BORDER);
-                g.fill(ax, ay, ax + 1, ay + 26, RpTheme.PANEL_BORDER);
-                g.fill(ax + 25, ay, ax + 26, ay + 26, RpTheme.PANEL_BORDER);
-            } else {
-                RpIcons.circle(g, ax + 13, ay + 13, 12, RpTheme.PANEL_BG_ALT);
-                g.drawString(font, firstChar(c), ax + 9, ay + 8, RpTheme.TEXT_SECONDARY, true);
-            }
-            g.drawString(font, str(c, "name"), ax + 34, b[1] + 6, sel ? 0xFFFFFFFF : RpTheme.TEXT_PRIMARY, true);
+            JsonObject fac = factionMeta(str(p, "factionId"));
+            RpIcons.factionBadge(g, b[0] + 14, b[1] + 14, 7, fac, false);
+            g.drawString(font, str(p, "name"), b[0] + 34, b[1] + 6, sel ? 0xFFFFFFFF : RpTheme.TEXT_PRIMARY, true);
             g.drawString(
-                    font,
-                    professionName(str(c, "professionId")) + " · " + factionName(str(c, "factionId")),
-                    ax + 34,
-                    b[1] + 20,
-                    sel ? 0xFFFFFFFF : RpTheme.TEXT_SECONDARY);
-            // 状态胶囊
-            String status = str(c, "status");
-            int pillW = 34;
-            int sx2 = b[2] - 7;
-            RpRoundRect.fill(
-                    g,
-                    sx2 - pillW,
-                    b[1] + 14,
-                    sx2,
-                    b[1] + 26,
-                    4f,
-                    RpTheme.alphaBlend(RpTheme.statusColor(status), 0xFF));
-            g.drawString(font, statusKey(status), sx2 - pillW + 11, b[1] + 16, 0xFFFFFFFF);
-            // 冷却
-            String cooldown = cooldownText(c.get("cooldownUntil").getAsLong());
-            if (!cooldown.isBlank()) {
-                g.drawString(font, "CD " + cooldown, sx2 - pillW - 44, b[1] + 16, RpTheme.COOLDOWN, true);
-            }
+                    font, factionName(p, factionMeta), b[0] + 34, b[1] + 20, sel ? 0xFFFFFFFF : RpTheme.TEXT_SECONDARY);
+            // 灰色职位 ID
+            g.drawString(font, str(p, "id"), b[0] + 34, b[1] + 32, sel ? 0xFFFFFFFF : RpTheme.TEXT_DIM);
+            boolean met = userLevel() >= unlockLevel(p);
+            String tag = "Lv " + unlockLevel(p);
+            int tagW = font.width(tag) + 8;
+            int tx2 = b[2] - 7;
+            int color = met ? RpTheme.STATUS_ALIVE : RpTheme.RED_LINE;
+            RpRoundRect.fill(g, tx2 - tagW, b[1] + 6, tx2, b[1] + 18, 3f, RpTheme.alphaBlend(color, met ? 0x66 : 0xFF));
+            g.drawString(font, tag, tx2 - tagW + 4, b[1] + 8, met ? color : 0xFFFFFFFF, true);
         }
-        // 滚动条（角色列表）
-        int gap = 4;
-        int maxVisible = Math.max(1, (bodyY2 - bodyY1 - 2) / (rowH + gap));
-        RpScrollbar.draw(g, mlX2 - 7, bodyY1, bodyY2, filteredChars().size(), maxVisible, offset);
+        // 职位列表滚动条（可拖拽）
+        RpScrollbar.draw(g, mlX2 - 7, bodyY1, bodyY2, visible.size(), maxVisibleRows(), offsetOfRows());
+        // 左侧机构/团队分类滚动条（可拖拽）
+        RpScrollbar.draw(g, nlX2 - 7, bodyY1, bodyY2, navBounds.size(), navVisible(), navScroll);
     }
 
-    private void renderProfile(GuiGraphics g) {
-        JsonObject c = ClientCharacterState.find(selectedId);
+    private int navVisible() {
+        int navH = 22;
+        int gap = 4;
+        int listH = bodyY2 - bodyY1 - 2;
+        return Math.max(1, (listH + gap) / (navH + gap));
+    }
+
+    private void renderDetail(GuiGraphics g, int mx, int my) {
+        JsonObject p = findProfession(selectedId);
         int x = rlX1;
         int w = rlX2 - rlX1;
         int y = bodyY1;
-        int h = 54;
-        RpTheme.card(g, x, y, x + w, y + h, 8f, RpTheme.PANEL_BG);
-        if (c == null) {
-            g.drawString(font, "— NO ACTIVE FILE —", x + 10, y + 22, RpTheme.TEXT_DIM, true);
+        RpTheme.card(g, x, y, x + w, y + 44, 8f, RpTheme.PANEL_BG);
+        if (p == null) {
+            g.drawString(font, "— 选择一个职位 —", x + 10, y + 18, RpTheme.TEXT_DIM, true);
+            g.drawString(font, "点选职位后可按部署", x + 10, y + 30, RpTheme.TEXT_DIM);
             return;
         }
-        String name = str(c, "name");
-        g.drawString(font, name, x + 8, y + 5, RpTheme.CYAN, true);
-        String status = str(c, "status");
-        int pillW = 34;
-        int pillX = x + w - pillW - 8;
-        RpRoundRect.fill(
-                g, pillX, y + 5, pillX + pillW, y + 17, 4f, RpTheme.alphaBlend(RpTheme.statusColor(status), 0xFF));
-        g.drawString(font, statusKey(status), pillX + 11, y + 7, 0xFFFFFFFF);
-        g.drawString(font, "ID " + str(c, "id"), x + 8 + font.width(name) + 8, y + 7, RpTheme.TEXT_DIM);
-        // 阵营徽章 + 职业
-        JsonObject fac = majority(str(c, "factionId"));
-        String gname = fac == null ? "hex" : str(fac, "icon");
-        if (gname.isBlank()) {
-            gname = "hex";
-        }
-        RpIcons.badge(g, x + 12, y + 27, 7, gname, fac == null ? 2 : tierOf(fac), false);
+        g.drawString(font, str(p, "name"), x + 8, y + 5, RpTheme.CYAN, true);
+        String facName = factionName(p, factionMeta);
         g.drawString(
                 font,
-                factionName(str(c, "factionId")) + "  /  " + professionName(str(c, "professionId")),
-                x + 24,
-                y + 22,
-                RpTheme.TEXT_PRIMARY,
+                "ID " + str(p, "id") + "  /  " + facName,
+                x + 8 + font.width(str(p, "name")) + 10,
+                y + 7,
+                RpTheme.TEXT_DIM);
+        boolean met = userLevel() >= unlockLevel(p);
+        String req = "需求等级：Lv " + unlockLevel(p) + "（当前 Lv " + userLevel() + "）";
+        g.drawString(font, req, x + 8, y + 24, met ? RpTheme.STATUS_ALIVE : RpTheme.RED_LINE);
+        g.drawString(
+                font,
+                Component.translatable("ccnr_rp.gui.character.preview").getString(),
+                x + 8,
+                y + 36,
+                RpTheme.TEXT_DIM,
                 true);
-        // 经验/等级/执勤/冷却
-        long xp = c.has("xp") ? c.get("xp").getAsLong() : 0;
-        long duty = c.has("dutySeconds") ? c.get("dutySeconds").getAsLong() : 0;
-        String stat = String.format("XP %d   等级 %d   执勤 %dh", xp, levelOf(c), duty / 3600);
-        g.drawString(font, stat, x + 8, y + 36, RpTheme.TEXT_SECONDARY);
-        String cd = cooldownText(c.get("cooldownUntil").getAsLong());
-        if (!cd.isBlank()) {
-            g.drawString(font, "冷却 " + cd + "m", x + 8 + font.width(stat) + 10, y + 36, RpTheme.COOLDOWN, true);
-        }
+        JsonObject loadout = loadoutOf(p);
+        int contentTop = bodyY1 + 50;
+        int contentBottom = deployY - 12;
+        int modelW = Math.max(88, w * 38 / 100);
+        // 3D 人物立绘（使用玩家自己的皮肤，来自 CharacterPreview）
+        g.enableScissor(x, contentTop, x + modelW, contentBottom);
+        JsonObject ch = new JsonObject();
+        ch.addProperty("id", "pos-" + selectedId);
+        ch.addProperty("name", str(p, "name"));
+        int modelH = contentBottom - contentTop;
+        int scale = Math.max(12, Math.min(36, Math.min(modelH / 3 - 6, modelW / 3)));
+        int cy = contentTop + modelH / 2 + 4;
+        CharacterPreview.render(g, x + modelW / 2, cy, scale, mx, my, ch, loadout);
+        g.disableScissor();
+        // 战术装备实物预览（职位 loadout：头/胸/腿/靴/武器，悬停显示词条）
+        renderEquipList(g, x + modelW + 8, x + w - 8, contentTop, contentBottom, loadout, mx, my);
     }
 
-    private void renderPreview(GuiGraphics g, int mouseX, int mouseY) {
-        int x = pvX1;
-        int w = pvX2 - pvX1;
-        RpRoundRect.outlined(g, x, pvY1, x + w, pvY2, 8f, RpTheme.PANEL_BORDER, 0xA010161B);
-        RpTheme.scanlines(g, x + 2, pvY1 + 2, x + w - 2, pvY2 - 2);
-        g.drawString(
-                font,
-                RpTheme.tag(Component.translatable("ccnr_rp.gui.character.preview")
-                                .getString())
-                        .toUpperCase(Locale.ROOT),
-                x + 8,
-                pvY1 + 4,
-                RpTheme.CYAN_DIM,
-                true);
-        JsonObject c = ClientCharacterState.find(selectedId);
-        // 3D 模型（裁剪在框内，跟随鼠标）
-        if (c != null) {
-            int pvH = pvY2 - pvY1;
-            int scale = Math.max(32, Math.min(95, (pvH - 100) / 2));
-            g.enableScissor(x + 2, pvY1 + 14, x + w - 2, pvY2 - 24);
-            CharacterPreview.render(g, x + w / 2, pvY2 - 30, scale, mouseX, mouseY, c);
-            g.disableScissor();
-        } else {
-            g.drawCenteredString(
-                    font,
-                    Component.translatable("ccnr_rp.gui.character.detail_header"),
-                    x + w / 2,
-                    pvY1 + 60,
-                    RpTheme.TEXT_DIM);
+    private static JsonObject loadoutOf(JsonObject p) {
+        if (p == null || !p.has("loadout") || !p.get("loadout").isJsonObject()) {
+            return null;
         }
-        // 战术装备槽：头/胸/腿/背
-        String[] slots = {"helm", "chest", "legs", "back"};
-        String[] slotNames = {
+        return p.getAsJsonObject("loadout");
+    }
+
+    private void renderEquipList(
+            GuiGraphics g, int ex, int er, int top, int bottom, JsonObject loadout, int mx, int my) {
+        String[] labels = {
             Component.translatable("ccnr_rp.gui.character.equip.head").getString(),
             Component.translatable("ccnr_rp.gui.character.equip.chest").getString(),
             Component.translatable("ccnr_rp.gui.character.equip.legs").getString(),
-            Component.translatable("ccnr_rp.gui.character.equip.back").getString()
+            Component.translatable("ccnr_rp.gui.character.equip.boots").getString(),
+            Component.translatable("ccnr_rp.gui.character.equip.weapon").getString()
         };
-        int slot = 15;
-        int total = slots.length * (slot + 6) - 6;
-        int sx = x + w / 2 - total / 2;
-        int sy = pvY2 - 21;
-        for (int i = 0; i < slots.length; i++) {
-            RpIcons.slot(g, sx + i * (slot + 6), sy, slot, slots[i], RpTheme.CYAN);
-            g.drawString(font, slotNames[i], sx + i * (slot + 6) + 1, sy + slot + 3, RpTheme.TEXT_DIM);
+        ItemStack[] stacks = {
+            armorStack(loadout, 39),
+            armorStack(loadout, 38),
+            armorStack(loadout, 37),
+            armorStack(loadout, 36),
+            weaponStack(loadout)
+        };
+        int availH = bottom - top - 8;
+        if (availH < 10) {
+            return;
         }
+        int rowH = Math.max(16, Math.min(24, availH / labels.length));
+        int slotS = Math.min(18, rowH - 3);
+        int iy = (slotS - 16) / 2;
+        ItemStack hovered = ItemStack.EMPTY;
+        for (int i = 0; i < labels.length; i++) {
+            int ry = top + 6 + i * rowH;
+            RpRoundRect.outlined(g, ex, ry, ex + slotS, ry + slotS, 3f, RpTheme.PANEL_BORDER, 0xFF2F2F2F);
+            ItemStack stack = stacks[i];
+            if (stack != null && !stack.isEmpty()) {
+                g.renderItem(stack, ex + iy, ry + iy);
+                if (mx >= ex && mx <= ex + slotS && my >= ry && my <= ry + slotS) {
+                    hovered = stack;
+                }
+            } else {
+                g.drawString(font, "—", ex + slotS / 2 - 2, ry + slotS / 2 - 4, RpTheme.TEXT_DIM);
+            }
+            g.drawString(font, labels[i], ex + slotS + 6, ry + slotS / 2 - 4, RpTheme.TEXT_SECONDARY, true);
+        }
+        // 悬停物品显示词条
+        if (!hovered.isEmpty()) {
+            g.renderTooltip(font, hovered, mx, my);
+        }
+    }
+
+    private static ItemStack armorStack(JsonObject loadout, int slot) {
+        if (loadout == null || !loadout.has("armor") || !loadout.get("armor").isJsonArray()) {
+            return ItemStack.EMPTY;
+        }
+        try {
+            List<ProfessionJson.SlotItem> list =
+                    ProfessionJson.listFromJson(loadout.getAsJsonArray("armor"), "armor", new ArrayList<>());
+            for (ProfessionJson.SlotItem s : list) {
+                if (s.slot() == slot) {
+                    return ItemStackCodec.toStack(s);
+                }
+            }
+        } catch (Exception ignored) {
+            // 预览装备失败不致命
+        }
+        return ItemStack.EMPTY;
+    }
+
+    private static ItemStack weaponStack(JsonObject loadout) {
+        if (loadout == null) {
+            return ItemStack.EMPTY;
+        }
+        try {
+            if (loadout.has("inventory") && loadout.get("inventory").isJsonArray()) {
+                List<ProfessionJson.SlotItem> inv = ProfessionJson.listFromJson(
+                        loadout.getAsJsonArray("inventory"), "inventory", new ArrayList<>());
+                for (ProfessionJson.SlotItem s : inv) {
+                    ItemStack st = ItemStackCodec.toStack(s);
+                    if (isWeapon(st)) {
+                        return st;
+                    }
+                }
+                for (ProfessionJson.SlotItem s : inv) {
+                    ItemStack st = ItemStackCodec.toStack(s);
+                    if (!st.isEmpty()) {
+                        return st;
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            // 预览装备失败不致命
+        }
+        return ItemStack.EMPTY;
+    }
+
+    private static boolean isWeapon(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) {
+            return false;
+        }
+        net.minecraft.world.item.Item it = stack.getItem();
+        if (it instanceof net.minecraft.world.item.SwordItem
+                || it instanceof net.minecraft.world.item.AxeItem
+                || it instanceof net.minecraft.world.item.TridentItem
+                || it instanceof net.minecraft.world.item.BowItem
+                || it instanceof net.minecraft.world.item.CrossbowItem
+                || it instanceof net.minecraft.world.item.ShieldItem) {
+            return true;
+        }
+        net.minecraft.resources.ResourceLocation key = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(it);
+        String p2 = key == null ? "" : key.getPath().toLowerCase(Locale.ROOT);
+        return p2.contains("gun")
+                || p2.contains("rifle")
+                || p2.contains("pistol")
+                || p2.contains("weapon")
+                || p2.contains("sword")
+                || p2.contains("carbine");
     }
 
     private void renderNotice(GuiGraphics g) {
@@ -694,65 +688,8 @@ public class CharacterManagementScreen extends Screen {
         }
     }
 
-    // ---------- 工具 ----------
-
     private static String str(JsonObject o, String key) {
         return o.has(key) && !o.get(key).isJsonNull() ? o.get(key).getAsString() : "";
-    }
-
-    private static int tierOf(JsonObject f) {
-        try {
-            return f.has("tier") ? Math.max(1, Math.min(3, f.get("tier").getAsInt())) : 2;
-        } catch (Exception e) {
-            return 2;
-        }
-    }
-
-    private static String firstChar(JsonObject c) {
-        String n = str(c, "name");
-        return n.length() > 0 ? n.substring(0, 1) : "?";
-    }
-
-    private static String statusKey(String status) {
-        return switch (status) {
-            case "alive" -> "AM";
-            case "dead" -> "M";
-            default -> "OB";
-        };
-    }
-
-    private static String cooldownText(long cooldownUntil) {
-        if (cooldownUntil <= 0) {
-            return "";
-        }
-        long min = (cooldownUntil - System.currentTimeMillis()) / 60000L;
-        return min > 0 ? min + "m" : "";
-    }
-
-    private static int levelOf(JsonObject c) {
-        try {
-            return new com.ccnrcom.rp.experience.LevelCurve(
-                            com.ccnrcom.rp.config.CCNRRPConfig.LEVEL_BASE.get(),
-                            com.ccnrcom.rp.config.CCNRRPConfig.LEVEL_POW.get())
-                    .level(c.get("xp").getAsLong());
-        } catch (Exception e) {
-            return 0;
-        }
-    }
-
-    private static String versionString() {
-        try {
-            return net.minecraftforge.fml.ModList.get()
-                    .getModContainerById("ccnr_rp")
-                    .map(c -> c.getModInfo().getVersion().toString())
-                    .orElse("?");
-        } catch (Exception e) {
-            return "?";
-        }
-    }
-
-    private boolean mouseIn(double mx, double my, int x1, int y1, int x2, int y2) {
-        return mx >= x1 && mx <= x2 && my >= y1 && my <= y2;
     }
 
     @Override

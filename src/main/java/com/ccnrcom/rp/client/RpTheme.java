@@ -9,7 +9,7 @@ import net.minecraft.client.gui.GuiGraphics;
 /**
  * CCNR-RP 界面主题 v3——"SCP:NET 机密终端"：
  * 冷暗科技金属底 / 青色主色(文字+边框，电子屏发光) / 高饱和正红(选中+警戒) / 金·蓝徽章(机构等级)。
- * 布局：严格三栏网格（左：机构分类徽章导航 / 中：角色档案列表 / 右：详细资料+3D预览+战术装备槽）。
+ * 布局：严格三栏网格（左：机构分类徽章导航 / 中：角色档案列表 / 右：详细资料+3D预览+战术装备实物）。
  */
 public final class RpTheme {
     // ---- 几何 ----
@@ -17,21 +17,21 @@ public final class RpTheme {
     public static final float RADIUS_LARGE = 14;
     public static final int PAD = 8;
 
-    // ---- 金属暗底（军事指挥中心 / 机密终端屏幕）----
-    public static final int OVERLAY = 0xB40A0E13;
-    public static final int BG_DEEP = 0xCC070A0E;
-    public static final int PANEL_BG = 0x99141C22;
-    public static final int PANEL_BG_ALT = 0xB3202C34;
-    public static final int PANEL_BG_EVEN = 0x9B171F25;
-    public static final int PANEL_BORDER = 0xFF1A5A66;
-    public static final int PANEL_BORDER_BRIGHT = 0xFF2E8FA0;
+    // ---- 灰色半透明底（中性灰，保持克制；功能色仅保留于选中/警示/等级徽章）----
+    public static final int OVERLAY = 0xB32E2E2E;
+    public static final int BG_DEEP = 0xCC262626;
+    public static final int PANEL_BG = 0x99383838;
+    public static final int PANEL_BG_ALT = 0xB3454545;
+    public static final int PANEL_BG_EVEN = 0x9B313131;
+    public static final int PANEL_BORDER = 0xFF5F5F5F;
+    public static final int PANEL_BORDER_BRIGHT = 0xFF858585;
     public static final int SCANLINE = 0x20000000;
     public static final int SHEEN = 0x12FFFFFF;
 
-    // ---- 文字（层级：标题>副标题>正文>弱化）----
-    public static final int TEXT_PRIMARY = 0xFFE8F6FA;
-    public static final int TEXT_SECONDARY = 0xFF86A4B0;
-    public static final int TEXT_DIM = 0xFF51666E;
+    // ---- 文字（层级：标题>副标题>正文>弱化；中性灰阶）----
+    public static final int TEXT_PRIMARY = 0xFFF0F0F0;
+    public static final int TEXT_SECONDARY = 0xFFB4B4B4;
+    public static final int TEXT_DIM = 0xFF808080;
 
     // ---- 主色调：冷青色（电子屏发光 / 全息投影）----
     public static final int CYAN = 0xFF45D8F2;
@@ -41,7 +41,7 @@ public final class RpTheme {
     // 兼容旧引用（按钮边界色）
     public static final int ACCENT = CYAN_DIM;
     public static final int ACCENT_HOVER = CYAN;
-    public static final int ACCENT_TEXT = 0xFF0B1418;
+    public static final int ACCENT_TEXT = 0xFF161616;
 
     // ---- 警示/选中：高饱和正红 + 红底白字 ----
     public static final int RED = 0xFFFF3B30;
@@ -103,13 +103,10 @@ public final class RpTheme {
         g.fill(x2 - 1, y2 - len, x2, y2, color);
     }
 
-    /** 终端主面板：金属底 + 青色描边 + 四角角标 + 扫描线 + 顶部金属光泽。 */
+    /** 终端主面板（素版）：金属底 + 青色描边，无扫描线/角标/光泽等装饰。 */
     public static void terminalPanel(GuiGraphics g, int x1, int y1, int x2, int y2, float radius) {
         RpRoundRect.fill(g, x1, y1, x2, y2, radius, OVERLAY);
         RpRoundRect.outlined(g, x1, y1, x2, y2, radius, PANEL_BORDER, OVERLAY);
-        g.fillGradient(x1 + 3, y1 + 3, x2 - 3, y1 + 10, SHEEN, 0x00000000);
-        scanlines(g, x1 + 3, y1 + 3, x2 - 3, y2 - 3);
-        cornerBrackets(g, x1 + 2, y1 + 2, x2 - 2, y2 - 2, 7, CYAN_DIM);
     }
 
     /** 卡片：深色圆角 + 暗青描边。 */
@@ -117,11 +114,10 @@ public final class RpTheme {
         RpRoundRect.outlined(g, x1, y1, x2, y2, radius, PANEL_BORDER, bg);
     }
 
-    /** 选中高亮：红底近似 + 左侧红色高亮线 + 四角红标（战术选中态）。 */
+    /** 选中高亮（素版）：红底 + 左侧红色高亮线，无四角红标。 */
     public static void selectedBar(GuiGraphics g, int x1, int y1, int x2, int y2, float radius) {
         RpRoundRect.fill(g, x1, y1, x2, y2, radius, 0xE68C1613);
         RpRoundRect.fill(g, x1, y1, x1 + 3, y2, radius, RED);
-        cornerBrackets(g, x1, y1, x2, y2, 4, RED_LINE);
         g.fill(x1 + 4, y2 - 2, x2 - 4, y2 - 1, RED_LINE);
     }
 

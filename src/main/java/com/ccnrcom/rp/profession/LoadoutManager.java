@@ -48,19 +48,19 @@ public final class LoadoutManager {
         return o;
     }
 
-    /** 按 loadout 发放到玩家（不清理原有装备——保留决定权给调用方）。 */
+    /** 按 loadout 发放到玩家（不清理原有装备——保留决定权给调用方）；槽位越界/物品解码失败一律跳过。 */
     public static void apply(ServerPlayer player, JsonObject loadout) {
         Inventory inv = player.getInventory();
         if (loadout.has("inventory")) {
             for (SlotItem s :
                     ProfessionJson.listFromJson(loadout.getAsJsonArray("inventory"), "inventory", new ArrayList<>())) {
-                inv.setItem(s.slot(), ItemStackCodec.toStack(s));
+                applySlot(inv, s);
             }
         }
         if (loadout.has("armor")) {
             for (SlotItem s :
                     ProfessionJson.listFromJson(loadout.getAsJsonArray("armor"), "armor", new ArrayList<>())) {
-                inv.setItem(s.slot(), ItemStackCodec.toStack(s));
+                applySlot(inv, s);
             }
         }
         if (loadout.has("offhand")) {
@@ -68,9 +68,22 @@ public final class LoadoutManager {
             if (oh.isJsonObject() && oh.getAsJsonObject().size() > 0) {
                 SlotItem s = ProfessionJson.slotFromJson(oh.getAsJsonObject(), "offhand", new ArrayList<>());
                 if (s != null) {
-                    inv.setItem(40, ItemStackCodec.toStack(s));
+                    applySlot(inv, s);
                 }
             }
+        }
+    }
+
+    /** 单槽发放：槽位钳制 0-40，物品解码失败跳过（防越界崩溃/坏 NBT 崩溃）。 */
+    private static void applySlot(Inventory inv, SlotItem s) {
+        int slot = s.slot();
+        if (slot < 0 || slot > 40) {
+            return;
+        }
+        try {
+            inv.setItem(slot, ItemStackCodec.toStack(s));
+        } catch (Exception ignored) {
+            // 损坏 NBT/base64：跳过该槽，不影响部署
         }
     }
 }

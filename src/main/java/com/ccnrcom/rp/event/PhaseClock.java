@@ -33,7 +33,7 @@ public final class PhaseClock {
             return new Transition(false, null, null);
         }
         GamePhase p = current();
-        long limit = p.durationMinutes() * 1200L;
+        long limit = Math.max(1, p.durationMinutes()) * 1200L; // 时长≤0 时按 1 分钟兜底，避免每 tick 迁移
         ticksInPhase += ticks;
         if (ticksInPhase >= limit) {
             String ended = p.id();

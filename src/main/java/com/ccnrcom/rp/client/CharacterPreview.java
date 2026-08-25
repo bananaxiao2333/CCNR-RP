@@ -4,6 +4,7 @@
  */
 package com.ccnrcom.rp.client;
 
+import com.ccnrcom.rp.profession.ItemStackCodec;
 import com.google.gson.JsonObject;
 import com.mojang.authlib.GameProfile;
 import java.nio.charset.StandardCharsets;
@@ -14,14 +15,10 @@ import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.player.AbstractClientPlayer;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 
 /**
- * 右侧 3D 模型预览：真实玩家模型 + 战术重装（下界合金盔甲+剑盾），跟随鼠标旋转。
- * 皮肤优先使用上传的定制皮肤（SkinCache），未上传时回退默认 Steve。
+ * 右侧 3D 模型预览：真实玩家模型 + 职位 loadout 装备（角色查看界面展示职位装备），跟随鼠标旋转。
  * 渲染复用原版 InventoryScreen.renderEntityInInventoryFollowsMouse（GUI 摄像机）。
  */
 public final class CharacterPreview {
@@ -36,9 +33,16 @@ public final class CharacterPreview {
         cached = null;
     }
 
-    /** 在 (cx,cy) 中心渲染模型；调用方负责 enableScissor 裁剪预览框。 */
+    /** 在 (cx,cy) 中心渲染模型；调用方负责 enableScissor 裁剪预览框。loadout=职业装备定义（可 null）。 */
     public static void render(
-            GuiGraphics g, int cx, int cy, int scale, float mouseX, float mouseY, JsonObject character) {
+            GuiGraphics g,
+            int cx,
+            int cy,
+            int scale,
+            float mouseX,
+            float mouseY,
+            JsonObject character,
+            JsonObject loadout) {
         if (character == null) {
             return;
         }
@@ -47,7 +51,7 @@ public final class CharacterPreview {
         if (level == null) {
             return;
         }
-        AbstractClientPlayer p = entity(level, character);
+        AbstractClientPlayer p = entity(level, character, loadout);
         if (p == null) {
             return;
         }
@@ -57,67 +61,128 @@ public final class CharacterPreview {
         InventoryScreen.renderEntityInInventoryFollowsMouse(g, cx, cy, scale, dx, dy, p);
     }
 
-    private static AbstractClientPlayer entity(ClientLevel level, JsonObject c) {
-        String id = str(c, "id");
-        if (cached != null && cacheKey.equals(id)) {
-            return cached;
+    /**
+     * 立绘渲染（皮肤缩略图统一入口）：战术装备预览同款 3D 人物——水平（yaw）跟随鼠标、俯仰（pitch）锁定。
+     * 调用方只需传位置 + 角色 id；名字/职位装备自动解析（找不到角色时回退默认皮肤空装）。
+     */
+    public static void renderPortrait(GuiGraphics g, int cx, int cy, int scale, float mouseX, String charId) {
+        if (charId == null || charId.isBlank()) {
+            return;
         }
-        cacheKey = id;
-        cached = null;
+        com.google.gson.JsonObject c = com.ccnrcom.rp.client.ClientCharacterState.find(charId);
+        String name = c == null ? "" : str(c, "name");
+        String pid = c == null ? "" : str(c, "professionId");
+        JsonObject loadout = pid.isBlank() ? null : com.ccnrcom.rp.client.ClientCharacterState.professionLoadout(pid);
+        renderPortrait(g, cx, cy, scale, mouseX, charId, name, loadout);
+    }
+
+    /** 立绘渲染（按 charId/name，供无完整角色 JSON 的场景：招募卡片等）。 */
+    public static void renderPortrait(
+            GuiGraphics g, int cx, int cy, int scale, float mouseX, String charId, String name, JsonObject loadout) {
+        Minecraft mc = Minecraft.getInstance();
+        ClientLevel level = mc.level;
+        if (level == null || charId == null || charId.isBlank()) {
+            return;
+        }
+        AbstractClientPlayer p = entity(level, charId, name, loadout);
+        if (p == null) {
+            return;
+        }
+        // Z 轴（水平 yaw）跟随鼠标、其他轴（俯仰）锁定：立绘感，模型不前后倾
+        float yaw = Math.max(-45f, Math.min(45f, cx - mouseX));
+        // (cx, cy) 语义 = 立绘视觉中心：模型从脚底向上画（身高 ≈ 2×scale），脚底下移一个 scale 使人物居中于框
+        InventoryScreen.renderEntityInInventoryFollowsMouse(g, cx, cy + scale, scale, yaw, 0f, p);
+    }
+
+    private static AbstractClientPlayer entity(ClientLevel level, JsonObject c, JsonObject loadout) {
+        String id = str(c, "id");
         String name = str(c, "name");
         if (name.isBlank()) {
             name = "AGENT";
         }
-        GameProfile gp =
-                new GameProfile(UUID.nameUUIDFromBytes(("ccnr-rp:" + id).getBytes(StandardCharsets.UTF_8)), name);
-        PreviewPlayer p = new PreviewPlayer(level, gp, SkinCache.textureOrNull(id));
-        equipTactical(p);
+        return entity(level, id, name, loadout);
+    }
+
+    private static AbstractClientPlayer entity(ClientLevel level, String id, String name, JsonObject loadout) {
+        if (cached != null && cacheKey.equals(id + "|" + (loadout == null ? "" : loadout.toString()))) {
+            return cached;
+        }
+        cacheKey = id + "|" + (loadout == null ? "" : loadout.toString());
+        cached = null;
+        Minecraft mc = Minecraft.getInstance();
+        GameProfile gp;
+        if (mc.player != null) {
+            // 模型统一用「玩家自己的皮肤」：取本地玩家带 textures 的 GameProfile，所有预览模型都显示其本人皮肤。
+            gp = mc.player.getGameProfile();
+        } else {
+            if (name == null || name.isBlank()) {
+                name = "AGENT";
+            }
+            gp = new GameProfile(UUID.nameUUIDFromBytes(("ccnr-rp:" + id).getBytes(StandardCharsets.UTF_8)), name);
+        }
+        PreviewPlayer p = new PreviewPlayer(level, gp);
+        equipFromLoadout(p, loadout);
         cached = p;
         return p;
     }
 
-    /** 战术重装（预览展示用）：头盔/胸甲/护腿/靴子 + 剑盾。 */
-    private static void equipTactical(AbstractClientPlayer p) {
+    /** 职位装备（预览展示用）：按 loadout 槽位装配（0-35 背包 / 36-39 护甲 / 40 副手），无 loadout 则空装。 */
+    private static void equipFromLoadout(AbstractClientPlayer p, JsonObject loadout) {
+        if (loadout == null) {
+            return;
+        }
         Inventory inv = p.getInventory();
-        inv.setItem(36, new ItemStack(Items.NETHERITE_HELMET));
-        inv.setItem(37, new ItemStack(Items.NETHERITE_CHESTPLATE));
-        inv.setItem(38, new ItemStack(Items.NETHERITE_LEGGINGS));
-        inv.setItem(39, new ItemStack(Items.NETHERITE_BOOTS));
-        inv.setItem(0, new ItemStack(Items.NETHERITE_SWORD));
-        inv.setItem(40, new ItemStack(Items.SHIELD));
+        try {
+            if (loadout.has("inventory")) {
+                for (com.ccnrcom.rp.profession.ProfessionJson.SlotItem s :
+                        com.ccnrcom.rp.profession.ProfessionJson.listFromJson(
+                                loadout.getAsJsonArray("inventory"), "inventory", new java.util.ArrayList<>())) {
+                    if (s.slot() >= 0 && s.slot() <= 35) {
+                        inv.setItem(s.slot(), ItemStackCodec.toStack(s));
+                    }
+                }
+            }
+            if (loadout.has("armor")) {
+                for (com.ccnrcom.rp.profession.ProfessionJson.SlotItem s :
+                        com.ccnrcom.rp.profession.ProfessionJson.listFromJson(
+                                loadout.getAsJsonArray("armor"), "armor", new java.util.ArrayList<>())) {
+                    if (s.slot() >= 36 && s.slot() <= 39) {
+                        inv.setItem(s.slot(), ItemStackCodec.toStack(s));
+                    }
+                }
+            }
+            if (loadout.has("offhand")) {
+                com.google.gson.JsonElement oh = loadout.get("offhand");
+                if (oh.isJsonObject() && oh.getAsJsonObject().size() > 0) {
+                    com.ccnrcom.rp.profession.ProfessionJson.SlotItem s =
+                            com.ccnrcom.rp.profession.ProfessionJson.slotFromJson(
+                                    oh.getAsJsonObject(), "offhand", new java.util.ArrayList<>());
+                    if (s != null && s.slot() == 40) {
+                        inv.setItem(40, ItemStackCodec.toStack(s));
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            // 预览装备失败不致命（回退空装）
+        }
     }
 
     private static String str(JsonObject o, String key) {
         return o.has(key) && !o.get(key).isJsonNull() ? o.get(key).getAsString() : "";
     }
 
-    /** 预览用假玩家：皮肤指向注入的定制纹理。 */
+    /** 预览用假玩家：按角色档案 GameProfile 构造，皮肤回退原版渲染。 */
     static final class PreviewPlayer extends AbstractClientPlayer {
-        private final RenderInfo info;
+        private final PlayerInfo info;
 
-        PreviewPlayer(ClientLevel level, GameProfile gp, ResourceLocation skin) {
+        PreviewPlayer(ClientLevel level, GameProfile gp) {
             super(level, gp);
-            this.info = new RenderInfo(gp, skin);
+            this.info = new PlayerInfo(gp, false);
         }
 
         @Override
         protected PlayerInfo getPlayerInfo() {
             return info;
-        }
-    }
-
-    /** 覆写皮肤定位，使用 SkinCache 上传纹理（无则原版默认）。 */
-    static final class RenderInfo extends PlayerInfo {
-        private final ResourceLocation skin;
-
-        RenderInfo(GameProfile gp, ResourceLocation skin) {
-            super(gp, false);
-            this.skin = skin;
-        }
-
-        @Override
-        public ResourceLocation getSkinLocation() {
-            return skin != null ? skin : super.getSkinLocation();
         }
     }
 }

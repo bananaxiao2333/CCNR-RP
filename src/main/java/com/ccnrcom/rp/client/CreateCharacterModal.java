@@ -4,8 +4,6 @@
  */
 package com.ccnrcom.rp.client;
 
-import com.ccnrcom.rp.network.RpChannels;
-import com.ccnrcom.rp.network.RpPackets;
 import com.google.gson.JsonObject;
 import java.util.ArrayList;
 import java.util.List;
@@ -89,6 +87,14 @@ public final class CreateCharacterModal extends Screen {
     }
 
     private void create() {
+        // 创建冷却（客户端预检，服务端仍硬校验）
+        long remainMs = ClientCharacterState.createRemainingMs();
+        if (remainMs > 0) {
+            notice = net.minecraft.network.chat.Component.translatable(
+                            "ccnr_rp.character.error.create_cooldown", Math.max(1, (remainMs + 999) / 1000))
+                    .getString();
+            return;
+        }
         List<JsonObject> facs = factions();
         if (facs.isEmpty()) {
             notice = "阵营配置为空";
@@ -101,9 +107,8 @@ public final class CreateCharacterModal extends Screen {
         JsonObject f = facs.get(Math.min(selFactionIdx, facs.size() - 1));
         List<JsonObject> profs = professionsOf(str(f, "id"));
         JsonObject p = profs.isEmpty() ? null : profs.get(Math.min(selProfIdx, profs.size() - 1));
-        RpChannels.sendToServer(
-                new RpPackets.CharacterCreateC2S(nameBox.getValue(), str(f, "id"), p == null ? "" : str(p, "id"), ""));
-        notice = "";
+        // 角色库已删除（v2）：创建角色入口废弃，直接在 K 面板选职位部署
+        notice = "角色库已移除，请在 K 面板直接选择职位部署";
         closeModal();
     }
 
@@ -152,7 +157,7 @@ public final class CreateCharacterModal extends Screen {
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         g.fill(0, 0, width, height, 0xAA000000);
         RpTheme.terminalPanel(g, x1, y1, x2, y2, RpTheme.RADIUS_LARGE);
-        RpBg.draw(g, x1 + 4, y1 + 4, x2 - 4, y2 - 4);
+        // 素版：不绘制背景水印
         g.drawString(
                 font,
                 Component.translatable("ccnr_rp.gui.character.create.title")
@@ -223,7 +228,7 @@ public final class CreateCharacterModal extends Screen {
             RpRoundRect.fill(g, cx1 + 2, ry + 1, rx2, ry + rowH - 1, 5f, bg);
             if (sel) {
                 g.fill(cx1 + 2, ry + 1, cx1 + 4, ry + rowH - 1, RpTheme.RED);
-                RpTheme.cornerBrackets(g, cx1 + 2, ry + 1, rx2, ry + rowH - 1, 3, RpTheme.RED_LINE);
+                // 素版：选中行不加角标装饰
             } else if (hov) {
                 RpRoundRect.outlined(g, cx1 + 2, ry + 1, rx2, ry + rowH - 1, 5f, RpTheme.PANEL_BORDER_BRIGHT, bg);
             }
@@ -232,9 +237,17 @@ public final class CreateCharacterModal extends Screen {
             if (font.width(name) > maxW) {
                 name = font.plainSubstrByWidth(name, maxW - 1) + "…";
             }
-            g.drawString(font, name, cx1 + 7, ry + 5, sel ? 0xFFFFFFFF : RpTheme.TEXT_PRIMARY, true);
-            String sub = factionColumn ? str(item, "id") : "ID " + str(item, "id");
-            g.drawString(font, sub, cx1 + 7, ry + 16, sel ? 0xFFFFFFFF : RpTheme.TEXT_DIM, true);
+            if (factionColumn) {
+                // 阵营列：左侧徽章 + 文字右移
+                RpIcons.factionBadge(g, cx1 + 16, ry + rowH / 2, 8, item, sel);
+                g.drawString(font, name, cx1 + 28, ry + 5, sel ? 0xFFFFFFFF : RpTheme.TEXT_PRIMARY, true);
+                String sub = str(item, "id");
+                g.drawString(font, sub, cx1 + 28, ry + 16, sel ? 0xFFFFFFFF : RpTheme.TEXT_DIM, true);
+            } else {
+                g.drawString(font, name, cx1 + 7, ry + 5, sel ? 0xFFFFFFFF : RpTheme.TEXT_PRIMARY, true);
+                String sub = "ID " + str(item, "id");
+                g.drawString(font, sub, cx1 + 7, ry + 16, sel ? 0xFFFFFFFF : RpTheme.TEXT_DIM, true);
+            }
         }
         if (items.isEmpty()) {
             g.drawString(font, "（暂无配置）", cx1 + 6, cy1 + 8, RpTheme.TEXT_DIM);
@@ -246,6 +259,26 @@ public final class CreateCharacterModal extends Screen {
 
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
+        // 两栏滚动条：按住游标拖拽 / 点击轨道跳转
+        int fMax = Math.max(1, (fY2 - fY1) / rowH);
+        int ns1 = RpScrollbar.clickV(
+                (int) mx, (int) my, fX2 - sbW, fX2, fY1, fY2, factions().size(), fMax, facScroll, 1);
+        if (ns1 >= 0) {
+            facScroll = ns1;
+            return true;
+        }
+        List<JsonObject> facs = factions();
+        int pMax = Math.max(1, (pY2 - pY1) / rowH);
+        int profCount = 0;
+        if (!facs.isEmpty()) {
+            profCount = professionsOf(str(facs.get(Math.min(selFactionIdx, facs.size() - 1)), "id"))
+                    .size();
+        }
+        int ns2 = RpScrollbar.clickV((int) mx, (int) my, pX2 - sbW, pX2, pY1, pY2, profCount, pMax, profScroll, 2);
+        if (ns2 >= 0) {
+            profScroll = ns2;
+            return true;
+        }
         if (super.mouseClicked(mx, my, button)) {
             return true;
         }
@@ -265,7 +298,6 @@ public final class CreateCharacterModal extends Screen {
             return true;
         }
         if (mx >= pX1 && mx <= pX2 && my >= pY1 && my <= pY2) {
-            List<JsonObject> facs = factions();
             if (!facs.isEmpty()) {
                 List<JsonObject> profs = professionsOf(str(facs.get(Math.min(selFactionIdx, facs.size() - 1)), "id"));
                 int maxVisible = Math.max(1, (pY2 - pY1) / rowH);
@@ -278,6 +310,27 @@ public final class CreateCharacterModal extends Screen {
             return true;
         }
         return false;
+    }
+
+    /** 滚动条拖拽：按住游标移动即滚动（按 id 分发到阵营/职业栏）。 */
+    @Override
+    public boolean mouseDragged(double mx, double my, int button, double dx, double dy) {
+        int ns = RpScrollbar.dragV((int) my);
+        if (ns >= 0) {
+            if (RpScrollbar.dragId() == 1) {
+                facScroll = ns;
+            } else if (RpScrollbar.dragId() == 2) {
+                profScroll = ns;
+            }
+            return true;
+        }
+        return super.mouseDragged(mx, my, button, dx, dy);
+    }
+
+    @Override
+    public boolean mouseReleased(double mx, double my, int button) {
+        RpScrollbar.endDrag();
+        return super.mouseReleased(mx, my, button);
     }
 
     @Override

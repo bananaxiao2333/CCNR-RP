@@ -36,6 +36,7 @@ final class ProfessionCommand {
                 .requires(RpCommand.admin(Permissions.ADMIN_PROFESSION))
                 .then(Commands.argument("id", StringArgumentType.word())
                         .then(Commands.argument("factionId", StringArgumentType.word())
+                                .suggests(RpSuggest.factions())
                                 .then(Commands.argument("selfDeploy", BoolArgumentType.bool())
                                         .executes(ctx -> create(
                                                 ctx.getSource(),
@@ -55,17 +56,20 @@ final class ProfessionCommand {
                 .executes(ctx -> RpCommand.usageHint(ctx.getSource(), "ccnr_rp.command.usage.profession"))
                 .requires(RpCommand.admin(Permissions.ADMIN_PROFESSION))
                 .then(Commands.argument("id", StringArgumentType.word())
-                        .executes(ctx -> save(ctx.getSource(), StringArgumentType.getString(ctx, "id"), false))
-                        .then(Commands.literal("--hotbar")
-                                .executes(ctx -> save(ctx.getSource(), StringArgumentType.getString(ctx, "id"), false)))
+                        .suggests(RpSuggest.professions())
+                        // 默认全量保存：物品栏 0-35 + 盔甲 + 副手 + NBT
+                        .executes(ctx -> save(ctx.getSource(), StringArgumentType.getString(ctx, "id"), true))
                         .then(Commands.literal("--full")
-                                .executes(
-                                        ctx -> save(ctx.getSource(), StringArgumentType.getString(ctx, "id"), true)))));
+                                .executes(ctx -> save(ctx.getSource(), StringArgumentType.getString(ctx, "id"), true)))
+                        .then(Commands.literal("--hotbar")
+                                .executes(ctx ->
+                                        save(ctx.getSource(), StringArgumentType.getString(ctx, "id"), false)))));
 
         base.then(Commands.literal("load")
                 .executes(ctx -> RpCommand.usageHint(ctx.getSource(), "ccnr_rp.command.usage.profession"))
                 .requires(RpCommand.admin(Permissions.ADMIN_PROFESSION))
                 .then(Commands.argument("id", StringArgumentType.word())
+                        .suggests(RpSuggest.professions())
                         .executes(ctx -> load(ctx.getSource(), StringArgumentType.getString(ctx, "id")))));
 
         rp.addChild(base.build());
@@ -100,7 +104,7 @@ final class ProfessionCommand {
             return 0;
         }
         String displayName = (name == null || name.isBlank()) ? id : name;
-        List<String> errors = mgr.upsertProfession(id, displayName, factionId, selfDeploy, null);
+        List<String> errors = mgr.upsertProfession(id, displayName, factionId, selfDeploy, 0, null);
         if (!errors.isEmpty()) {
             source.sendSuccess(
                     () -> Component.translatable("ccnr_rp.profession.error.config", String.join("; ", errors)), false);
@@ -126,6 +130,7 @@ final class ProfessionCommand {
                 FactionProfessions.idsSafeName(def),
                 FactionProfessions.factionId(def),
                 FactionProfessions.selfDeploy(def),
+                FactionProfessions.unlockLevel(def),
                 loadout);
         if (!errors.isEmpty()) {
             source.sendSuccess(
@@ -140,7 +145,9 @@ final class ProfessionCommand {
                         ? 1
                         : 0);
         source.sendSuccess(
-                () -> Component.translatable("ccnr_rp.profession.saved", id, slots, full ? "full" : "hotbar"), false);
+                () -> Component.translatable(
+                        full ? "ccnr_rp.profession.saved_full" : "ccnr_rp.profession.saved_hotbar", slots, id),
+                false);
         return 1;
     }
 

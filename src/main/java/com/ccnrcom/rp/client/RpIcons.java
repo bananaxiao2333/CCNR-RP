@@ -109,10 +109,34 @@ public final class RpIcons {
     /** 机构徽章：环(等级色) + 盘 + 图形 + 右下等级刻度。selected=红色警戒态。 */
     public static void badge(GuiGraphics g, int cx, int cy, int r, String icon, int tier, boolean selected) {
         int ring = selected ? RpTheme.RED_LINE : RpTheme.tierColor(tier);
-        ring(g, cx, cy, r, ring, 0xFF10181E);
+        ring(g, cx, cy, r, ring, 0xFF2E2E2E);
         polygon(g, cx, cy, r - 1, icon, selected ? 0xFFFFFFFF : ring, 0xFF10181E);
         int n = Math.max(2, r / 4);
         g.fill(cx + r - n - 1, cy + r - n - 1, cx + r, cy + r, ring);
+    }
+
+    /** 阵营徽章（统一入口）：从阵营 JSON 读 icon/tier（icon 空→hex；tier 钳制 1..3；faction 为 null 用默认）。 */
+    public static void factionBadge(
+            GuiGraphics g, int cx, int cy, int r, com.google.gson.JsonObject faction, boolean selected) {
+        int tier = 2;
+        String icon = "";
+        if (faction != null) {
+            if (faction.has("tier") && faction.get("tier").isJsonPrimitive()) {
+                tier = faction.get("tier").getAsInt();
+            }
+            icon = faction.has("icon") && !faction.get("icon").isJsonNull()
+                    ? faction.get("icon").getAsString()
+                    : "";
+        }
+        factionBadge(g, cx, cy, r, icon, tier, selected);
+    }
+
+    /** 阵营徽章（底层）：icon 空→hex；tier 钳制 1..3。 */
+    public static void factionBadge(GuiGraphics g, int cx, int cy, int r, String icon, int tier, boolean selected) {
+        if (icon == null || icon.isBlank()) {
+            icon = "hex";
+        }
+        badge(g, cx, cy, r, icon, Math.max(1, Math.min(3, tier)), selected);
     }
 
     /** 大号阵营徽章（入场电影）：外晕 + 等级色环 + 全息同心环 + 大图形 + 刻度。alpha 0..255。 */
@@ -120,26 +144,63 @@ public final class RpIcons {
         int ring = RpTheme.tierColor(tier);
         circle(g, cx, cy, r + 3, RpTheme.alphaBlend(ring, alpha * 2 / 5));
         circle(g, cx, cy, r + 1, RpTheme.alphaBlend(ring, alpha));
-        ring(g, cx, cy, r, RpTheme.alphaBlend(ring, alpha), RpTheme.alphaBlend(0xFF10181E, alpha));
+        ring(g, cx, cy, r, RpTheme.alphaBlend(ring, alpha), RpTheme.alphaBlend(0xFF2E2E2E, alpha));
         int inner = Math.max(4, r * 2 / 3);
         circle(g, cx, cy, inner, RpTheme.alphaBlend(ring, alpha * 2 / 5));
-        polygon(g, cx, cy, r - 1, icon, RpTheme.alphaBlend(RpTheme.CYAN, alpha), RpTheme.alphaBlend(0xFF10181E, alpha));
+        polygon(g, cx, cy, r - 1, icon, RpTheme.alphaBlend(RpTheme.CYAN, alpha), RpTheme.alphaBlend(0xFF2E2E2E, alpha));
         int n = Math.max(3, r / 3);
         g.fill(cx + r - n - 1, cy + r - n - 1, cx + r, cy + r, RpTheme.alphaBlend(ring, alpha));
     }
 
     /** 战术装备槽图标（头/胸/腿/背）。 */
     public static void slot(GuiGraphics g, int x1, int y1, int size, String name, int color) {
-        RpRoundRect.outlined(g, x1, y1, x1 + size, y1 + size, 4f, RpTheme.PANEL_BORDER, 0xFF10161B);
-        glyph(g, x1 + 2, y1 + 2, Math.max(4, size - 4), name, color, 0xE610161B);
+        RpRoundRect.outlined(g, x1, y1, x1 + size, y1 + size, 4f, RpTheme.PANEL_BORDER, 0xFF2F2F2F);
+        glyph(g, x1 + 2, y1 + 2, Math.max(4, size - 4), name, color, 0xE62F2F2F);
     }
 
-    /** 在盒子内画多边形图标（16 单位盒映射）。 */
+    /** 在盒子内画多边形图标（16 单位盒映射）；img:<名> 时绘制图片徽章（assets/ccnr_rp/textures/faction/<名>.png）。 */
     private static void polygon(GuiGraphics g, int cx, int cy, int r, String name, int color, int punchColor) {
+        if (name != null && name.startsWith("img:")) {
+            drawImageBadge(g, cx, cy, r, name.substring(4), color);
+            return;
+        }
         int s = r * 2 - 2;
         if (s < 4) {
             return;
         }
         glyph(g, cx - s / 2, cy - s / 2, s, name, color, punchColor);
+    }
+
+    /** 图片徽章：底色盘 + 方形纹理（alpha 随 color 的整体透明度走）。素材由服务器中央下发。 */
+    private static void drawImageBadge(GuiGraphics g, int cx, int cy, int r, String fileName, int color) {
+        try {
+            if (fileName == null || !fileName.matches("[A-Za-z0-9_-]+")) {
+                return;
+            }
+            // 服务器素材优先：img:<名> 由服务器下发（config/ccnr_rp/textures/），客户端缓存后使用；
+            // 未下载/未配置时回退 jar 内嵌图标。
+            net.minecraft.resources.ResourceLocation loc = ClientAssetCache.serverIcon(fileName);
+            int tw = 512;
+            if (loc == null) {
+                loc = new net.minecraft.resources.ResourceLocation("ccnr_rp", "textures/faction/" + fileName + ".png");
+            } else {
+                tw = ClientAssetCache.iconSize(fileName);
+            }
+            // 触发纹理注册加载
+            net.minecraft.client.Minecraft.getInstance().getTextureManager().getTexture(loc);
+            int th = tw;
+            int s = r * 2;
+            if (s < 4) {
+                return;
+            }
+            // 底盘（保持徽章底色质感）+ 纹理；alpha 为整体透明度（入场电影淡出用）
+            circle(g, cx, cy, r - 1, color);
+            float a = ((color >>> 24) & 0xFF) / 255f;
+            com.mojang.blaze3d.systems.RenderSystem.setShaderColor(1f, 1f, 1f, a);
+            g.blit(loc, cx - s / 2, cy - s / 2, s, s, 0, 0, tw, th, tw, th);
+            com.mojang.blaze3d.systems.RenderSystem.setShaderColor(1f, 1f, 1f, 1f);
+        } catch (Exception ignored) {
+            // 图片徽章缺失回退（仅画底盘）
+        }
     }
 }

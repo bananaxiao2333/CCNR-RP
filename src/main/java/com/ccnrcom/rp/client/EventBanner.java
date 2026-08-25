@@ -11,7 +11,7 @@ import net.minecraft.network.chat.Component;
 
 /**
  * 激活事件横幅：顶部居中，事件为一个 4:3 横向长方形排开（边框红色警戒）。
- * 在背包等任意界面打开时依然可见（ScreenEvent.Render.Post 第二渲染路径）。
+ * 仅在背包（InventoryScreen）打开时绘制（ScreenEvent.Render.Post）；游戏内 HUD 与其他界面不显示。
  */
 public final class EventBanner {
 
@@ -60,7 +60,7 @@ public final class EventBanner {
         g.enableScissor(8, y - 2, w - 8, y + bh + 4);
         for (String id : ids) {
             // 4:3 横向长方形（红色警戒边框 + 半透明深底）
-            RpRoundRect.outlined(g, x, y, x + bw, y + bh, 4f, RpTheme.RED_LINE, 0xC00A0E13);
+            RpRoundRect.outlined(g, x, y, x + bw, y + bh, 4f, RpTheme.RED_LINE, 0xC02E2E2E);
             g.fill(x, y + 3, x + 4, y + bh - 3, RpTheme.RED);
             g.drawCenteredString(font, Component.literal(id).getString(), x + bw / 2 + 2, y + 12, RpTheme.RED_LINE);
             g.drawCenteredString(
@@ -85,13 +85,6 @@ public final class EventBanner {
                     y + bh + 2,
                     RpTheme.TEXT_DIM);
             RpScrollbar.drawH(g, 40, w - 40, y + bh + 9, total, areaW, offsetPx);
-        } else {
-            g.drawCenteredString(
-                    font,
-                    Component.translatable("ccnr_rp.event.banner.hint").getString(),
-                    w / 2,
-                    y + bh + 2,
-                    RpTheme.TEXT_DIM);
         }
     }
 }

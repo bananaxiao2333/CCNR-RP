@@ -11,7 +11,7 @@
   - `ON_PHASE_START {phase}` / `ON_PHASE_END {phase}`
   - `ON_TIME {day, tickOfDay}`
   - `PERIODIC {seconds}`
-  - `CONDITION {type: DEAD_COUNT|ALIVE_COUNT|SCOREBOARD, objective?, op, value}`
+  - `CONDITION {cond: DEAD_COUNT|ALIVE_COUNT|SCOREBOARD, objective?, op, value}`（子类型字段为 cond，避免与触发器外层 type 冲突）
 - 钩子（公共契约，签名冻结）：`hooks.startAnimation`（P7）、`hooks.spawnWave`（P8，预留接口）、
   `hooks.notify`（标题/动作条提示）。
 
