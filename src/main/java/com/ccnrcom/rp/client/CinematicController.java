@@ -41,8 +41,24 @@ public final class CinematicController {
     public static void start(JsonObject payload) {
         data = payload;
         startMs = System.currentTimeMillis();
-        // 职业出场音乐（配置驱动，未配置则静默跳过）
-        ClientAudio.playEntrance(payload == null ? "" : str(payload, "music"));
+        // 音乐传递（高→低）：启动程序指定音乐 > 职业音乐 > 阵营音乐；均未配置则静默跳过
+        ClientAudio.playEntrance(resolveMusic(payload));
+    }
+
+    /** 按优先级取第一个非空的音乐路径（payload 为 null 时全部为空）。 */
+    private static String resolveMusic(JsonObject payload) {
+        String launcher = ClientAudio.launcherMusic();
+        if (!launcher.isBlank()) {
+            return launcher;
+        }
+        if (payload != null) {
+            String prof = str(payload, "music");
+            if (!prof.isBlank()) {
+                return prof;
+            }
+            return str(payload, "factionMusic");
+        }
+        return "";
     }
 
     private static long t() {

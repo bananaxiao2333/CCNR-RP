@@ -96,7 +96,8 @@ public final class SpawnModels {
             String professionId,
             String factionId,
             boolean professionSelfDeploy,
-            boolean online) {
+            boolean online,
+            boolean anySupportRevive) {
 
         public boolean dead() {
             return "dead".equals(status);
@@ -193,6 +194,10 @@ public final class SpawnModels {
     }
 
     private static long num(JsonObject o, String key, long def) {
-        return o.has(key) ? o.get(key).getAsLong() : def;
+        try {
+            return o.has(key) ? o.get(key).getAsLong() : def;
+        } catch (Exception e) {
+            return def; // 畸形配置（非数字）不崩服
+        }
     }
 }

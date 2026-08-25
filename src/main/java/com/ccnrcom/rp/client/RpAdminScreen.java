@@ -46,13 +46,40 @@ public class RpAdminScreen extends Screen {
     private int factionIdx = 0;
     private int iconIdx = 0;
     private int tierIdx = 1;
-    private boolean selfDeploy = false;
+    private EditBox unlockLevelBox;
+    /** serverconfig 程序化设定：key → 数值输入框（设定标签）。 */
+    private final java.util.Map<String, net.minecraft.client.gui.components.EditBox> cfgBoxes =
+            new java.util.HashMap<>();
+    /** 设定标签（serverconfig）滚动偏移。 */
+    private int settingsScroll = 0;
+
+    // 阵营出生点编辑（P9）：可编辑坐标列表 + 分布规则（弹窗管理）
+    private final List<double[]> spawnPts = new ArrayList<>();
+    private final List<String> spawnDims = new ArrayList<>();
+    private String spawnRule = "SPREAD";
+    private final List<int[]> spawnRowBounds = new ArrayList<>();
+    private final List<String> spawnRowTexts = new ArrayList<>();
+    private boolean spawnModalOpen = false;
+    private String spawnModalFaction = "";
+    private int spX1, spY1, spX2, spY2;
+    private int spRuleX1, spRuleY1, spRuleX2, spRuleY2;
+    private int spAddX1, spAddY1, spAddX2, spAddY2;
+    private int spSaveX1, spSaveY1, spSaveX2, spSaveY2;
+    private int spCancelX1, spCancelY1, spCancelX2, spCancelY2;
+    private final List<int[]> spRemoveBounds = new ArrayList<>();
 
     private EditBox idBox;
     private EditBox nameBox;
     private EditBox colorBox;
     private EditBox descBox;
     private EditBox musicBox;
+    private EditBox musicUploadBox;
+    /** 音乐补全提示：当前过滤列表 / 选中索引 / 命中矩形（渲染时重建）。 */
+    private List<String> musicSugItems = new ArrayList<>();
+
+    private int musicSugIdx = -1;
+    private String lastMusicQuery = null;
+    private final List<int[]> musicSugBounds = new ArrayList<>();
     private EditBox profileBox;
     private EditBox fld2Box;
     private EditBox fld3Box;
@@ -74,11 +101,22 @@ public class RpAdminScreen extends Screen {
     private String pendingKind = "";
     private String pendingAction = "";
     private JsonObject pendingPayload;
-    private String stepsReadyFor = "";
-    // 当前编辑项的内嵌行为序列步骤（事件/阶段/波通用）
-    private final List<JsonObject> seqSteps = new ArrayList<>();
 
-    private static final String[] ICONS = {"hex", "shield", "claw", "storm", "eye", "target", "cross", "gear"};
+    private static final String[] ICONS = {
+        "hex", "shield", "claw", "storm", "eye", "target", "cross", "gear", "img:admin_hq", "img:madison"
+    };
+
+    /** 图标可选值 = 内嵌向量/图片 + 服务器素材库图标（img: 中央下发），去重保序。 */
+    private static java.util.List<String> iconOptions() {
+        java.util.List<String> out = new java.util.ArrayList<>(java.util.List.of(ICONS));
+        for (String s : ClientAssetCache.iconNames()) {
+            if (!out.contains(s)) {
+                out.add(s);
+            }
+        }
+        return out;
+    }
+
     private static final String[] TABS = {
         "ccnr_rp.gui.admin.tab.settings",
         "ccnr_rp.gui.admin.tab.profession",
@@ -171,6 +209,7 @@ public class RpAdminScreen extends Screen {
 
     private void buildForm() {
         switch (tab) {
+            case TAB_SETTINGS -> buildSettingsForm();
             case TAB_PROFESSION -> buildProfessionForm();
             case TAB_FACTION -> buildFactionForm();
             case TAB_EVENT -> buildEventForm();
@@ -180,6 +219,40 @@ public class RpAdminScreen extends Screen {
         }
     }
 
+    /** serverconfig 程序化设定：为每个配置项生成一个数字输入框 + 保存按钮。 */
+    private void buildSettingsForm() {
+        cfgBoxes.clear();
+        // 「设定」标签无左侧列表：表单占满面板宽度
+        int x = px1 + 12;
+        int w = px2 - 12 - x;
+        int y = py1 + 80;
+        int yMax = py2 - 70;
+        JsonObject cfg = ClientCharacterState.serverConfig();
+        java.util.List<String> keys = com.ccnrcom.rp.config.CCNRRPConfig.keys();
+        int maxVisible = Math.max(1, (yMax - y) / 30);
+        settingsScroll = Math.max(0, Math.min(settingsScroll, Math.max(0, keys.size() - maxVisible)));
+        for (int i = settingsScroll; i < keys.size(); i++) {
+            String key = keys.get(i);
+            String cur = cfg.has(key) ? cfg.get(key).getAsString() : "";
+            cfgBoxes.put(key, mkBox(x + 210, y, w - 210, "", cur, false));
+            y += 30;
+            if (y > yMax) {
+                break;
+            }
+        }
+        addRenderableWidget(RpButton.primary(
+                x, py2 - 40, w, 20, Component.translatable("ccnr_rp.gui.admin.crud.save"), b -> saveServerConfig()));
+    }
+
+    private void saveServerConfig() {
+        for (java.util.Map.Entry<String, net.minecraft.client.gui.components.EditBox> e : cfgBoxes.entrySet()) {
+            RpChannels.sendToServer(
+                    new RpPackets.ServerConfigSetC2S(e.getKey(), e.getValue().getValue()));
+        }
+        notice = "serverconfig 已保存";
+        rebuild();
+    }
+
     private void buildEventForm() {
         int x = listX2 + 10;
         int w = px2 - 12 - x;
@@ -187,7 +260,8 @@ public class RpAdminScreen extends Screen {
         JsonObject ev = selItem();
         String id = ev == null ? "" : str(ev, "id");
         boolean edit = !id.isBlank();
-        idBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.id", id, !edit);
+        // ID 仅编辑模式锁定（创建模式必须可输入，否则无法新建）
+        idBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.id", id, edit);
         y += 30;
         boolean enabled = ev == null || !ev.has("enabled") || ev.get("enabled").getAsBoolean();
         addRenderableWidget(
@@ -206,10 +280,18 @@ public class RpAdminScreen extends Screen {
         y += 30;
         fld3Box = mkBox(x, y, w, "时长(秒,0=事件持续时间)", ev == null ? "0" : num(ev, "durationSeconds", 0), false);
         y += 30;
-        syncSeqSteps(ev);
-        stepsRow(x, y, w);
-        y += 30;
         actionRow(x, y, w, edit);
+        // 管理快捷操作：手动触发事件
+        y += 26;
+        addRenderableWidget(
+                RpButton.primary(x, y, w, 20, Component.literal("触发事件：手动启动选中事件（等同 /rp event trigger）"), b -> {
+                    String evtId = idBox.getValue();
+                    if (evtId.isBlank()) {
+                        notice = "缺少 id";
+                        return;
+                    }
+                    RpChannels.sendToServer(new RpPackets.AdminEventTriggerC2S(evtId));
+                }));
     }
 
     private void buildPhaseForm() {
@@ -219,44 +301,14 @@ public class RpAdminScreen extends Screen {
         JsonObject ph = selItem();
         String id = ph == null ? "" : str(ph, "id");
         boolean edit = !id.isBlank();
-        idBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.id", id, !edit);
+        // ID 仅编辑模式锁定（创建模式必须可输入，否则无法新建）
+        idBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.id", id, edit);
         y += 30;
         fld2Box = mkBox(x, y, w, "顺序 order", ph == null ? "0" : num(ph, "order", 0), false);
         y += 30;
         fld3Box = mkBox(x, y, w, "时长(分钟)", ph == null ? "30" : num(ph, "durationMinutes", 30), false);
         y += 30;
-        syncSeqSteps(ph);
-        stepsRow(x, y, w);
-        y += 30;
         actionRow(x, y, w, edit);
-    }
-
-    /** 同步当前编辑项的内嵌序列步骤（item 变化时读取 sequence 数组，与编辑器共享）。 */
-    private void syncSeqSteps(JsonObject item) {
-        String key = item == null ? "" : (tab + "|" + str(item, "id"));
-        if (key.equals(stepsReadyFor)) {
-            return;
-        }
-        seqSteps.clear();
-        if (item != null && item.has("sequence") && item.get("sequence").isJsonArray()) {
-            for (var e : item.getAsJsonArray("sequence")) {
-                if (e.isJsonObject()) {
-                    seqSteps.add(e.getAsJsonObject());
-                }
-            }
-        }
-        stepsReadyFor = key;
-    }
-
-    /** 行为序列行（事件/阶段/波通用）：显示步数 + 打开弹窗编辑（编辑 seqSteps 副本，保存时写回）。 */
-    private void stepsRow(int x, int y, int w) {
-        addRenderableWidget(RpButton.secondary(
-                x,
-                y,
-                w,
-                18,
-                Component.literal("行为序列: " + seqSteps.size() + " 步（WAIT/命令/刷新波/强制抽取） · 点击编辑"),
-                b -> net.minecraft.client.Minecraft.getInstance().setScreen(new StepsEditorModal(this, seqSteps))));
     }
 
     private void buildWaveForm() {
@@ -266,7 +318,8 @@ public class RpAdminScreen extends Screen {
         JsonObject wv = selItem();
         String id = wv == null ? "" : str(wv, "id");
         boolean edit = !id.isBlank();
-        idBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.id", id, !edit);
+        // ID 仅编辑模式锁定（创建模式必须可输入，否则无法新建）
+        idBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.id", id, edit);
         y += 30;
         int bw2 = (w - 4) / 2;
         addRenderableWidget(RpButton.secondary(x, y, bw2, 18, Component.literal("模式: " + Modes[modeIdx]), b -> {
@@ -293,10 +346,19 @@ public class RpAdminScreen extends Screen {
         descBox = mkBox(x, y, bw2, "职业ID(逗号)", csv(wv, "professionIds"), false);
         musicBox = mkBox(x + bw2 + 4, y, bw2, "阵营ID(逗号)", csv(wv, "factionIds"), false);
         y += 30;
-        syncSeqSteps(wv);
-        stepsRow(x, y, w);
         y += 30;
         actionRow(x, y, w, edit);
+        // 管理快捷操作：手动召唤复活波
+        y += 26;
+        addRenderableWidget(
+                RpButton.primary(x, y, w, 20, Component.literal("召唤复活波：向候选池发邀请（等同 /rp spawn trigger）"), b -> {
+                    String wvId = idBox.getValue();
+                    if (wvId.isBlank()) {
+                        notice = "缺少 id";
+                        return;
+                    }
+                    RpChannels.sendToServer(new RpPackets.AdminWaveTriggerC2S(wvId));
+                }));
     }
 
     /** 通用操作行：保存/删除/新建。 */
@@ -328,8 +390,6 @@ public class RpAdminScreen extends Screen {
                     deployIdx = 0;
                     evState = true;
                     endSettle = true;
-                    seqSteps.clear();
-                    stepsReadyFor = "";
                     rebuild();
                 }));
     }
@@ -352,7 +412,7 @@ public class RpAdminScreen extends Screen {
                 p.addProperty("id", idBox.getValue());
                 p.addProperty("name", nameBox.getValue());
                 p.addProperty("factionId", currentFactionId());
-                p.addProperty("selfDeploy", selfDeploy);
+                p.addProperty("unlockLevel", intOf(unlockLevelBox.getValue(), 0));
                 p.addProperty("music", musicBox.getValue());
                 p.addProperty("profile", profileBox.getValue());
                 yield p;
@@ -363,7 +423,7 @@ public class RpAdminScreen extends Screen {
                 p.addProperty("name", nameBox.getValue());
                 p.addProperty("color", colorBox.getValue());
                 p.addProperty("description", descBox.getValue());
-                p.addProperty("icon", ICONS[iconIdx]);
+                p.addProperty("icon", iconOptions().get(iconIdx));
                 p.addProperty("tier", tierIdx + 1);
                 yield p;
             }
@@ -396,7 +456,9 @@ public class RpAdminScreen extends Screen {
                     p.addProperty("durationSeconds", parseInt(fld3Box));
                     p.addProperty("settleOnEnd", endSettle);
                 }
-                p.add("sequence", seqArray());
+                if (src != null && src.has("sequence")) {
+                    p.add("sequence", src.getAsJsonArray("sequence")); // 行为序列不在面板编辑，保存时透传保留
+                }
                 yield p;
             }
             case TAB_PHASE -> {
@@ -404,7 +466,10 @@ public class RpAdminScreen extends Screen {
                 p.addProperty("id", idBox.getValue());
                 p.addProperty("order", parseInt(fld2Box));
                 p.addProperty("durationMinutes", parseInt(fld3Box));
-                p.add("sequence", seqArray());
+                JsonObject phSrc = selItem();
+                if (phSrc != null && phSrc.has("sequence")) {
+                    p.add("sequence", phSrc.getAsJsonArray("sequence"));
+                }
                 yield p;
             }
             case TAB_WAVE -> {
@@ -438,19 +503,13 @@ public class RpAdminScreen extends Screen {
                 p.add("teamIds", csvArray(colorBox.getValue()));
                 p.add("professionIds", csvArray(descBox.getValue()));
                 p.add("factionIds", csvArray(musicBox.getValue()));
-                p.add("sequence", seqArray());
+                if (src != null && src.has("sequence")) {
+                    p.add("sequence", src.getAsJsonArray("sequence"));
+                }
                 yield p;
             }
             default -> payload();
         };
-    }
-
-    private JsonArray seqArray() {
-        JsonArray arr = new JsonArray();
-        for (JsonObject s : seqSteps) {
-            arr.add(s.deepCopy());
-        }
-        return arr;
     }
 
     private static int parseInt(EditBox box) {
@@ -524,6 +583,14 @@ public class RpAdminScreen extends Screen {
         }
     }
 
+    private static int intOf(String v, int def) {
+        try {
+            return Math.max(0, Integer.parseInt(v.trim()));
+        } catch (Exception e) {
+            return def;
+        }
+    }
+
     private static final String[] Modes = {"SELF_DEPLOY", "RECRUIT", "BOTH"};
     private static final String[] DeployTypes = {"WORLD_SPAWN", "POS"};
 
@@ -536,7 +603,8 @@ public class RpAdminScreen extends Screen {
         JsonObject prof = selProf();
         String id = prof == null ? "" : str(prof, "id");
         boolean edit = !id.isBlank();
-        idBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.id", id, !edit);
+        // ID 仅编辑模式锁定（创建模式必须可输入，否则无法新建）
+        idBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.id", id, edit);
         y += 30;
         nameBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.name", prof == null ? "" : str(prof, "name"), false);
         y += 30;
@@ -546,20 +614,17 @@ public class RpAdminScreen extends Screen {
                     % Math.max(1, ClientCharacterState.factions().size());
             rebuild();
         }));
-        addRenderableWidget(RpButton.secondary(
+        unlockLevelBox = mkBox(
                 x + bw2 + 4,
                 y,
                 bw2,
-                18,
-                Component.literal(Component.translatable(
-                                selfDeploy ? "ccnr_rp.gui.admin.value.on" : "ccnr_rp.gui.admin.value.off")
-                        .getString()),
-                b -> {
-                    selfDeploy = !selfDeploy;
-                    rebuild();
-                }));
+                "ccnr_rp.gui.admin.field.unlock_level",
+                prof == null ? "0" : num(prof, "unlockLevel", 0),
+                false);
         y += 30;
         musicBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.music", prof == null ? "" : str(prof, "music"), false);
+        y += 30;
+        buildMusicUploadRow(x, y, w);
         y += 30;
         profileBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.profile", prof == null ? "" : str(prof, "profile"), false);
         y += 30;
@@ -583,8 +648,24 @@ public class RpAdminScreen extends Screen {
                     factionIdx = 0;
                     iconIdx = 0;
                     tierIdx = 1;
-                    selfDeploy = false;
                     rebuild();
+                }));
+        // 管理快捷操作：把自己的角色（在场优先）刷成所选职业（含阵营）
+        addRenderableWidget(RpButton.primary(x, y + 26, w, 20, Component.literal("刷给自己：当前角色改为所选职业（含阵营）"), b -> {
+            if (selProfId.isBlank()) {
+                notice = "请先在左侧选择职业";
+                return;
+            }
+            RpChannels.sendToServer(new RpPackets.AdminSelfProfessionC2S(selProfId));
+        }));
+        // 管理快捷操作：把当前背包/护甲/副手（含 NBT）全量保存为所选职业 loadout（/rp profession save <id> --full）
+        addRenderableWidget(
+                RpButton.secondary(x, y + 52, w, 20, Component.literal("全量保存装备：当前背包/护甲/副手 → 所选职业（--full）"), b -> {
+                    if (selProfId.isBlank()) {
+                        notice = "请先在左侧选择职业";
+                        return;
+                    }
+                    RpChannels.sendToServer(new RpPackets.AdminProfessionSaveFullC2S(selProfId));
                 }));
     }
 
@@ -612,7 +693,7 @@ public class RpAdminScreen extends Screen {
         p.addProperty("id", idBox.getValue());
         p.addProperty("name", nameBox.getValue());
         p.addProperty("factionId", currentFactionId());
-        p.addProperty("selfDeploy", selfDeploy);
+        p.addProperty("unlockLevel", intOf(unlockLevelBox.getValue(), 0));
         p.addProperty("music", musicBox.getValue());
         p.addProperty("profile", profileBox.getValue());
         requestCrud("profession", edit ? "update" : "create", p);
@@ -632,17 +713,20 @@ public class RpAdminScreen extends Screen {
         JsonObject fac = selFaction();
         String id = fac == null ? "" : str(fac, "id");
         boolean edit = !id.isBlank();
-        idBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.id", id, !edit);
+        loadFactionSpawn(fac);
+        // ID 仅编辑模式锁定（创建模式必须可输入，否则无法新建）
+        idBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.id", id, edit);
         y += 30;
         nameBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.name", fac == null ? "" : str(fac, "name"), false);
         y += 30;
         colorBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.color", fac == null ? "#FFFFFF" : str(fac, "color"), false);
         y += 30;
         int bw2 = (w - 4) / 2;
-        addRenderableWidget(RpButton.secondary(x, y, bw2, 18, Component.literal("图标: " + ICONS[iconIdx]), b -> {
-            iconIdx = (iconIdx + 1) % ICONS.length;
-            rebuild();
-        }));
+        addRenderableWidget(RpButton.secondary(
+                x, y, bw2, 18, Component.literal("图标: " + iconOptions().get(iconIdx)), b -> {
+                    iconIdx = (iconIdx + 1) % iconOptions().size();
+                    rebuild();
+                }));
         addRenderableWidget(
                 RpButton.secondary(x + bw2 + 4, y, bw2, 18, Component.literal("等级: " + (tierIdx + 1)), b -> {
                     tierIdx = (tierIdx + 1) % 3;
@@ -650,6 +734,10 @@ public class RpAdminScreen extends Screen {
                 }));
         y += 30;
         descBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.desc", fac == null ? "" : str(fac, "description"), false);
+        y += 30;
+        musicBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.music", fac == null ? "" : str(fac, "music"), false);
+        y += 30;
+        buildMusicUploadRow(x, y, w);
         y += 30;
         int bw3 = Math.max(60, w / 4);
         addRenderableWidget(RpButton.primary(
@@ -672,6 +760,237 @@ public class RpAdminScreen extends Screen {
                     tierIdx = 1;
                     rebuild();
                 }));
+        // 出生点配置（P9）：弹出管理窗口（规则 + 坐标列表 + 一键添加当前坐标）
+        addRenderableWidget(RpButton.secondary(
+                x, y + 28, w, 18, Component.literal("管理出生点…（规则 / 坐标 / 添加当前坐标）"), b -> openSpawnModal()));
+    }
+
+    /** 从阵营 JSON 载入出生点配置到编辑状态。 */
+    private void loadFactionSpawn(JsonObject fac) {
+        spawnPts.clear();
+        spawnDims.clear();
+        spawnRowBounds.clear();
+        spawnRowTexts.clear();
+        spawnRule = "SPREAD";
+        if (fac == null || !fac.has("spawn") || !fac.get("spawn").isJsonObject()) {
+            return;
+        }
+        JsonObject sp = fac.getAsJsonObject("spawn");
+        spawnRule = "SINGLE".equalsIgnoreCase(str(sp, "rule", "SPREAD")) ? "SINGLE" : "SPREAD";
+        if (sp.has("points") && sp.get("points").isJsonArray()) {
+            for (com.google.gson.JsonElement e : sp.getAsJsonArray("points")) {
+                if (e.isJsonObject()) {
+                    JsonObject o = e.getAsJsonObject();
+                    spawnPts.add(new double[] {dbl(o, "x", 0), dbl(o, "y", 64), dbl(o, "z", 0)});
+                    spawnDims.add(str(o, "dim", "minecraft:overworld"));
+                }
+            }
+        }
+    }
+
+    private static double dbl(JsonObject o, String key, double def) {
+        try {
+            return o != null && o.has(key) ? o.get(key).getAsDouble() : def;
+        } catch (Exception e) {
+            return def;
+        }
+    }
+
+    /** 打开出生点管理弹窗：从当前选中阵营载入配置到工作副本。 */
+    private void openSpawnModal() {
+        JsonObject fac = selFaction();
+        if (fac == null || str(fac, "id").isBlank()) {
+            notice = "请先在左侧选择阵营";
+            return;
+        }
+        spawnModalFaction = str(fac, "id");
+        loadFactionSpawn(fac);
+        notice = ""; // 弹窗已打开，清掉残留的“请先选择阵营”提示
+        spawnModalOpen = true;
+    }
+
+    private String ruleLabel(String rule) {
+        return "SINGLE".equals(rule) ? "集中(单点)" : "分摊(随机)";
+    }
+
+    /** 把本机玩家当前坐标 + 维度加入出生点列表（弹窗内，不触发窗体重建）。 */
+    private void addCurrentPos() {
+        net.minecraft.client.player.LocalPlayer p = net.minecraft.client.Minecraft.getInstance().player;
+        if (p == null) {
+            notice = "需以玩家身份打开";
+            return;
+        }
+        String dim = p.level().dimension().location().toString();
+        spawnPts.add(new double[] {p.getX(), p.getY(), p.getZ()});
+        spawnDims.add(dim);
+    }
+
+    /** 发送出生点配置到服务端（写 faction spawn 字段），成功后关闭弹窗。 */
+    private void saveFactionSpawn() {
+        if (spawnModalFaction.isBlank()) {
+            notice = "请先选择阵营";
+            return;
+        }
+        com.google.gson.JsonArray arr = new com.google.gson.JsonArray();
+        for (int i = 0; i < spawnPts.size(); i++) {
+            double[] p = spawnPts.get(i);
+            JsonObject o = new JsonObject();
+            o.addProperty("x", p[0]);
+            o.addProperty("y", p[1]);
+            o.addProperty("z", p[2]);
+            o.addProperty("dim", spawnDims.get(i));
+            arr.add(o);
+        }
+        RpChannels.sendToServer(new RpPackets.AdminFactionSpawnC2S(spawnModalFaction, spawnRule, arr.toString()));
+        spawnModalOpen = false;
+    }
+
+    /** 渲染出生点管理弹窗（每帧；按钮为手动绘制，命中在 mouseClicked）。 */
+    private void renderSpawnModal(GuiGraphics g, int mouseX, int mouseY) {
+        // 弹窗遮罩：压暗底层界面，明确“弹窗在最上层、下层不可交互”
+        g.fill(0, 0, width, height, 0xA6000000);
+        int w = Math.min(560, width - 40);
+        int h = Math.min(400, height - 40);
+        int x1 = (width - w) / 2;
+        int y1 = (height - h) / 2;
+        spX1 = x1;
+        spY1 = y1;
+        spX2 = x1 + w;
+        spY2 = y1 + h;
+        RpTheme.terminalPanel(g, x1, y1, x1 + w, y1 + h, RpTheme.RADIUS_LARGE);
+        g.drawString(font, "管理出生点 — " + spawnModalFaction, x1 + 14, y1 + 10, RpTheme.CYAN, true);
+        g.fill(x1 + 8, y1 + 26, x1 + w - 8, y1 + 27, RpTheme.CYAN_DIM);
+
+        int cx = x1 + 14;
+        int cw = x1 + w - 14;
+        int cy = y1 + 38;
+        int bw = Math.max(72, (cw - cx - 12) / 4);
+        int border = RpTheme.PANEL_BORDER;
+        int borderHover = RpTheme.PANEL_BORDER_BRIGHT;
+        // 规则切换
+        spRuleX1 = cx;
+        spRuleY1 = cy;
+        spRuleX2 = cx + bw;
+        spRuleY2 = cy + 18;
+        RpButton.draw(
+                g,
+                spRuleX1,
+                spRuleY1,
+                spRuleX2,
+                spRuleY2,
+                "规则: " + ruleLabel(spawnRule),
+                inRect(mouseX, mouseY, spRuleX1, spRuleY1, spRuleX2, spRuleY2) ? borderHover : border,
+                false);
+        // 添加当前坐标
+        spAddX1 = spRuleX2 + 4;
+        spAddY1 = cy;
+        spAddX2 = spAddX1 + bw;
+        spAddY2 = cy + 18;
+        RpButton.draw(
+                g,
+                spAddX1,
+                spAddY1,
+                spAddX2,
+                spAddY2,
+                "+ 添加当前坐标",
+                inRect(mouseX, mouseY, spAddX1, spAddY1, spAddX2, spAddY2) ? borderHover : border,
+                false);
+        // 保存
+        spSaveX1 = spAddX2 + 4;
+        spSaveY1 = cy;
+        spSaveX2 = spSaveX1 + bw;
+        spSaveY2 = cy + 18;
+        RpButton.draw(
+                g,
+                spSaveX1,
+                spSaveY1,
+                spSaveX2,
+                spSaveY2,
+                "保存",
+                inRect(mouseX, mouseY, spSaveX1, spSaveY1, spSaveX2, spSaveY2) ? borderHover : border,
+                true);
+        // 关闭
+        spCancelX1 = spSaveX2 + 4;
+        spCancelY1 = cy;
+        spCancelX2 = spCancelX1 + bw;
+        spCancelY2 = cy + 18;
+        RpButton.draw(
+                g,
+                spCancelX1,
+                spCancelY1,
+                spCancelX2,
+                spCancelY2,
+                "关闭",
+                inRect(mouseX, mouseY, spCancelX1, spCancelY1, spCancelX2, spCancelY2) ? borderHover : border,
+                false);
+        cy += 26;
+
+        int ry = cy + 4;
+        int rx = cx;
+        int rw2 = cw - rx;
+        g.drawString(font, "提示：点“+ 添加当前坐标”把传送到此处的坐标记入；规则=分摊/集中。", rx, ry, RpTheme.TEXT_DIM);
+        ry += 16;
+
+        spRemoveBounds.clear();
+        for (int i = 0; i < spawnPts.size(); i++) {
+            double[] p = spawnPts.get(i);
+            g.drawString(
+                    font,
+                    String.format("(%d, %d, %d)  %s", (int) p[0], (int) p[1], (int) p[2], spawnDims.get(i)),
+                    rx,
+                    ry + 3,
+                    RpTheme.TEXT_PRIMARY);
+            int rbX = x1 + w - 14 - 48;
+            spRemoveBounds.add(new int[] {rbX, ry, rbX + 48, ry + 16});
+            RpButton.draw(
+                    g,
+                    rbX,
+                    ry,
+                    rbX + 48,
+                    ry + 16,
+                    "移除",
+                    inRect(mouseX, mouseY, rbX, ry, rbX + 48, ry + 16) ? borderHover : border,
+                    false);
+            ry += 22;
+        }
+        if (spawnPts.isEmpty()) {
+            g.drawString(font, "（未配置出生点：部署回退部署点/世界出生点）", rx, ry + 3, RpTheme.TEXT_DIM);
+        }
+    }
+
+    private boolean inRect(int mx, int my, int x1, int y1, int x2, int y2) {
+        return mx >= x1 && mx <= x2 && my >= y1 && my <= y2;
+    }
+
+    /** 弹窗内命中处理（在 mouseClicked 顶部调用）。 */
+    private boolean spawnModalClick(double mx, double my) {
+        if (inRect((int) mx, (int) my, spRuleX1, spRuleY1, spRuleX2, spRuleY2)) {
+            spawnRule = "SINGLE".equals(spawnRule) ? "SPREAD" : "SINGLE";
+            return true;
+        }
+        if (inRect((int) mx, (int) my, spAddX1, spAddY1, spAddX2, spAddY2)) {
+            addCurrentPos();
+            return true;
+        }
+        if (inRect((int) mx, (int) my, spSaveX1, spSaveY1, spSaveX2, spSaveY2)) {
+            saveFactionSpawn();
+            return true;
+        }
+        if (inRect((int) mx, (int) my, spCancelX1, spCancelY1, spCancelX2, spCancelY2)) {
+            spawnModalOpen = false;
+            return true;
+        }
+        for (int i = 0; i < spRemoveBounds.size(); i++) {
+            int[] rb = spRemoveBounds.get(i);
+            if (inRect((int) mx, (int) my, rb[0], rb[1], rb[2], rb[3])) {
+                if (i < spawnPts.size()) {
+                    spawnPts.remove(i);
+                    spawnDims.remove(i);
+                }
+                return true;
+            }
+        }
+        return false;
     }
 
     private JsonObject selFaction() {
@@ -691,7 +1010,120 @@ public class RpAdminScreen extends Screen {
         p.addProperty("description", descBox.getValue());
         p.addProperty("icon", ICONS[iconIdx]);
         p.addProperty("tier", tierIdx + 1);
+        p.addProperty("music", musicBox.getValue());
         requestCrud("faction", edit ? "update" : "create", p);
+    }
+
+    // ---------- 音乐管理 ----------
+
+    /** 音乐上传行：路径/URL 输入 + 上传按钮（职业与阵营表单共用）。 */
+    private void buildMusicUploadRow(int x, int y, int w) {
+        int bw = Math.max(64, w / 5);
+        musicUploadBox = mkBox(x, y, w - bw - 4, "ccnr_rp.gui.admin.music.path", "", false);
+        addRenderableWidget(RpButton.secondary(
+                x + w - bw, y, bw, 18, Component.translatable("ccnr_rp.gui.admin.music.upload"), b -> uploadMusic()));
+    }
+
+    private void uploadMusic() {
+        String src = musicUploadBox.getValue();
+        if (src == null || src.isBlank()) {
+            notice = Component.translatable("ccnr_rp.gui.admin.music.need_path").getString();
+            return;
+        }
+        if (src.startsWith("http://") || src.startsWith("https://")) {
+            String name = musicNameFromUrl(src);
+            if (name == null) {
+                notice = Component.translatable("ccnr_rp.gui.admin.music.invalid_name")
+                        .getString();
+                return;
+            }
+            fetchMusicUrl(src, name);
+            return;
+        }
+        try {
+            String name = java.nio.file.Path.of(src).getFileName().toString();
+            if (com.ccnrcom.rp.music.MusicStore.validateName(name) != null) {
+                notice = Component.translatable("ccnr_rp.gui.admin.music.invalid_name")
+                        .getString();
+                return;
+            }
+            byte[] data = java.nio.file.Files.readAllBytes(java.nio.file.Path.of(src));
+            if (data.length > com.ccnrcom.rp.music.MusicStore.MAX_BYTES) {
+                notice = Component.translatable("ccnr_rp.gui.admin.music.too_big")
+                        .getString();
+                return;
+            }
+            sendMusicChunks(name, data);
+        } catch (Exception e) {
+            notice = Component.translatable("ccnr_rp.gui.admin.music.read_fail").getString();
+        }
+    }
+
+    /** URL 末段取文件名（去 query/fragment）；非法返回 null。 */
+    private static String musicNameFromUrl(String url) {
+        try {
+            String path = new java.net.URL(url).getPath();
+            int slash = path.lastIndexOf('/');
+            String name = slash >= 0 ? path.substring(slash + 1) : path;
+            return name.isBlank() ? null : name;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** URL 拉取音乐（后台线程，成功后回主线程上传）。 */
+    private void fetchMusicUrl(String url, String name) {
+        Thread t = new Thread(
+                () -> {
+                    byte[] data = null;
+                    try {
+                        java.net.HttpURLConnection conn =
+                                (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+                        conn.setConnectTimeout(8000);
+                        conn.setReadTimeout(20000);
+                        conn.setRequestProperty("User-Agent", "CCNR-RP/1.0");
+                        try (java.io.InputStream in = conn.getInputStream();
+                                java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream()) {
+                            byte[] buf = new byte[8192];
+                            int n;
+                            while ((n = in.read(buf)) > 0) {
+                                bos.write(buf, 0, n);
+                                if (bos.size() > com.ccnrcom.rp.music.MusicStore.MAX_BYTES) {
+                                    bos.reset();
+                                    bos.write(new byte[] {0});
+                                    break;
+                                }
+                            }
+                            data = bos.toByteArray();
+                        }
+                    } catch (Exception ignored) {
+                        data = null;
+                    }
+                    final byte[] result = data;
+                    net.minecraft.client.Minecraft.getInstance().execute(() -> {
+                        if (result == null || result.length > com.ccnrcom.rp.music.MusicStore.MAX_BYTES) {
+                            notice = Component.translatable("ccnr_rp.gui.admin.music.fetch_fail")
+                                    .getString();
+                            return;
+                        }
+                        sendMusicChunks(name, result);
+                    });
+                },
+                "ccnr-rp-music-url");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /** 音乐分片上传（本地/URL 共用）。 */
+    private void sendMusicChunks(String name, byte[] data) {
+        int part = 32 * 1024;
+        int total = (data.length + part - 1) / part;
+        for (int i = 0; i < total; i++) {
+            byte[] chunk = java.util.Arrays.copyOfRange(data, i * part, Math.min((i + 1) * part, data.length));
+            RpChannels.sendToServer(new RpPackets.MusicUploadPartC2S(name, i, total, chunk));
+        }
+        RpChannels.sendToServer(new RpPackets.MusicUploadCommitC2S(name, data.length, total));
+        notice = Component.translatable("ccnr_rp.gui.admin.music.uploading").getString();
     }
 
     // ---------- 通用 ----------
@@ -777,6 +1209,69 @@ public class RpAdminScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
+        // 音乐补全提示点击优先（选中项填入音乐框）
+        if (!musicSugBounds.isEmpty()) {
+            for (int i = 0; i < musicSugBounds.size(); i++) {
+                int[] b = musicSugBounds.get(i);
+                if (mx >= b[0] && mx <= b[2] && my >= b[1] && my <= b[3]) {
+                    if (musicBox != null && i < musicSugItems.size()) {
+                        musicBox.setValue(musicSugItems.get(i));
+                    }
+                    musicSugIdx = -1;
+                    return true;
+                }
+            }
+        }
+        // 非管理员直接拦截所有管理操作（服务端仍有二次校验兜底）
+        if (!ClientCharacterState.isAdmin()) {
+            return super.mouseClicked(mx, my, button);
+        }
+        // 设定（serverconfig）滚动条
+        if (tab == TAB_SETTINGS) {
+            int ns = RpScrollbar.clickV(
+                    (int) mx,
+                    (int) my,
+                    px2 - 14,
+                    px2 - 9,
+                    py1 + 76,
+                    py2 - 70,
+                    com.ccnrcom.rp.config.CCNRRPConfig.keys().size(),
+                    settingsMaxVisible(),
+                    settingsScroll,
+                    7);
+            if (ns >= 0) {
+                settingsScroll = (int) Math.max(
+                        0,
+                        Math.min(
+                                ns,
+                                Math.max(
+                                        0,
+                                        com.ccnrcom.rp.config.CCNRRPConfig.keys()
+                                                        .size()
+                                                - settingsMaxVisible())));
+                rebuild();
+                return true;
+            }
+        }
+        // 列表滚动条：按住游标拖拽 / 点击轨道跳转
+        if (tab != TAB_SETTINGS) {
+            int maxRows = Math.max(1, (listY2 - listY1) / rowHeight());
+            int ns = RpScrollbar.clickV(
+                    (int) mx,
+                    (int) my,
+                    listX2 - 6,
+                    listX2 - 1,
+                    listY1,
+                    listY2,
+                    listItems().size(),
+                    maxRows,
+                    scroll,
+                    0);
+            if (ns >= 0) {
+                scroll = ns;
+                return true;
+            }
+        }
         if (impactOpen) {
             if (mx >= okX1 && mx <= okX2 && my >= okY1 && my <= okY2) {
                 impactOpen = false;
@@ -787,6 +1282,10 @@ public class RpAdminScreen extends Screen {
                 impactOpen = false;
                 return true;
             }
+            return true;
+        }
+        if (spawnModalOpen) {
+            spawnModalClick(mx, my); // 命中弹窗按钮则处理；未命中也不放行到底层
             return true;
         }
         if (super.mouseClicked(mx, my, button)) {
@@ -804,7 +1303,6 @@ public class RpAdminScreen extends Screen {
                 selProfId = "";
                 selFactionId = "";
                 selSelId = "";
-                stepsReadyFor = "";
                 rebuild();
                 return true;
             }
@@ -836,6 +1334,40 @@ public class RpAdminScreen extends Screen {
         return false;
     }
 
+    /** 滚动条拖拽：按住游标移动即滚动。 */
+    @Override
+    public boolean mouseDragged(double mx, double my, int button, double dx, double dy) {
+        if (tab == TAB_SETTINGS) {
+            int ns = RpScrollbar.dragV((int) my);
+            if (ns >= 0 && RpScrollbar.dragId() == 7) {
+                settingsScroll = (int) Math.max(
+                        0,
+                        Math.min(
+                                ns,
+                                Math.max(
+                                        0,
+                                        com.ccnrcom.rp.config.CCNRRPConfig.keys()
+                                                        .size()
+                                                - settingsMaxVisible())));
+                rebuild();
+                return true;
+            }
+            return super.mouseDragged(mx, my, button, dx, dy);
+        }
+        int ns = RpScrollbar.dragV((int) my);
+        if (ns >= 0) {
+            scroll = ns;
+            return true;
+        }
+        return super.mouseDragged(mx, my, button, dx, dy);
+    }
+
+    @Override
+    public boolean mouseReleased(double mx, double my, int button) {
+        RpScrollbar.endDrag();
+        return super.mouseReleased(mx, my, button);
+    }
+
     private JsonObject visibleItem(int i) {
         List<JsonObject> items = listItems();
         int rowH = rowHeight();
@@ -858,7 +1390,6 @@ public class RpAdminScreen extends Screen {
             return;
         }
         selSelId = str(item, "id");
-        stepsReadyFor = "";
         if (tab == TAB_EVENT) {
             evState = !item.has("enabled") || item.get("enabled").getAsBoolean();
             endSettle = !item.has("settleOnEnd") || item.get("settleOnEnd").getAsBoolean();
@@ -920,15 +1451,15 @@ public class RpAdminScreen extends Screen {
                 break;
             }
         }
-        selfDeploy = p.has("selfDeploy") && p.get("selfDeploy").getAsBoolean();
         rebuild();
     }
 
     private void selectFaction(JsonObject f) {
         selFactionId = str(f, "id");
         String icon = str(f, "icon");
-        for (int i = 0; i < ICONS.length; i++) {
-            if (ICONS[i].equals(icon)) {
+        java.util.List<String> opts = iconOptions();
+        for (int i = 0; i < opts.size(); i++) {
+            if (opts.get(i).equals(icon)) {
                 iconIdx = i;
                 break;
             }
@@ -947,11 +1478,50 @@ public class RpAdminScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+        if (impactOpen || spawnModalOpen) {
+            return true; // 弹窗打开时不滚动底层列表
+        }
         if (tab == TAB_PROFESSION) {
             scroll = (int) Math.max(0, scroll - delta / 8);
             rebuild();
+        } else if (tab == TAB_SETTINGS) {
+            int max = Math.max(0, com.ccnrcom.rp.config.CCNRRPConfig.keys().size() - settingsMaxVisible());
+            settingsScroll = (int) Math.max(0, Math.min(settingsScroll - delta, max));
+            rebuild();
         }
         return true;
+    }
+
+    private int settingsMaxVisible() {
+        int y = py1 + 80;
+        int yMax = py2 - 70;
+        return Math.max(1, (yMax - y) / 30);
+    }
+
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (!musicSugItems.isEmpty() && musicBox != null && musicBox.isFocused()) {
+            if (keyCode == 264) { // Down
+                musicSugIdx = (musicSugIdx + 1) % musicSugItems.size();
+                return true;
+            }
+            if (keyCode == 265) { // Up
+                musicSugIdx = (musicSugIdx - 1 + musicSugItems.size()) % musicSugItems.size();
+                return true;
+            }
+            if (keyCode == 257 || keyCode == 335) { // Enter / Numpad Enter
+                if (musicSugIdx >= 0 && musicSugIdx < musicSugItems.size()) {
+                    musicBox.setValue(musicSugItems.get(musicSugIdx));
+                }
+                musicSugIdx = -1;
+                return true;
+            }
+            if (keyCode == 256) { // Esc
+                musicSugIdx = -1;
+                return true;
+            }
+        }
+        return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
     // ---------- 渲染 ----------
@@ -959,65 +1529,119 @@ public class RpAdminScreen extends Screen {
     @Override
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         renderBackground(g);
-        RpTheme.terminalPanel(g, px1, py1, px2, py2, RpTheme.RADIUS_LARGE);
-        g.drawString(font, title.getString().toUpperCase(java.util.Locale.ROOT), px1 + 12, py1 + 8, RpTheme.CYAN, true);
-        boolean admin = ClientCharacterState.isAdmin();
-        g.drawString(
-                font,
-                admin
-                        ? "● ADMIN"
-                        : "● "
+        // 模态（弹窗）打开时，仅保留深色背景 + 弹窗本身，彻底隐藏下层管理界面
+        boolean modal = impactOpen || spawnModalOpen;
+        if (!modal) {
+            RpTheme.terminalPanel(g, px1, py1, px2, py2, RpTheme.RADIUS_LARGE);
+            g.drawString(
+                    font, title.getString().toUpperCase(java.util.Locale.ROOT), px1 + 12, py1 + 8, RpTheme.CYAN, true);
+            // 素版：不再绘制黄色「● ADMIN」徽章；非管理员保留红色无权限提示
+            if (!ClientCharacterState.isAdmin()) {
+                g.drawString(
+                        font,
+                        "● "
                                 + Component.translatable("ccnr_rp.gui.admin.no_perm")
                                         .getString(),
-                px1 + 12 + font.width(title.getString()) + 14,
-                py1 + 10,
-                admin ? RpTheme.GOLD : RpTheme.RED,
-                true);
-        boolean hover = mouseX >= closeX1 && mouseX <= closeX2 && mouseY >= closeY1 && mouseY <= closeY2;
-        if (hover) {
-            g.fill(closeX1 - 2, closeY1 - 1, closeX2 + 2, closeY2 + 1, 0xE66F1613);
-        }
-        g.drawString(
-                font, "X", (closeX1 + closeX2) / 2 - 2, closeY1 + 4, hover ? 0xFFFFFFFF : RpTheme.TEXT_SECONDARY, true);
-        g.fill(px1 + 8, py1 + 26, px2 - 8, py1 + 27, RpTheme.CYAN_DIM);
-
-        for (int i = 0; i < 6; i++) {
-            int[] b = rowBounds.get(i);
-            boolean sel = tab == i;
-            boolean hov = mouseX >= b[0] && mouseX <= b[2] && mouseY >= b[1] && mouseY <= b[3];
-            if (sel) {
-                RpTheme.selectedBar(g, b[0], b[1], b[2], b[3], 4f);
-            } else {
-                RpRoundRect.outlined(
-                        g,
-                        b[0],
-                        b[1],
-                        b[2],
-                        b[3],
-                        4f,
-                        hov ? RpTheme.PANEL_BORDER_BRIGHT : RpTheme.PANEL_BORDER,
-                        hov ? RpTheme.PANEL_BG_ALT : RpTheme.PANEL_BG);
+                        px1 + 12 + font.width(title.getString()) + 14,
+                        py1 + 10,
+                        RpTheme.RED,
+                        true);
             }
-            g.drawCenteredString(
+            boolean hover = mouseX >= closeX1 && mouseX <= closeX2 && mouseY >= closeY1 && mouseY <= closeY2;
+            if (hover) {
+                g.fill(closeX1 - 2, closeY1 - 1, closeX2 + 2, closeY2 + 1, 0xE66F1613);
+            }
+            g.drawString(
                     font,
-                    Component.translatable(TABS[i]).getString(),
-                    (b[0] + b[2]) / 2,
-                    b[1] + 6,
-                    sel ? 0xFFFFFFFF : RpTheme.TEXT_SECONDARY);
-        }
+                    "X",
+                    (closeX1 + closeX2) / 2 - 2,
+                    closeY1 + 4,
+                    hover ? 0xFFFFFFFF : RpTheme.TEXT_SECONDARY,
+                    true);
+            g.fill(px1 + 8, py1 + 26, px2 - 8, py1 + 27, RpTheme.CYAN_DIM);
 
-        if (tab == TAB_SETTINGS) {
-            renderSettings(g, mouseX, mouseY);
-        } else {
-            renderListTab(g, mouseX, mouseY);
+            for (int i = 0; i < 6; i++) {
+                int[] b = rowBounds.get(i);
+                boolean sel = tab == i;
+                boolean hov = mouseX >= b[0] && mouseX <= b[2] && mouseY >= b[1] && mouseY <= b[3];
+                if (sel) {
+                    RpTheme.selectedBar(g, b[0], b[1], b[2], b[3], 4f);
+                } else {
+                    RpRoundRect.outlined(
+                            g,
+                            b[0],
+                            b[1],
+                            b[2],
+                            b[3],
+                            4f,
+                            hov ? RpTheme.PANEL_BORDER_BRIGHT : RpTheme.PANEL_BORDER,
+                            hov ? RpTheme.PANEL_BG_ALT : RpTheme.PANEL_BG);
+                }
+                g.drawCenteredString(
+                        font,
+                        Component.translatable(TABS[i]).getString(),
+                        (b[0] + b[2]) / 2,
+                        b[1] + 6,
+                        sel ? 0xFFFFFFFF : RpTheme.TEXT_SECONDARY);
+            }
+
+            if (tab == TAB_SETTINGS) {
+                renderSettings(g, mouseX, mouseY);
+            } else {
+                renderListTab(g, mouseX, mouseY);
+            }
+            renderFieldLabels(g);
+            renderMusicSuggestions(g);
+            if (!notice.isBlank()) {
+                g.drawCenteredString(font, "[ 系统 ] " + notice, (px1 + px2) / 2, py2 - 46, RpTheme.RED_LINE);
+            }
+            super.render(g, mouseX, mouseY, partialTick);
         }
-        renderFieldLabels(g);
-        if (!notice.isBlank()) {
-            g.drawCenteredString(font, "[ 系统 ] " + notice, (px1 + px2) / 2, py2 - 46, RpTheme.RED_LINE);
-        }
-        super.render(g, mouseX, mouseY, partialTick);
         if (impactOpen) {
             renderImpactModal(g, mouseX, mouseY);
+        }
+        if (spawnModalOpen) {
+            renderSpawnModal(g, mouseX, mouseY);
+        }
+    }
+
+    /** 音乐补全提示：职业/阵营表单的音乐框聚焦时按输入过滤已上传音乐列表并绘制下拉。 */
+    private void renderMusicSuggestions(GuiGraphics g) {
+        musicSugBounds.clear();
+        boolean form = tab == TAB_PROFESSION || tab == TAB_FACTION;
+        if (!form || musicBox == null || !musicBox.isFocused()) {
+            musicSugItems = new ArrayList<>();
+            musicSugIdx = -1;
+            lastMusicQuery = null;
+            return;
+        }
+        String q = musicBox.getValue() == null ? "" : musicBox.getValue().toLowerCase(java.util.Locale.ROOT);
+        if (!q.equals(lastMusicQuery)) {
+            lastMusicQuery = q;
+            musicSugIdx = -1;
+        }
+        musicSugItems = new ArrayList<>();
+        for (String m : ClientCharacterState.musicList()) {
+            if (q.isBlank() || m.toLowerCase(java.util.Locale.ROOT).contains(q)) {
+                musicSugItems.add(m);
+            }
+        }
+        if (musicSugIdx >= musicSugItems.size()) {
+            musicSugIdx = musicSugItems.size() - 1;
+        }
+        if (musicSugItems.isEmpty()) {
+            return;
+        }
+        int sx = musicBox.getX();
+        int sy = musicBox.getY() + 20;
+        int sw = musicBox.getWidth();
+        int n = Math.min(6, musicSugItems.size());
+        g.fill(sx - 1, sy - 1, sx + sw + 1, sy + n * 12 + 1, 0xE0323232);
+        g.fill(sx - 1, sy - 1, sx + sw + 1, sy, 0xFF5F5F5F);
+        for (int i = 0; i < n; i++) {
+            int yy = sy + i * 12;
+            g.drawString(font, musicSugItems.get(i), sx + 4, yy + 2, RpTheme.CYAN, false);
+            musicSugBounds.add(new int[] {sx, yy, sx + sw, yy + 12});
         }
     }
 
@@ -1118,6 +1742,11 @@ public class RpAdminScreen extends Screen {
                         hov ? RpTheme.PANEL_BG_ALT : (i % 2 == 0 ? RpTheme.PANEL_BG : 0x00000000));
             }
             int fx = b[0] + 5;
+            if (tab == TAB_FACTION) {
+                // 阵营行：左侧徽章 + 文字右移
+                RpIcons.factionBadge(g, b[0] + 16, b[1] + 11, 8, item, sel);
+                fx = b[0] + 28;
+            }
             g.drawString(
                     font,
                     str(item, "name").isBlank() ? str(item, "id") : str(item, "name"),
@@ -1126,8 +1755,31 @@ public class RpAdminScreen extends Screen {
                     sel ? 0xFFFFFFFF : RpTheme.TEXT_PRIMARY,
                     true);
             g.drawString(font, str(item, "id"), fx, b[1] + 11, sel ? 0xFFFFFFFF : RpTheme.TEXT_DIM, true);
+            // 职业缺装备设定 → 右侧小标记
+            if (tab == TAB_PROFESSION && isProfessionLoadoutEmpty(item)) {
+                String warn = "缺装备";
+                g.drawString(font, warn, b[2] - 8 - font.width(warn), b[1] + 11, 0xFFFF8C42, true);
+            }
         }
         RpScrollbar.draw(g, listX2 - 6, listY1, listY2, items.size(), maxVisible, off);
+    }
+
+    /** 职业 loadout 是否缺装备设定（无 loadout 或 inventory/armor/offhand 全空）。 */
+    private static boolean isProfessionLoadoutEmpty(JsonObject prof) {
+        if (prof == null || !prof.has("loadout") || !prof.get("loadout").isJsonObject()) {
+            return true;
+        }
+        JsonObject lo = prof.getAsJsonObject("loadout");
+        boolean invEmpty = !lo.has("inventory")
+                || !lo.get("inventory").isJsonArray()
+                || lo.getAsJsonArray("inventory").isEmpty();
+        boolean armEmpty = !lo.has("armor")
+                || !lo.get("armor").isJsonArray()
+                || lo.getAsJsonArray("armor").isEmpty();
+        boolean ohEmpty = !lo.has("offhand")
+                || !lo.get("offhand").isJsonObject()
+                || lo.getAsJsonObject("offhand").size() == 0;
+        return invEmpty && armEmpty && ohEmpty;
     }
 
     private String currentSelId() {
@@ -1139,30 +1791,50 @@ public class RpAdminScreen extends Screen {
     }
 
     private void renderSettings(GuiGraphics g, int mouseX, int mouseY) {
-        for (int i = 0; i < 6; i++) {
-            int[] b = rowBounds.get(6 + i);
-            boolean on = value(SETTING_KEYS[i]);
-            boolean hoverRow = mouseX >= b[0] && mouseX <= b[2] && mouseY >= b[1] && mouseY <= b[3];
-            RpRoundRect.outlined(
-                    g,
-                    b[0],
-                    b[1],
-                    b[2],
-                    b[3],
-                    6f,
-                    hoverRow && ClientCharacterState.isAdmin() ? RpTheme.PANEL_BORDER_BRIGHT : RpTheme.PANEL_BORDER,
-                    hoverRow ? RpTheme.PANEL_BG_ALT : RpTheme.PANEL_BG);
-            g.drawString(
-                    font,
-                    Component.translatable(SETTING_TITLES[i]).getString(),
-                    b[0] + 10,
-                    b[1] + 4,
-                    on ? RpTheme.CYAN : RpTheme.TEXT_PRIMARY,
-                    true);
-            g.drawString(
-                    font, Component.translatable(SETTING_DESCS[i]).getString(), b[0] + 10, b[1] + 16, RpTheme.TEXT_DIM);
-            drawSwitch(g, b[2] - 60, b[1] + 13, on);
+        // serverconfig 程序化设定：占满面板宽度，右侧数字输入框（renderFieldLabels 已画标签），支持滚动。
+        int x = px1 + 12;
+        int w = px2 - 12 - x;
+        int y = py1 + 80;
+        int yMax = py2 - 70;
+        JsonObject cfg = ClientCharacterState.serverConfig();
+        java.util.List<String> keys = com.ccnrcom.rp.config.CCNRRPConfig.keys();
+        int maxVisible = Math.max(1, (yMax - y) / 30);
+        int start = Math.min(settingsScroll, Math.max(0, keys.size() - maxVisible));
+        for (int i = start; i < keys.size(); i++) {
+            String key = keys.get(i);
+            String cur = cfg.has(key) ? cfg.get(key).getAsString() : "";
+            RpRoundRect.outlined(g, x, y, x + w, y + 22, 4f, RpTheme.PANEL_BORDER, RpTheme.PANEL_BG);
+            g.drawString(font, cfgLabel(key), x + 6, y + 6, RpTheme.TEXT_PRIMARY, true);
+            g.drawString(font, cur, x + 6 + font.width(cfgLabel(key)) + 10, y + 7, RpTheme.TEXT_DIM);
+            y += 30;
+            if (y > yMax) {
+                break;
+            }
         }
+        // 设定标签滚动条（可拖拽）
+        RpScrollbar.draw(g, px2 - 14, py1 + 76, yMax, keys.size(), maxVisible, start);
+    }
+
+    private static String cfgLabel(String key) {
+        return switch (key) {
+            case "deathCooldownMinutes" -> "死亡冷却(分钟)";
+            case "maxCharactersPerPlayer" -> "最大角色数/人";
+            case "createCooldownSeconds" -> "创建冷却(秒)";
+            case "offlineGraceSeconds" -> "离线判死宽限(秒)";
+            case "offlinePollSeconds" -> "离线判死轮询(秒)";
+            case "evalIntervalTicks" -> "事件求值间隔(tick)";
+            case "pollTicks" -> "复活波轮询(tick)";
+            case "deployDelayTicks" -> "部署延迟(tick)";
+            case "dutyXpPerSecond" -> "值班XP/秒";
+            case "taskDefaultXp" -> "任务默认XP";
+            case "evacSafeXp" -> "安全撤离XP";
+            case "evacDiedXp" -> "阵亡XP(可负)";
+            case "evacObservingXp" -> "观察结束XP";
+            case "evacStayBehindXp" -> "留守XP";
+            case "base" -> "等级基数";
+            case "pow" -> "等级指数";
+            default -> key;
+        };
     }
 
     private void drawSwitch(GuiGraphics g, int sx, int sy, boolean on) {
@@ -1175,7 +1847,7 @@ public class RpAdminScreen extends Screen {
                 sy + 14,
                 3f,
                 on ? RpTheme.CYAN : RpTheme.PANEL_BORDER,
-                on ? 0xCC0F2A33 : 0xCC10161B);
+                on ? 0xCC3F3F3F : 0xCC323232);
         if (on) {
             g.fill(sx + sw / 2 + 2, sy + 3, sx + sw - 3, sy + 11, RpTheme.CYAN);
         } else {

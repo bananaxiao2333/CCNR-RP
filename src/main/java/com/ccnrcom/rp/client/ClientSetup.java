@@ -28,6 +28,14 @@ public final class ClientSetup {
             GLFW.GLFW_KEY_K,
             "key.categories.ccnr_rp");
 
+    /** 招募邀请菜单开关（交互式弹窗）；右侧常驻悬浮 HUD 不受此热键控制。 */
+    public static final KeyMapping OPEN_RECRUIT = new KeyMapping(
+            "key.ccnr_rp.recruit_menu",
+            KeyConflictContext.IN_GAME,
+            InputConstants.Type.KEYSYM,
+            GLFW.GLFW_KEY_R,
+            "key.categories.ccnr_rp");
+
     private ClientSetup() {}
 
     @SubscribeEvent
@@ -38,6 +46,7 @@ public final class ClientSetup {
     @SubscribeEvent
     public static void registerKeys(RegisterKeyMappingsEvent event) {
         event.register(OPEN_CHARACTERS);
+        event.register(OPEN_RECRUIT);
     }
 
     @SubscribeEvent
@@ -46,8 +55,22 @@ public final class ClientSetup {
         event.registerAboveAll(
                 "ccnr_rp_recruit",
                 (gui, gfx, partial, w, h) -> com.ccnrcom.rp.client.RecruitOverlayHud.render(gfx, w, h));
-        event.registerAboveAll("ccnr_rp_status", (gui, gfx, partial, w, h) -> StatusHud.render(gfx, w, h));
-        event.registerAboveAll("ccnr_rp_events", (gui, gfx, partial, w, h) -> EventBanner.render(gfx, w, h));
+        // 注意：状态栏与事件横幅不再注册 HUD 覆盖层——仅在背包（InventoryScreen）打开时绘制，
+        // 见 ClientForgeEvents.onScreenRender
+        // 结算明细逐行（右下角红/绿）：常驻覆盖层，非背包内也可见
+        event.registerAboveAll("ccnr_rp_xp", (gui, gfx, partial, w, h) -> StatusHud.renderXpOverlay(gfx, w, h));
+        event.registerAboveAll("ccnr_rp_sync", (gui, gfx, partial, w, h) -> {
+            // 素材同步中提示（左上角小标签；同步完成前服务端禁用部署）
+            if (ClientAssetCache.isSyncing()) {
+                String text = net.minecraft.network.chat.Component.translatable("ccnr_rp.gui.asset.syncing")
+                        .getString();
+                var font = net.minecraft.client.Minecraft.getInstance().font;
+                int x = 8;
+                int y = 10;
+                RpRoundRect.fill(gfx, x, y, x + font.width(text) + 12, y + 16, 6f, 0xAA3A3A3A);
+                gfx.drawString(font, text, x + 6, y + 4, 0xFFD8D8D8, true);
+            }
+        });
         event.registerAboveAll("ccnr_rp_cinematic", (gui, gfx, partial, w, h) -> CinematicController.render(gfx, w, h));
     }
 }

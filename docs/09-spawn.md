@@ -3,8 +3,7 @@
 ## 1. 需求
 特定触发时按配置刷新"支援潮"。两种刷新方式（可配置选择）：
 - **自刷新**：玩家在人物管理界面自己部署（仅 selfDeploy=true 的职业可自刷）。
-- **复活波**：指定队伍被创建时，自动从**阴间**（DEAD 池）选择符合条件玩家部署；人数不足时向合格**阳间**
-  （OBSERVING 池）玩家发招募申请——**屏幕右侧招募列表**，限时接受。
+- **复活波（邀请制）**：指定队伍被创建时，从**阴间池**（DEAD / 观察中带复活冷却标记）+ **阳间池**（OBSERVING 无冷却）选出符合条件玩家，**全部发招募邀请**（屏幕右侧招募列表）——**自行选择加入或拒绝**，不再强制复活；**人满即提前部署**，超时按已加入人数部署，无人加入则公告失败。**活着（已有在场角色）的玩家不会收到邀请**；已加入名单实时广播（X 已选择加入：已 n/需要 m）。
 - 非自部署类型必须切换到**观察状态**后才可能被复活波选中；自部署类型可随时从界面部署。
 
 ## 2. 数据模型（config/ccnr_rp/spawn_waves.json）
@@ -13,7 +12,7 @@
   "version": 1,
   "waves": [
     {"id": "qdf_reinforce", "mode": "RESURRECTION", "enabled": true,
-     "teamIds": ["qdf_team"], "professionIds": ["qdf_guard", "qdf_special"],
+     "teamIds": ["qdf_team"], "professionIds": ["s4_guard", "s3_special"],
      "factionIds": [], "count": 4, "minLevel": 1,
      "deployAt": {"type": "WORLD_SPAWN"},
      "recruitTimeoutSeconds": 60,
@@ -27,8 +26,8 @@
   命中 teamIds 且波 enabled → 触发一次复活波（同一队伍生命周期内只触发一次，world/ccnr_rp/team_wave_done.json 记录）。
 
 ## 3. 选人算法（WaveSelector 纯类）
-1. 候选池：阴间池 = status==DEAD && cooldownUntil<=now && 职业/阵营/等级匹配；
-   阳间池 = status==OBSERVING && 职业非 selfDeploy（selfDeploy 类型的观察者不参加复活波，走自刷）。
+1. 候选池：阴间池 = status==DEAD（阴间等待复活，含冷却中）或 OBSERVING 带复活冷却标记 → 复活波强制抽取、无视冷却；职业/阵营/等级匹配。
+   阳间池 = status==OBSERVING 且无冷却标记 && 职业非 selfDeploy（selfDeploy 类型的观察者不参加复活波，走自刷）。
 2. 排序：阴间池按 等级↓ → 冷却早↑ → 随机；不足 count 时按 阳间池随机 补齐并进入招募流程。
 3. 名额分配：先按波内 professionIds 配额（均分），不足则跨职业补足。
 4. 招募（RecruitmentManager）：对每个缺口向阳间池玩家发 RecruitOfferS2C（offerId、残余倒计时、角色预览），

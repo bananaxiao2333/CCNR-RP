@@ -28,7 +28,7 @@ public final class TriggerEvaluator {
     }
 
     private static boolean evaluateCondition(Trigger t, TriggerContext ctx) {
-        String type = t.param("type", "");
+        String type = t.param("cond", "");
         int actual =
                 switch (type) {
                     case "DEAD_COUNT" -> ctx.deadCount();

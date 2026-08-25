@@ -143,4 +143,33 @@ class FactionGraphTest {
     void resolveUnknownThrows() {
         assertThrows(IllegalArgumentException.class, () -> graph.resolve("a", "nope"));
     }
+
+    @Test
+    void factionMusicParsesFromConfig() {
+        com.google.gson.JsonObject root = new com.google.gson.JsonObject();
+        com.google.gson.JsonArray fa = new com.google.gson.JsonArray();
+        com.google.gson.JsonObject f = new com.google.gson.JsonObject();
+        f.addProperty("id", "x");
+        f.addProperty("name", "X");
+        f.addProperty("music", "audio/x.wav");
+        fa.add(f);
+        root.add("factions", fa);
+        ParseResult r = FactionManager.parse(root);
+        assertTrue(r.success(), () -> r.errors().toString());
+        assertEquals("audio/x.wav", r.graph().factions().get("x").music());
+    }
+
+    @Test
+    void factionMusicDefaultsEmpty() {
+        com.google.gson.JsonObject root = new com.google.gson.JsonObject();
+        com.google.gson.JsonArray fa = new com.google.gson.JsonArray();
+        com.google.gson.JsonObject f = new com.google.gson.JsonObject();
+        f.addProperty("id", "x");
+        f.addProperty("name", "X");
+        fa.add(f);
+        root.add("factions", fa);
+        ParseResult r = FactionManager.parse(root);
+        assertTrue(r.success(), () -> r.errors().toString());
+        assertEquals("", r.graph().factions().get("x").music());
+    }
 }

@@ -36,6 +36,7 @@ public final class ManagerSettings {
         o.addProperty("forceObserving", true);
         o.addProperty("openPanelOnJoin", true);
         o.addProperty("forceRetain", true);
+        o.addProperty("recruitInviteAlive", true);
         o.addProperty("hudEnabled", true);
         o.addProperty("hudProfessionText", true);
         o.addProperty("hudFactionText", false);
@@ -73,6 +74,11 @@ public final class ManagerSettings {
         return bool("forceRetain", true);
     }
 
+    /** 支援波是否允许向「存活（在场）」人员发送招募邀请。 */
+    public boolean recruitInviteAlive() {
+        return bool("recruitInviteAlive", true);
+    }
+
     private boolean bool(String key, boolean def) {
         try {
             return state.has(key) ? state.get(key).getAsBoolean() : def;
@@ -103,6 +109,7 @@ public final class ManagerSettings {
                 "forceObserving",
                 "openPanelOnJoin",
                 "forceRetain",
+                "recruitInviteAlive",
                 "hudProfessionText",
                 "hudFactionText",
                 "hudHealthText");

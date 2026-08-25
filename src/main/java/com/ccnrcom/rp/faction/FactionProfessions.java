@@ -41,6 +41,7 @@ public final class FactionProfessions {
             String name,
             String factionId,
             boolean selfDeploy,
+            int unlockLevel,
             JsonObject loadout,
             String music,
             String profile,
@@ -76,6 +77,7 @@ public final class FactionProfessions {
         picked.addProperty("name", name == null || name.isBlank() ? id : name);
         picked.addProperty("factionId", factionId);
         picked.addProperty("selfDeploy", selfDeploy);
+        picked.addProperty("unlockLevel", Math.max(0, unlockLevel));
         picked.add("loadout", loadout == null ? ProfessionJson.emptyLoadout() : loadout);
         if (music != null && !music.isBlank()) {
             picked.addProperty("music", music);
@@ -113,6 +115,15 @@ public final class FactionProfessions {
 
     public static boolean selfDeploy(JsonObject def) {
         return def.has("selfDeploy") && def.get("selfDeploy").getAsBoolean();
+    }
+
+    /** 职位解锁等级：玩家等级达到该值才能该职位部署；缺省 0（无门槛）。 */
+    public static int unlockLevel(JsonObject def) {
+        try {
+            return def.has("unlockLevel") ? Math.max(0, def.get("unlockLevel").getAsInt()) : 0;
+        } catch (Exception e) {
+            return 0;
+        }
     }
 
     public static String factionId(JsonObject def) {

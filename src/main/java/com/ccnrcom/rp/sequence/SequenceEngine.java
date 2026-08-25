@@ -5,7 +5,6 @@
 package com.ccnrcom.rp.sequence;
 
 import com.ccnrcom.rp.CCNRRPMod;
-import com.ccnrcom.rp.character.CharacterData;
 import com.ccnrcom.rp.util.JsonUtil;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -27,10 +26,76 @@ import org.apache.logging.log4j.Logger;
 /**
  * 序列引擎（序列编辑器）：顺序执行步骤 WAIT/WAVE/COMMAND/FORCE_PICK，支持 {{变量}} 注入。
  * 变量来自序列上下文（event/phase/wave/seq/faction/count…）。
- * FORCE_PICK：从观察者池强制抽取 ≤N 名在线玩家角色，附上指定职业 + 随机 UID 名字，可刷新生效。
+ * FORCE_PICK：强制征召（邀请制）——为被选用户创建临时征召兵（UID 名 + 编制职业），
+ * 不进角色库（不占角色上限、不显示在 K 面板），接受后部署、拒绝/超时/阵亡即消失。
  */
 public final class SequenceEngine {
     private static final Logger LOGGER = LogManager.getLogger();
+
+    /** 临时征召兵登记（不落角色库，完全临时；key=征召 ID）。pending=邀请挂起中；deployedAt=部署时刻（值班结算用）。 */
+    public record Conscript(
+            String id,
+            String playerUuid,
+            String name,
+            String professionId,
+            String factionId,
+            boolean pending,
+            long deployedAt) {
+        public Conscript withPending(boolean v) {
+            return new Conscript(id, playerUuid, name, professionId, factionId, v, deployedAt);
+        }
+
+        public Conscript withDeployedAt(long at) {
+            return new Conscript(id, playerUuid, name, professionId, factionId, pending, at);
+        }
+    }
+
+    private static final java.util.Map<String, Conscript> CONSCRIPTS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    public static Conscript findConscript(String id) {
+        return CONSCRIPTS.get(id);
+    }
+
+    /** 该玩家是否正在以征召兵身份在场（仅已接受部署的征召；邀请挂起中不算，避免把未入队玩家切生存）。 */
+    public static boolean isConscripted(String playerUuid) {
+        return CONSCRIPTS.values().stream().anyMatch(c -> c.playerUuid().equals(playerUuid) && !c.pending());
+    }
+
+    /** 接受部署：把征召从"待定"转为"在场"，并记录部署时刻（值班结算用）。 */
+    public static void markDeployed(String id) {
+        Conscript c = CONSCRIPTS.get(id);
+        if (c != null && c.pending()) {
+            CONSCRIPTS.put(id, c.withPending(false).withDeployedAt(System.currentTimeMillis()));
+        }
+    }
+
+    /** 征召兵已执勤秒数（部署到现在的时长，死亡结算玩家加分用）。 */
+    public static long conscriptDutySeconds(String playerUuid) {
+        long now = System.currentTimeMillis();
+        return CONSCRIPTS.values().stream()
+                .filter(c -> c.playerUuid().equals(playerUuid) && !c.pending() && c.deployedAt() > 0)
+                .mapToLong(c -> Math.max(0, (now - c.deployedAt()) / 1000L))
+                .findFirst()
+                .orElse(0L);
+    }
+
+    public static void removeConscript(String id) {
+        CONSCRIPTS.remove(id);
+    }
+
+    /** 清除该玩家的征召登记；返回是否确有征召被清理。 */
+    public static boolean removeConscriptFor(String playerUuid) {
+        return CONSCRIPTS.values().removeIf(c -> c.playerUuid().equals(playerUuid));
+    }
+
+    public static void registerConscript(Conscript conscript) {
+        CONSCRIPTS.put(conscript.id(), conscript);
+    }
+
+    /** 服务停止/世界切换时清空临时征召登记（静态态不应跨世界残留）。 */
+    public static void clearConscripts() {
+        CONSCRIPTS.clear();
+    }
 
     private final MinecraftServer server;
     private final Random random = new Random();
@@ -198,92 +263,97 @@ public final class SequenceEngine {
         }
     }
 
-    /** 强制抽取观察者：≤count 名在线观察者角色，随机职业（可指定）+ 随机 UID 名字，可选刷新生效。 */
+    /**
+     * 强制征召（改邀请制）：候选 = 所有在线且未在场的用户（开启「以任何支援身份复活」的无角色用户也能收到）；
+     * 每个被选中用户创建一个独立征召兵角色（UID 名 + 征召编制职业），发出邀请；接受后部署，拒绝/超时删除（用完即删）。
+     */
     private void forcePick(JsonObject p, Map<String, String> vars) {
         int count = (int) Math.max(0, Math.min(64, num(p, "count", 1)));
         String factionId = inject(str(p, "faction", ""), vars);
         String professionsCsv = inject(str(p, "professions", ""), vars);
-        boolean randomName = !p.has("randomName") || p.get("randomName").getAsBoolean();
-        boolean spawn = !p.has("spawn") || p.get("spawn").getAsBoolean();
-        if (CCNRRPMod.characters == null || CCNRRPMod.factions == null) {
+        if (CCNRRPMod.users == null || CCNRRPMod.factions == null) {
             return;
         }
-        List<CharacterData> pool = new ArrayList<>();
-        for (CharacterData c : CCNRRPMod.characters.store().all()) {
-            if (c.status() != com.ccnrcom.rp.status.CharacterStatus.OBSERVING) {
-                continue;
-            }
-            ServerPlayer online = server.getPlayerList().getPlayer(java.util.UUID.fromString(c.playerUuid()));
-            if (online != null) {
-                pool.add(c);
-            }
-        }
-        java.util.Collections.shuffle(pool, random);
-        int picked = Math.min(count, pool.size());
-        List<String> profPool = new ArrayList<>();
         if (factionId.isBlank() && !CCNRRPMod.factions.graph().factions().isEmpty()) {
             factionId =
                     CCNRRPMod.factions.graph().factions().keySet().iterator().next();
         }
-        if (CCNRRPMod.factions != null) {
-            if (!professionsCsv.isBlank()) {
-                for (String pid : professionsCsv.split(",")) {
-                    String t = pid.trim();
-                    var def = CCNRRPMod.factions.findProfession(t).orElse(null);
-                    if (def != null
-                            && com.ccnrcom.rp.faction.FactionProfessions.factionId(def)
-                                    .equals(factionId)) {
-                        profPool.add(t);
-                    }
+        // 候选池：在线玩家（非在场）；支援复活开=无条件候选；关=需有观察角色
+        List<ServerPlayer> pool = new ArrayList<>();
+        for (ServerPlayer online : server.getPlayerList().getPlayers()) {
+            String uuid = online.getUUID().toString();
+            boolean deployed = CCNRRPMod.users.status(uuid) == com.ccnrcom.rp.status.CharacterStatus.ALIVE;
+            if (deployed || isConscripted(uuid)) {
+                continue;
+            }
+            boolean anySupport = CCNRRPMod.users.anySupportRevive(uuid);
+            boolean hasObserving = CCNRRPMod.users.status(uuid) == com.ccnrcom.rp.status.CharacterStatus.OBSERVING;
+            if (!anySupport && !hasObserving) {
+                continue;
+            }
+            pool.add(online);
+        }
+        java.util.Collections.shuffle(pool, random);
+        int picked = Math.min(count, pool.size());
+        if (picked <= 0 || CCNRRPMod.spawnFramework == null) {
+            LOGGER.info("[CCNR-RP] 强制征召无候选（{}）", vars.getOrDefault("seq", "?"));
+            return;
+        }
+        // 征召编制职业池
+        List<String> profPool = new ArrayList<>();
+        if (!professionsCsv.isBlank()) {
+            for (String pid : professionsCsv.split(",")) {
+                String t = pid.trim();
+                var def = CCNRRPMod.factions.findProfession(t).orElse(null);
+                if (def != null
+                        && com.ccnrcom.rp.faction.FactionProfessions.factionId(def)
+                                .equals(factionId)) {
+                    profPool.add(t);
                 }
             }
-            if (profPool.isEmpty()) {
-                for (String pid : CCNRRPMod.factions.professionIds()) {
-                    var def = CCNRRPMod.factions.findProfession(pid).orElse(null);
-                    if (def != null
-                            && com.ccnrcom.rp.faction.FactionProfessions.factionId(def)
-                                    .equals(factionId)) {
-                        profPool.add(pid);
-                    }
+        }
+        if (profPool.isEmpty()) {
+            for (String pid : CCNRRPMod.factions.professionIds()) {
+                var def = CCNRRPMod.factions.findProfession(pid).orElse(null);
+                if (def != null
+                        && com.ccnrcom.rp.faction.FactionProfessions.factionId(def)
+                                .equals(factionId)) {
+                    profPool.add(pid);
                 }
             }
         }
         String prefix = factionId.isBlank()
                 ? "AGENT"
                 : factionId.substring(0, Math.min(3, factionId.length())).toUpperCase(java.util.Locale.ROOT);
+        // 为每个被选用户登记临时征召兵（UID 名 + 编制职业；不进角色库），发出邀请
+        List<com.ccnrcom.rp.spawn.SpawnModels.Candidate> cands = new ArrayList<>();
+        List<ServerPlayer> online = new ArrayList<>();
         for (int i = 0; i < picked; i++) {
-            CharacterData c = pool.get(i);
-            String profId = profPool.isEmpty() ? c.professionId() : profPool.get(random.nextInt(profPool.size()));
-            String name = randomName ? prefix + "-" + hex(4) + "-" + hex(2) : c.name();
-            var updated = c.withRole(name, profId);
-            CCNRRPMod.characters.store().update(updated);
-            CCNRRPMod.characters.store().save();
-            com.ccnrcom.rp.character.CharacterService.updateAndBroadcast(updated, null);
-            LOGGER.info("[CCNR-RP] 强制抽取: {} → {}（职业 {}）", c.name(), name, profId);
-            if (spawn && CCNRRPMod.spawnFramework != null) {
-                var wave = new com.ccnrcom.rp.spawn.SpawnModels.Wave(
-                        "_force_" + seqEscape(c.id()),
-                        com.ccnrcom.rp.spawn.SpawnModels.Mode.SELF_DEPLOY,
-                        true,
-                        List.of(),
-                        List.of(),
-                        List.of(),
-                        1,
-                        0,
-                        "WORLD_SPAWN",
-                        0,
-                        64,
-                        0,
-                        "minecraft:overworld",
-                        0);
-                CCNRRPMod.spawnFramework.deployCharacter(updated.id(), wave, false, false);
+            ServerPlayer user = pool.get(i);
+            if (profPool.isEmpty()) {
+                LOGGER.warn("[CCNR-RP] 征召编制职业池为空，跳过 {}", user.getName().getString());
+                continue;
             }
+            String uuid = user.getUUID().toString();
+            String profId = profPool.get(random.nextInt(profPool.size()));
+            String uidName = prefix + "-" + hex(4) + "-" + hex(2);
+            String csId = "conscript-" + java.util.UUID.randomUUID();
+            registerConscript(new Conscript(csId, uuid, uidName, profId, factionId, true, 0L)); // pending：邀请挂起中
+            cands.add(new com.ccnrcom.rp.spawn.SpawnModels.Candidate(
+                    csId, uuid, uidName, "observing", 0, 0, profId, factionId, false, true, false));
+            online.add(user);
+            LOGGER.info(
+                    "[CCNR-RP] 征召兵登记: {}（{} → {}，临时编制不进角色库）",
+                    uidName,
+                    user.getName().getString(),
+                    profId);
         }
-        LOGGER.info("[CCNR-RP] 强制抽取完成: {}/{}", picked, count);
-    }
-
-    private static String seqEscape(String s) {
-        return s.replaceAll("[^a-zA-Z0-9_-]", "");
+        if (cands.isEmpty()) {
+            return;
+        }
+        String label = vars.getOrDefault("seq", "force");
+        CCNRRPMod.spawnFramework.recruitConscript(label, cands.size(), cands, online, 60);
+        LOGGER.info("[CCNR-RP] 强制征召邀请发出: {}（需要 {} 人）", label, cands.size());
     }
 
     private String hex(int len) {
@@ -292,6 +362,10 @@ public final class SequenceEngine {
             sb.append("0123456789ABCDEF".charAt(random.nextInt(16)));
         }
         return sb.toString();
+    }
+
+    private static String seqEscape(String s) {
+        return s.replaceAll("[^a-zA-Z0-9_-]", "");
     }
 
     /** {{key}} 变量注入（缺失保留原样）。 */

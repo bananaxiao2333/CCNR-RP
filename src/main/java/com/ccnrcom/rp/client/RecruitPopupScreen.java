@@ -10,7 +10,6 @@ import java.util.List;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
 
 /** 招募请求窗 v2（CCNR-Com 风格：右侧圆角面板 + 卡片 + 主题按钮；自动弹出/关闭）。 */
 public class RecruitPopupScreen extends Screen {
@@ -29,7 +28,8 @@ public class RecruitPopupScreen extends Screen {
     }
 
     private List<RecruitOverlayHud.OfferEntry> entries() {
-        return List.copyOf(RecruitOverlayHud.OFFERS);
+        // 已同意（等待部署）的邀请不再展示接受/拒绝操作，只保留在右侧悬浮 HUD 显示倒计时。
+        return RecruitOverlayHud.OFFERS.stream().filter(e -> !e.accepted()).toList();
     }
 
     private void rebuild() {
@@ -39,9 +39,16 @@ public class RecruitPopupScreen extends Screen {
         for (RecruitOverlayHud.OfferEntry o : entries()) {
             addRenderableWidget(RpButton.primary(
                     x + 190, y + 18, 56, 20, Component.translatable("ccnr_rp.spawn.recruit.accept"), b -> {
-                        RpChannels.sendToServer(new RpPackets.RecruitAnswerC2S(o.offerId(), true));
-                        RecruitOverlayHud.remove(o.offerId());
-                        rebuild();
+                        if ("pick".equals(o.kind())) {
+                            // 通用复活波：打开选岗菜单（从自己可复活的观察角色中选）
+                            RecruitOverlayHud.remove(o.offerId());
+                            net.minecraft.client.Minecraft.getInstance().setScreen(new RecruitPickScreen(o.offerId()));
+                        } else {
+                            RpChannels.sendToServer(new RpPackets.RecruitAnswerC2S(o.offerId(), true));
+                            // 同意后不可取消：仅在右侧悬浮 HUD 保留该邀请（已同意 + 强制部署倒计时），弹窗移除操作项。
+                            RecruitOverlayHud.markAccepted(o.offerId());
+                            rebuild();
+                        }
                     }));
             addRenderableWidget(RpButton.secondary(
                     x + 252, y + 18, 56, 20, Component.translatable("ccnr_rp.spawn.recruit.decline"), b -> {
@@ -71,22 +78,66 @@ public class RecruitPopupScreen extends Screen {
         g.drawString(font, title, px1 + 12, py1 + 10, RpTheme.TEXT_PRIMARY);
         int y = py1 + 34;
         for (RecruitOverlayHud.OfferEntry o : entries()) {
+            int kc = kindColor(o.kind());
             RpRoundRect.fill(g, px1 + 8, y, px2 - 8, y + 58, 8f, RpTheme.PANEL_BG_ALT);
-            ResourceLocation tex = SkinCache.textureOrNull(o.charId());
-            if (tex != null) {
-                g.blit(tex, px1 + 16, y + 10, 38, 38, 0, 0, 32, 32, 32, 32);
-            }
-            g.drawString(font, o.charName(), px1 + 62, y + 12, RpTheme.TEXT_PRIMARY);
-            g.drawString(font, "复活波 " + o.waveId(), px1 + 62, y + 26, RpTheme.TEXT_SECONDARY);
-            g.drawString(font, o.professionId(), px1 + 62, y + 40, RpTheme.ACCENT_HOVER);
+            RpRoundRect.fill(g, px1 + 8, y, px1 + 11, y + 58, 8f, kc); // 左侧类型色条
+            // 人物立绘（战术装备预览同款：水平跟随鼠标、俯仰锁定，带职位装备）
+            CharacterPreview.renderPortrait(g, px1 + 35, y + 29, 19, mouseX, o.charId());
+            // 主要显示可征召职位显示名（不露内部 ID）
+            String profName = ClientCharacterState.professionName(o.professionId());
+            String facName = ClientCharacterState.factionNameOf(o.professionId());
+            g.drawString(font, profName, px1 + 62, y + 8, RpTheme.TEXT_PRIMARY);
+            // 第二行：征召阵营 · 类型标签（颜色区分）：强制征召=红 / 指定编制复活=金 / 通用选岗=青
+            g.drawString(
+                    font,
+                    (facName.isEmpty() ? "" : facName + " · ")
+                            + Component.translatable(kindKey(o.kind())).getString(),
+                    px1 + 62,
+                    y + 22,
+                    kc,
+                    true);
+            g.drawString(
+                    font,
+                    Component.translatable(kindDescKey(o.kind())).getString(),
+                    px1 + 62,
+                    y + 38,
+                    RpTheme.TEXT_SECONDARY);
             y += 72;
         }
         super.render(g, mouseX, mouseY, partialTick);
     }
 
+    /** 邀请类型颜色：强制征召=红 / 指定编制复活=金 / 通用选岗=青。 */
+    private static int kindColor(String kind) {
+        return switch (kind == null ? "" : kind) {
+            case "conscript" -> RpTheme.RED_LINE;
+            case "typed" -> RpTheme.GOLD;
+            case "pick" -> RpTheme.CYAN;
+            default -> RpTheme.TEXT_SECONDARY;
+        };
+    }
+
+    private static String kindKey(String kind) {
+        return switch (kind == null ? "" : kind) {
+            case "conscript" -> "ccnr_rp.spawn.recruit.kind_conscript";
+            case "typed" -> "ccnr_rp.spawn.recruit.kind_typed";
+            case "pick" -> "ccnr_rp.spawn.recruit.kind_pick";
+            default -> "ccnr_rp.spawn.recruit.kind_wave";
+        };
+    }
+
+    private static String kindDescKey(String kind) {
+        return switch (kind == null ? "" : kind) {
+            case "conscript" -> "ccnr_rp.spawn.recruit.desc_conscript";
+            case "typed" -> "ccnr_rp.spawn.recruit.desc_typed";
+            case "pick" -> "ccnr_rp.spawn.recruit.desc_pick";
+            default -> "ccnr_rp.spawn.recruit.desc_wave";
+        };
+    }
+
     @Override
     public void tick() {
-        if (RecruitOverlayHud.isEmpty()) {
+        if (entries().isEmpty()) {
             onClose();
         }
     }

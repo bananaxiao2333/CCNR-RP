@@ -51,10 +51,12 @@ public final class SettlementCalcs {
      * @param evac             本次疏散方式（尘埃落定的结局裁定）
      */
     public static Result calculate(long dutySecondsDelta, int taskXpDelta, EvacuationMethod evac, Weights w) {
-        long dutyXp = Math.round(dutySecondsDelta * w.dutyXpPerSecond());
+        // 防御：duty/task 负增量按 0 处理（避免倒扣）；疏散可负（DIED 为惩罚，允许倒扣），总 XP 随之可为负。
+        long dutyXp = Math.round(Math.max(0, dutySecondsDelta) * Math.max(0.0, w.dutyXpPerSecond()));
+        int taskXp = Math.max(0, taskXpDelta);
         int evacXp = w.evacXp(evac);
-        long total = dutyXp + taskXpDelta + evacXp;
+        long total = dutyXp + taskXp + evacXp;
         String note = evac == EvacuationMethod.NONE ? "" : evac.name();
-        return new Result(dutyXp, taskXpDelta, evacXp, total, note);
+        return new Result(dutyXp, taskXp, evacXp, total, note);
     }
 }

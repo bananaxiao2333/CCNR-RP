@@ -24,25 +24,45 @@ public final class LedgerStore {
     }
 
     public JsonObject entry(String charId) {
-        if (!root.has(charId)) {
-            root.add(charId, new JsonObject());
+        if (!root.has(charId) || !root.get(charId).isJsonObject()) {
+            root.add(charId, new JsonObject()); // 坏值（非对象）一律重建
         }
         return root.getAsJsonObject(charId);
     }
 
     public long dutySeconds(String charId) {
         JsonObject e = entry(charId);
-        return e.has("dutySeconds") ? e.get("dutySeconds").getAsLong() : 0;
+        try {
+            return e.has("dutySeconds") ? e.get("dutySeconds").getAsLong() : 0;
+        } catch (Exception ex) {
+            return 0; // 手改/损坏的类型错配：按 0 处理
+        }
     }
 
     public int taskXp(String charId) {
         JsonObject e = entry(charId);
-        return e.has("taskXp") ? e.get("taskXp").getAsInt() : 0;
+        try {
+            return e.has("taskXp") ? e.get("taskXp").getAsInt() : 0;
+        } catch (Exception ex) {
+            return 0;
+        }
     }
 
     public boolean evacSettled(String charId) {
         JsonObject e = entry(charId);
-        return e.has("evacSettled") && e.get("evacSettled").getAsBoolean();
+        try {
+            return e.has("evacSettled") && e.get("evacSettled").getAsBoolean();
+        } catch (Exception ex) {
+            return false;
+        }
+    }
+
+    /** 删除角色时清理其结算基线（防文件膨胀与角色 id 复用污染）。 */
+    public void remove(String charId) {
+        if (root.has(charId)) {
+            root.remove(charId);
+            save();
+        }
     }
 
     public void setDutySeconds(String charId, long v) {

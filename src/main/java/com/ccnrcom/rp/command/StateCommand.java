@@ -5,8 +5,9 @@
 package com.ccnrcom.rp.command;
 
 import com.ccnrcom.rp.CCNRRPMod;
-import com.ccnrcom.rp.character.CharacterData;
-import com.ccnrcom.rp.status.StatusManager;
+import com.ccnrcom.rp.config.CCNRRPConfig;
+import com.ccnrcom.rp.status.CharacterStatus;
+import com.ccnrcom.rp.status.StatusMachine;
 import com.ccnrcom.rp.util.Permissions;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.tree.LiteralCommandNode;
@@ -15,7 +16,9 @@ import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 
-/** /rp state / rp kill（P4）。 */
+/**
+ * /rp state / rp kill（P9，v2：状态与冷却随用户走，直接读写 UserService）。
+ */
 final class StateCommand {
 
     private StateCommand() {}
@@ -24,12 +27,14 @@ final class StateCommand {
         rp.addChild(Commands.literal("state")
                 .executes(ctx -> RpCommand.usageHint(ctx.getSource(), "ccnr_rp.command.usage.state"))
                 .then(Commands.argument("player", StringArgumentType.word())
+                        .suggests(RpSuggest.players())
                         .executes(ctx -> state(ctx.getSource(), StringArgumentType.getString(ctx, "player"))))
                 .build());
         rp.addChild(Commands.literal("kill")
                 .executes(ctx -> RpCommand.usageHint(ctx.getSource(), "ccnr_rp.command.usage.state"))
                 .requires(RpCommand.admin(Permissions.ADMIN_KILL))
                 .then(Commands.argument("player", StringArgumentType.word())
+                        .suggests(RpSuggest.players())
                         .executes(ctx -> kill(ctx.getSource(), StringArgumentType.getString(ctx, "player"))))
                 .build());
     }
@@ -37,28 +42,24 @@ final class StateCommand {
     private static int state(CommandSourceStack source, String playerName) {
         ServerPlayer target = source.getServer().getPlayerList().getPlayerByName(playerName);
         if (target == null) {
-            boolean found = false;
-            for (CharacterData c : CCNRRPMod.characters.store().all()) {
-                if (c.playerUuid().equals(playerName)) {
-                    found = true;
-                }
-            }
             source.sendSuccess(() -> Component.translatable("ccnr_rp.error.player_not_found", playerName), false);
-            return found ? 1 : 0;
+            return 0;
         }
-        for (CharacterData c :
-                CCNRRPMod.characters.store().ofPlayer(target.getUUID().toString())) {
-            long remain = (c.cooldownUntil() - System.currentTimeMillis()) / 60000L;
-            source.sendSuccess(
-                    () -> Component.translatable(
-                            "ccnr_rp.character.info",
-                            c.name(),
-                            c.factionId(),
-                            c.professionId(),
-                            c.status().name().toLowerCase(java.util.Locale.ROOT),
-                            Math.max(0, remain)),
-                    false);
+        if (CCNRRPMod.users == null) {
+            return 0;
         }
+        String uuid = target.getUUID().toString();
+        CharacterStatus status = CCNRRPMod.users.status(uuid);
+        long remain = (CCNRRPMod.users.cooldownUntil(uuid) - System.currentTimeMillis()) / 60000L;
+        source.sendSuccess(
+                () -> Component.translatable(
+                        "ccnr_rp.character.info",
+                        target.getName().getString(),
+                        CCNRRPMod.users.factionId(uuid),
+                        CCNRRPMod.users.professionId(uuid),
+                        status.name().toLowerCase(java.util.Locale.ROOT),
+                        Math.max(0, remain)),
+                false);
         return 1;
     }
 
@@ -68,7 +69,29 @@ final class StateCommand {
             source.sendSuccess(() -> Component.translatable("ccnr_rp.error.player_not_found", playerName), false);
             return 0;
         }
-        StatusManager.killCommand(target);
+        if (CCNRRPMod.users == null) {
+            return 0;
+        }
+        String uuid = target.getUUID().toString();
+        if (CCNRRPMod.users.status(uuid) != CharacterStatus.ALIVE) {
+            source.sendSuccess(() -> Component.translatable("ccnr_rp.status.error.no_alive"), false);
+            return 0;
+        }
+        // 状态机校验：ALIVE → DEAD（同状态视为成功；非法迁移拒绝）。
+        String rejected = StatusMachine.transition(CharacterStatus.ALIVE, CharacterStatus.DEAD)
+                .orElse(null);
+        if (rejected != null) {
+            source.sendSuccess(() -> Component.translatable("ccnr_rp.status.error.no_alive"), false);
+            return 0;
+        }
+        CCNRRPMod.users.setStatus(uuid, CharacterStatus.DEAD);
+        CCNRRPMod.users.setCooldown(
+                uuid, System.currentTimeMillis() + CCNRRPConfig.DEATH_COOLDOWN_MINUTES.get() * 60000L);
+        CCNRRPMod.users.save();
+        source.sendSuccess(
+                () -> Component.translatable(
+                        "ccnr_rp.status.killed.command", target.getName().getString()),
+                false);
         return 1;
     }
 }

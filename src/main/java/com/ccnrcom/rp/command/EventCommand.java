@@ -26,10 +26,12 @@ final class EventCommand {
                 .then(Commands.literal("trigger")
                         .requires(RpCommand.admin(Permissions.ADMIN_EVENT))
                         .then(Commands.argument("id", StringArgumentType.word())
+                                .suggests(RpSuggest.events())
                                 .executes(ctx -> trigger(ctx.getSource(), StringArgumentType.getString(ctx, "id")))))
                 .then(Commands.literal("end")
                         .requires(RpCommand.admin(Permissions.ADMIN_EVENT))
                         .then(Commands.argument("id", StringArgumentType.word())
+                                .suggests(RpSuggest.events())
                                 .executes(ctx -> end(ctx.getSource(), StringArgumentType.getString(ctx, "id")))))
                 .then(Commands.literal("clear")
                         .requires(RpCommand.admin(Permissions.ADMIN_EVENT))
@@ -37,6 +39,7 @@ final class EventCommand {
                 .then(Commands.literal("enable")
                         .requires(RpCommand.admin(Permissions.ADMIN_EVENT))
                         .then(Commands.argument("id", StringArgumentType.word())
+                                .suggests(RpSuggest.events())
                                 .then(Commands.argument("on", BoolArgumentType.bool())
                                         .executes(ctx -> enable(
                                                 ctx.getSource(),
@@ -49,6 +52,7 @@ final class EventCommand {
                 .then(Commands.literal("list").executes(ctx -> phaseList(ctx.getSource())))
                 .then(Commands.literal("set")
                         .then(Commands.argument("id", StringArgumentType.word())
+                                .suggests(RpSuggest.phases())
                                 .executes(ctx -> phaseSet(ctx.getSource(), StringArgumentType.getString(ctx, "id")))))
                 .then(Commands.literal("advance").executes(ctx -> phaseAdvance(ctx.getSource())))
                 .build());
@@ -65,13 +69,12 @@ final class EventCommand {
                 .build());
     }
 
-    /** /rp event clear：清空当前正在运行的所有事件（横幅同时清空）。 */
+    /** /rp event clear：清空当前正在运行的所有事件（横幅同时清空）；不输出“已清空”文字提示。 */
     private static int clear(CommandSourceStack source) {
         if (CCNRRPMod.eventManager == null) {
             return 0;
         }
-        var cleared = CCNRRPMod.eventManager.clearAll();
-        source.sendSuccess(() -> Component.translatable("ccnr_rp.event.cleared", cleared.size()), true);
+        CCNRRPMod.eventManager.clearAll();
         return 1;
     }
 

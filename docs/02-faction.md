@@ -5,7 +5,7 @@
 供角色创建（阵营下拉）、冲突判定、事件与刷新波筛选复用。
 
 ## 2. 领域模型
-- `Faction {id, name, color(hex), description}`
+- `Faction {id, name, color(hex), description, icon, tier, music?}`（music 为阵营出场音乐，可选；音乐传递优先级：启动程序指定 > 职业 music > 阵营 music）
 - `RelationType {HOSTILE, NEUTRAL, FRIENDLY}`
 - `FactionGroup {id, memberIds[]}`
 - `RelationRule {from, to, type}`（from/to 可单阵营或组；组×组 = 任意成员对；组内规则 from=to=组）
@@ -16,7 +16,8 @@
 {
   "version": 1,
   "factions": [
-    {"id": "quantum_science", "name": "量子科学", "color": "#2F6BFF", "description": "CCNR 全资子公司" },
+    {"id": "quantum_science", "name": "量子科学", "color": "#2F6BFF", "description": "CCNR 全资子公司",
+     "music": "audio/faction_quantum.wav" },
     {"id": "qdf", "name": "QDF司令部", "color": "#4CAF50", "description": "设施保全与武装指挥" },
     {"id": "qsa", "name": "QSA综合处理小组", "color": "#FF9800", "description": "高级安全保障部队" },
     {"id": "qso", "name": "QSO", "color": "#9C27B0", "description": "直属最高层私人武装" },

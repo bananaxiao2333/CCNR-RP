@@ -10,13 +10,12 @@ import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.Clip;
 import javax.sound.sampled.FloatControl;
-import net.minecraftforge.fml.loading.FMLPaths;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 /**
- * 客户端配置音乐播放器：职业出场音乐（config/ccnr_rp/ 相对路径或绝对路径，WAV）。
- * play() 60 秒后淡出（1.5s）；重复 play 会先停旧曲。
+ * 客户端配置音乐播放器：出场音乐（WAV）。相对路径 = 服务器下发的素材（自动下载缓存）；
+ * 绝对路径 = 启动程序/启动器指定（本地媒体，优先级最高）。play() 60 秒后淡出（1.5s）。
  */
 public final class ClientAudio {
     private static final Logger LOGGER = LogManager.getLogger();
@@ -25,6 +24,19 @@ public final class ClientAudio {
     private static Thread activeThread;
 
     private ClientAudio() {}
+
+    /**
+     * 启动程序（启动器）指定音乐：最高优先级。
+     * 优先读 JVM 参数 -Dccnr_rp.entrance_music=...，其次环境变量 CCNR_RP_ENTRANCE_MUSIC；未指定返回空串。
+     */
+    public static String launcherMusic() {
+        String prop = System.getProperty("ccnr_rp.entrance_music");
+        if (prop != null && !prop.isBlank()) {
+            return prop.trim();
+        }
+        String env = System.getenv("CCNR_RP_ENTRANCE_MUSIC");
+        return env == null ? "" : env.trim();
+    }
 
     /** 播放配置中的出场音乐（60s 后淡出）。路径相对 config/ccnr_rp/ 或绝对路径。 */
     public static void playEntrance(String cfgPath) {
@@ -113,10 +125,13 @@ public final class ClientAudio {
         try {
             Path p = Path.of(cfgPath);
             if (p.isAbsolute()) {
+                // 启动程序/启动器指定（客户端本地媒体，优先级最高）
                 return Files.exists(p) ? p : null;
             }
-            Path rel = FMLPaths.CONFIGDIR.get().resolve("ccnr_rp").resolve(cfgPath);
-            return Files.exists(rel) ? rel : null;
+            // 相对路径 = 服务器下发的素材（音乐由服务器控制）：一律从素材缓存解析，
+            // 未下载完成返回 null（跳过本次播放，清单已自动排队下载）。
+            String asset = cfgPath.startsWith("audio/") ? cfgPath.substring("audio/".length()) : cfgPath;
+            return ClientAssetCache.resolve(asset);
         } catch (Exception e) {
             return null;
         }

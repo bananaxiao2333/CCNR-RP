@@ -167,7 +167,12 @@ public final class EventModels {
             return null;
         }
         Map<String, String> params = new LinkedHashMap<>();
-        o.entrySet().forEach(e -> params.put(e.getKey(), e.getValue().getAsString()));
+        o.entrySet().forEach(e -> {
+            if ("type".equals(e.getKey())) {
+                return; // 外层类型不入参数表（CONDITION 子类型用独立 cond 字段）
+            }
+            params.put(e.getKey(), e.getValue().getAsString());
+        });
         return new Trigger(t, params);
     }
 
@@ -195,7 +200,7 @@ public final class EventModels {
                 }
             }
             case CONDITION -> {
-                String type = tr.param("type", "");
+                String type = tr.param("cond", "");
                 if (!CONDITION_TYPES.contains(type)) {
                     errors.add(path + ": 无效 CONDITION 类型 " + type);
                 }
@@ -280,6 +285,10 @@ public final class EventModels {
     }
 
     private static long num(JsonObject o, String key, long def) {
-        return o.has(key) ? o.get(key).getAsLong() : def;
+        try {
+            return o.has(key) ? o.get(key).getAsLong() : def;
+        } catch (Exception e) {
+            return def; // 畸形配置（非数字）不崩服
+        }
     }
 }

@@ -5,62 +5,56 @@
 package com.ccnrcom.rp.character;
 
 import com.ccnrcom.rp.CCNRRPMod;
-import com.ccnrcom.rp.config.CCNRRPConfig;
 import com.ccnrcom.rp.network.RpChannels;
 import com.ccnrcom.rp.network.RpPackets;
 import com.ccnrcom.rp.status.CharacterStatus;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.security.MessageDigest;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
-import javax.imageio.ImageIO;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
-/** 角色服务（服务端）：CRUD 规则、皮肤上传与分发、与客户端的同步。 */
+/**
+ * 用户/职位服务（服务端）：以 UserService 的单用户档案为唯一身份，负责：
+ * - 用户档案列表同步（K 面板，S2C CharacterListS2C）；
+ * - 部署入口 onDeployPosition（自刷新部署，职位维度的校验走 UserService + FactionManager）；
+ * - 管理器（阵营/职业/事件/阶段/波）的管理员操作（与角色库无关）。
+ * 多角色角色库、皮肤上传与绑定已全部移除。
+ */
 public final class CharacterService {
-    private static final Logger LOGGER = LogManager.getLogger();
-    private static final int MAX_SKIN_BYTES = 256 * 1024;
-    private static final int MAX_SKIN_DIMENSION = 512;
-    private static final int PART_SIZE = 32 * 1024;
-
     private final MinecraftServer server;
-    private final CharacterStore store;
-    private final Path skinDir;
-    private final Map<UUID, String> selected = new HashMap<>();
-    private final Map<UUID, SkinUpload> uploads = new HashMap<>();
+    private final java.util.Map<java.util.UUID, MusicUpload> musicUploads = new java.util.HashMap<>();
+
+    private record MusicUpload(String name, byte[] parts, int received) {}
 
     public CharacterService(MinecraftServer server) {
         this.server = server;
-        net.minecraft.world.level.storage.LevelResource dir =
-                new net.minecraft.world.level.storage.LevelResource("ccnr_rp");
-        this.store = new CharacterStore(server.getWorldPath(dir));
-        this.skinDir = server.getWorldPath(dir).resolve("skins");
-        store.load();
     }
 
-    public CharacterStore store() {
-        return store;
+    /** 观察者：地位 OBSERVING 且未被征召。 */
+    public static boolean isObserver(ServerPlayer player) {
+        if (player == null || CCNRRPMod.users == null) {
+            return false;
+        }
+        String uuid = player.getUUID().toString();
+        boolean active = CCNRRPMod.users.status(uuid) != CharacterStatus.OBSERVING;
+        return !active && !com.ccnrcom.rp.sequence.SequenceEngine.isConscripted(uuid);
     }
 
-    public Path skinDir() {
-        return skinDir;
+    private static CharacterService service() {
+        CharacterService s = CCNRRPMod.characters;
+        if (s == null) {
+            throw new IllegalStateException("角色服务未初始化");
+        }
+        return s;
     }
 
-    private record SkinUpload(String charId, byte[] parts, int received) {}
+    public void sendError(ServerPlayer player, String key, String... args) {
+        RpChannels.sendTo(player, new RpPackets.ErrorS2C(key, args));
+    }
 
-    // ---------- 入站 ----------
+    // ---------- 入站：用户档案列表 ----------
 
     public static void onRequestList(ServerPlayer player) {
         if (player != null) {
@@ -68,71 +62,80 @@ public final class CharacterService {
         }
     }
 
-    public static void onCreate(
-            ServerPlayer player, String name, String factionId, String professionId, String background) {
+    /** 用户开关：「以任何支援身份复活」（K 面板切换）。 */
+    public static void onUserAnySupport(ServerPlayer player, boolean on) {
         if (player == null) {
             return;
         }
-        CharacterService svc = service();
-        List<ValidationIssue> errors = svc.validateCreate(player, name, factionId, professionId);
-        if (!errors.isEmpty()) {
-            errors.forEach(v -> RpChannels.sendTo(player, new RpPackets.ErrorS2C(v.key(), v.args())));
+        CCNRRPMod.users.setAnySupportRevive(player.getUUID().toString(), on);
+        service().sendError(player, on ? "ccnr_rp.user.any_support.on" : "ccnr_rp.user.any_support.off");
+        service().sendList(player);
+    }
+
+    // ---------- 部署入口（自刷新） ----------
+
+    /**
+     * 自刷新部署（GUI / 命令）：以「职位」为维度部署到游戏内，状态机为 OBSERVING → ALIVE。
+     * 校验：素材同步完成 → 观察态 → 复活冷却结束 → 职位定义存在 → 用户等级 ≥ 职位解锁等级，
+     * 然后交给 SpawnFramework.deployPosition 落地。
+     */
+    public static void onDeployPosition(ServerPlayer player, String professionId) {
+        if (player == null || professionId == null || professionId.isBlank()) {
             return;
         }
-        CharacterData c = svc.store.create(
-                player.getUUID().toString(),
-                name.trim(),
-                factionId,
-                professionId,
-                background == null ? "" : background.trim(),
-                CCNRRPConfig.MAX_CHARACTERS_PER_PLAYER.get(),
-                UUID::randomUUID);
-        svc.store.save();
-        RpChannels.sendTo(player, new RpPackets.ErrorS2C("ccnr_rp.character.create.ok", c.name()));
+        CharacterService svc = service();
+        String uuid = player.getUUID().toString();
+        if (!com.ccnrcom.rp.assets.AssetLibrary.isSynced(player)) {
+            svc.sendError(player, "ccnr_rp.gui.asset.syncing");
+            return;
+        }
+        if (CCNRRPMod.users == null) {
+            svc.sendError(player, "ccnr_rp.error.invalid_argument", "用户服务未就绪");
+            return;
+        }
+        if (CCNRRPMod.users.status(uuid) != CharacterStatus.OBSERVING) {
+            svc.sendError(player, "ccnr_rp.spawn.error.self_deploy");
+            return;
+        }
+        if (CCNRRPMod.users.onCooldown(uuid)) {
+            svc.sendError(player, "ccnr_rp.spawn.error.self_deploy");
+            return;
+        }
+        if (CCNRRPMod.factions == null) {
+            svc.sendError(player, "ccnr_rp.error.invalid_argument", "配置管理器未就绪");
+            return;
+        }
+        var def = CCNRRPMod.factions.findProfession(professionId).orElse(null);
+        if (def == null) {
+            svc.sendError(player, "ccnr_rp.character.error.profession", professionId);
+            return;
+        }
+        int required = com.ccnrcom.rp.faction.FactionProfessions.unlockLevel(def);
+        int userLevel = CCNRRPMod.users.level(uuid);
+        if (userLevel < required) {
+            svc.sendError(
+                    player,
+                    "ccnr_rp.spawn.error.level",
+                    com.ccnrcom.rp.faction.FactionProfessions.idsSafeName(def),
+                    String.valueOf(required),
+                    String.valueOf(userLevel));
+            return;
+        }
+        if (CCNRRPMod.spawnFramework == null || !CCNRRPMod.spawnFramework.deployPosition(player, professionId)) {
+            svc.sendError(player, "ccnr_rp.spawn.error.self_deploy");
+            return;
+        }
+        // 部署成功：以 UserService 写回角色/状态（幂等）
+        CCNRRPMod.users.setRole(uuid, professionId, com.ccnrcom.rp.faction.FactionProfessions.factionId(def));
+        CCNRRPMod.users.setStatus(uuid, CharacterStatus.ALIVE);
+        CCNRRPMod.users.setCooldown(uuid, 0);
+        CCNRRPMod.users.save();
+        svc.sendError(player, "ccnr_rp.spawn.deployed", com.ccnrcom.rp.faction.FactionProfessions.idsSafeName(def));
         svc.sendList(player);
-    }
-
-    public static void onSelect(ServerPlayer player, String charId) {
-        CharacterService svc = service();
-        if (svc.owns(player, charId)) {
-            svc.selected.put(player.getUUID(), charId);
-            svc.sendList(player);
-        }
-    }
-
-    public static void onDelete(ServerPlayer player, String charId) {
-        CharacterService svc = service();
-        if (!svc.owns(player, charId)) {
-            svc.sendError(player, "ccnr_rp.character.error.ownership");
-            return;
-        }
-        svc.selected.remove(player.getUUID());
-        svc.store.delete(charId);
-        svc.store.save();
-        RpChannels.sendTo(player, new RpPackets.CharacterRemoveS2C(charId));
-    }
-
-    /** 自刷新部署入口（GUI/命令）。 */
-    public static void onDeploy(ServerPlayer player, String charId) {
-        if (player == null) {
-            return;
-        }
-        var c = service().store.find(charId).orElse(null);
-        if (c != null && c.status() == com.ccnrcom.rp.status.CharacterStatus.ALIVE) {
-            // 存活角色禁止自刷新部署（防自杀逃逸，服务端硬校验）
-            service().sendError(player, "ccnr_rp.spawn.error.self_deploy", charId);
-            return;
-        }
-        if (CCNRRPMod.spawnFramework == null || !CCNRRPMod.spawnFramework.deploySelf(player, charId)) {
-            service().sendError(player, "ccnr_rp.spawn.error.self_deploy", charId);
-            return;
-        }
-        service().sendError(player, "ccnr_rp.spawn.deployed", charId);
     }
 
     // ---------- 管理器（管理员）----------
 
-    /** 请求管理器状态（管理员）。 */
     public static void onManagerRequest(ServerPlayer player) {
         if (!com.ccnrcom.rp.util.Permissions.canAdmin(player, com.ccnrcom.rp.util.Permissions.ADMIN_FACTION)) {
             service().sendError(player, "ccnr_rp.command.no_permission");
@@ -141,7 +144,21 @@ public final class CharacterService {
         sendManagerState(player);
     }
 
-    /** 设置项修改（管理员）。 */
+    /** 管理面板程序化设定：设置 serverconfig 项（CCNRRPConfig），成功后刷新客户端。 */
+    public static void onServerConfigSet(ServerPlayer player, String key, String value) {
+        if (!com.ccnrcom.rp.util.Permissions.canAdmin(player, com.ccnrcom.rp.util.Permissions.ADMIN_FACTION)) {
+            service().sendError(player, "ccnr_rp.command.no_permission");
+            return;
+        }
+        java.util.List<String> errors = com.ccnrcom.rp.config.CCNRRPConfig.set(key, value);
+        if (!errors.isEmpty()) {
+            service().sendError(player, "ccnr_rp.error.invalid_argument", String.join("; ", errors));
+            return;
+        }
+        service().sendList(player); // 等级曲线等客户端展示值同步
+        sendManagerState(player);
+    }
+
     public static void onManagerSet(ServerPlayer player, String key, String value) {
         if (!com.ccnrcom.rp.util.Permissions.canAdmin(player, com.ccnrcom.rp.util.Permissions.ADMIN_FACTION)) {
             service().sendError(player, "ccnr_rp.command.no_permission");
@@ -159,7 +176,7 @@ public final class CharacterService {
         service().broadcastToAll();
     }
 
-    /** 管理端变更后同步全员：角色列表 + 管理器状态（阵营/职业/事件/阶段/波）。 */
+    /** 管理端变更后同步全员：用户档案 + 管理器状态（阵营/职业/事件/阶段/波）。 */
     private void broadcastToAll() {
         if (server == null) {
             return;
@@ -169,6 +186,7 @@ public final class CharacterService {
             sendList(p);
             sendManagerState(p);
         }
+        com.ccnrcom.rp.assets.AssetLibrary.broadcastManifest();
     }
 
     private static void sendManagerState(ServerPlayer player) {
@@ -189,10 +207,12 @@ public final class CharacterService {
         JsonArray wav = new JsonArray();
         com.ccnrcom.rp.util.ConfigCrud.items("spawn_waves.json", "waves").forEach(wav::add);
         pay.add("waves", wav);
+        // serverconfig 程序化设定（管理面板「设定」标签）
+        pay.add("serverConfig", com.ccnrcom.rp.config.CCNRRPConfig.values());
         RpChannels.sendTo(player, new RpPackets.ManagerStateS2C(pay.toString()));
+        RpChannels.sendTo(player, new RpPackets.MusicListS2C(musicListJson()));
     }
 
-    /** 管理器 CRUD（管理员）：kind=faction|profession，action=create|update|delete。 */
     public static void onManagerCrud(ServerPlayer player, String kind, String action, String payload) {
         if (!com.ccnrcom.rp.util.Permissions.canAdmin(player, com.ccnrcom.rp.util.Permissions.ADMIN_FACTION)) {
             service().sendError(player, "ccnr_rp.command.no_permission");
@@ -220,12 +240,14 @@ public final class CharacterService {
                 String name = str(p, "name", id);
                 String factionId = str(p, "factionId", "");
                 boolean selfDeploy = p.has("selfDeploy") && p.get("selfDeploy").getAsBoolean();
+                int unlockLevel = com.ccnrcom.rp.faction.FactionProfessions.unlockLevel(p);
                 String music = str(p, "music", "");
                 String profile = str(p, "profile", "");
                 if ("delete".equals(action)) {
                     errors = CCNRRPMod.factions.deleteProfession(id);
                 } else {
-                    errors = CCNRRPMod.factions.upsertProfession(id, name, factionId, selfDeploy, null, music, profile);
+                    errors = CCNRRPMod.factions.upsertProfession(
+                            id, name, factionId, selfDeploy, unlockLevel, null, music, profile);
                 }
             }
             case "faction" -> {
@@ -239,14 +261,16 @@ public final class CharacterService {
                             str(p, "color", "#FFFFFF"),
                             str(p, "description", ""),
                             str(p, "icon", "hex"),
-                            tier);
+                            tier,
+                            str(p, "music", ""));
                     case "update" -> errors = CCNRRPMod.factions.updateFaction(
                             id,
                             name,
                             str(p, "color", "#FFFFFF"),
                             str(p, "description", ""),
                             str(p, "icon", "hex"),
-                            tier);
+                            tier,
+                            str(p, "music", ""));
                     case "delete" -> errors = CCNRRPMod.factions.deleteFaction(id);
                     default -> errors = List.of("未知操作: " + action);
                 }
@@ -317,7 +341,6 @@ public final class CharacterService {
             service().sendError(player, "ccnr_rp.error.invalid_argument", String.join("; ", errors));
             return;
         }
-        // 热重载对应系统
         if ("event".equals(kind) || "phase".equals(kind)) {
             if (CCNRRPMod.eventManager != null) {
                 CCNRRPMod.eventManager.reload();
@@ -331,7 +354,7 @@ public final class CharacterService {
         service().broadcastToAll();
     }
 
-    /** 管理端影响预检：更新/删除前统计波及（角色/阵营/职业/波/事件/阶段引用）。 */
+    /** 管理端影响预检（管理员）：统计用户（按当前职位/阵营）与波/事件/阶段引用。 */
     public static void onManagerImpact(ServerPlayer player, String kind, String action, String payloadJson) {
         if (player == null) {
             return;
@@ -352,29 +375,28 @@ public final class CharacterService {
         }
         String id = str(p, "id", "");
         List<String> lines = new ArrayList<>();
-        List<String> chars = new ArrayList<>();
+        List<String> users = new ArrayList<>();
         List<String> waves = new ArrayList<>();
         List<String> profs = new ArrayList<>();
         List<String> events = new ArrayList<>();
         List<String> phases = new ArrayList<>();
         boolean rename = "update".equals(action);
-        // 职业：角色引用 / 波引用 / 序列步骤引用
         if ("profession".equals(kind)) {
             if (updateInvolvesIdChange("profession", id, p)) {
                 rename = true;
             }
-            for (var c : CCNRRPMod.characters.store().all()) {
-                if (id.equals(c.professionId())) {
-                    chars.add(c.name());
+            for (String uuid : CCNRRPMod.users.uuids()) {
+                if (id.equals(CCNRRPMod.users.professionId(uuid))) {
+                    users.add(uuid);
                 }
             }
             waves = referenceWaves("profession", id);
             profs = List.of();
             stepsReferencing("profession", id, events, phases, waves);
         } else if ("faction".equals(kind)) {
-            for (var c : CCNRRPMod.characters.store().all()) {
-                if (id.equals(c.factionId())) {
-                    chars.add(c.name());
+            for (String uuid : CCNRRPMod.users.uuids()) {
+                if (id.equals(CCNRRPMod.users.factionId(uuid))) {
+                    users.add(uuid);
                 }
             }
             for (String pid : CCNRRPMod.factions.professionIds()) {
@@ -401,9 +423,9 @@ public final class CharacterService {
         } else if ("phase".equals(kind)) {
             stepsReferencing("phase", id, events, phases, waves);
         }
-        if (!chars.isEmpty()) {
-            lines.add("角色(" + chars.size() + "): " + String.join(", ", chars.subList(0, Math.min(6, chars.size())))
-                    + (chars.size() > 6 ? "…" : ""));
+        if (!users.isEmpty()) {
+            lines.add("用户(" + users.size() + "): " + String.join(", ", users.subList(0, Math.min(6, users.size())))
+                    + (users.size() > 6 ? "…" : ""));
         }
         if (!profs.isEmpty()) {
             lines.add("职业(" + profs.size() + "): " + String.join(", ", profs.subList(0, Math.min(6, profs.size())))
@@ -422,7 +444,7 @@ public final class CharacterService {
                     + (phases.size() > 6 ? "…" : ""));
         }
         if (rename && id.length() > 0) {
-            // 重命名（update 且 id 字段变化不算，UI 锁 id；此处仅提示改名不影响引用）
+            // 重命名提示
         }
         JsonObject resp = new JsonObject();
         resp.addProperty("kind", kind);
@@ -436,13 +458,11 @@ public final class CharacterService {
         RpChannels.sendTo(player, new RpPackets.ManagerImpactS2C(resp.toString()));
     }
 
-    /** 更新时 id 是否发生变化（重命名 → 引用全断，必须确认）。 */
     private static boolean updateInvolvesIdChange(String kind, String id, JsonObject p) {
         String oldId = str(p, "_oldId", "");
         return !oldId.isBlank() && !oldId.equals(id);
     }
 
-    /** 波对 profession/faction 的引用（factionIds/professionIds 数组，来自 spawn_waves.json）。 */
     private static List<String> referenceWaves(String kind, String id) {
         List<String> out = new ArrayList<>();
         for (JsonObject w : com.ccnrcom.rp.util.ConfigCrud.items("spawn_waves.json", "waves")) {
@@ -467,7 +487,6 @@ public final class CharacterService {
         return out;
     }
 
-    /** 序列步骤引用（inline sequence 数组，扫描事件/阶段/波）。 */
     private static void stepsReferencing(
             String kind, String id, List<String> events, List<String> phases, List<String> waves) {
         scanSteps(com.ccnrcom.rp.util.ConfigCrud.items("events.json", "events"), "ev", kind, id, events, phases, waves);
@@ -536,7 +555,6 @@ public final class CharacterService {
         return false;
     }
 
-    /** 通用数组段 CRUD：delete 删除；否则用 item 补齐缺省字段后 upsert。 */
     private static List<String> crudArray(
             String file,
             String arrayKey,
@@ -557,270 +575,203 @@ public final class CharacterService {
         return o.has(key) && !o.get(key).isJsonNull() ? o.get(key).getAsString() : def;
     }
 
-    /** 转生/退役（强制保留角色）：判死 + 遗体，档案保留。 */
-    public static void onRetire(ServerPlayer player, String charId) {
-        CharacterService svc = service();
-        Optional<CharacterData> c = svc.store.find(charId);
-        if (c.isEmpty() || !c.get().playerUuid().equals(player.getUUID().toString())) {
-            svc.sendError(player, "ccnr_rp.character.error.ownership");
+    /** 管理端操作「刷给自己」：只把所选职业的装备刷给执行者（不改变用户状态）。 */
+    public static void onAdminSelfProfession(ServerPlayer player, String professionId) {
+        if (player == null || CCNRRPMod.factions == null) {
             return;
         }
-        CharacterData data = c.get();
-        if (data.status() == com.ccnrcom.rp.status.CharacterStatus.DEAD) {
-            svc.sendError(player, "ccnr_rp.character.error.status", data.name(), "DEAD");
+        if (!com.ccnrcom.rp.util.Permissions.canAdmin(player, com.ccnrcom.rp.util.Permissions.ADMIN_PROFESSION)) {
+            service().sendError(player, "ccnr_rp.command.no_permission");
             return;
         }
-        com.ccnrcom.rp.status.StatusManager.retire(data, player);
-        svc.sendError(player, "ccnr_rp.character.retire.ok", data.name());
+        var def = CCNRRPMod.factions.findProfession(professionId).orElse(null);
+        if (def == null) {
+            service().sendError(player, "ccnr_rp.character.error.profession", professionId);
+            return;
+        }
+        com.ccnrcom.rp.profession.LoadoutManager.apply(player, com.ccnrcom.rp.faction.FactionProfessions.loadout(def));
+        player.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);
+        service()
+                .sendError(
+                        player,
+                        "ccnr_rp.admin.profession.gear",
+                        professionId,
+                        player.getName().getString());
     }
 
-    /** 组装部署入场数据：名字/职业/阵营(图标+等级)/简历/阵营关系（图谱 resolve，非中立才列出）。 */
-    public static void sendCinematic(ServerPlayer player, String charId) {
-        Optional<CharacterData> c = service().store.find(charId);
-        if (c.isEmpty()) {
+    /** 管理端操作「全量保存职业装备」：把管理员当前背包/护甲/副手（含 NBT）存为所选职业的 loadout。 */
+    public static void onAdminSaveProfessionFull(ServerPlayer player, String professionId) {
+        if (player == null || CCNRRPMod.factions == null) {
             return;
         }
-        CharacterData data = c.get();
-        JsonObject en = new JsonObject();
-        en.addProperty("name", data.name());
-        String profName = data.professionId();
-        String music = "";
-        if (CCNRRPMod.factions != null) {
-            var profDef = CCNRRPMod.factions.findProfession(data.professionId()).orElse(null);
-            if (profDef != null) {
-                profName = com.ccnrcom.rp.faction.FactionProfessions.idsSafeName(profDef);
-                music = com.ccnrcom.rp.faction.FactionProfessions.music(profDef);
+        if (!com.ccnrcom.rp.util.Permissions.canAdmin(player, com.ccnrcom.rp.util.Permissions.ADMIN_PROFESSION)) {
+            service().sendError(player, "ccnr_rp.command.no_permission");
+            return;
+        }
+        var mgr = CCNRRPMod.factions;
+        var def = mgr.findProfession(professionId).orElse(null);
+        if (def == null) {
+            service().sendError(player, "ccnr_rp.character.error.profession", professionId);
+            return;
+        }
+        com.google.gson.JsonObject loadout = com.ccnrcom.rp.profession.LoadoutManager.capture(player, true);
+        var errors = mgr.upsertProfession(
+                professionId,
+                com.ccnrcom.rp.faction.FactionProfessions.idsSafeName(def),
+                com.ccnrcom.rp.faction.FactionProfessions.factionId(def),
+                com.ccnrcom.rp.faction.FactionProfessions.selfDeploy(def),
+                com.ccnrcom.rp.faction.FactionProfessions.unlockLevel(def),
+                loadout);
+        if (!errors.isEmpty()) {
+            service().sendError(player, "ccnr_rp.profession.error.config", String.join("; ", errors));
+            return;
+        }
+        int slots = loadout.getAsJsonArray("inventory").size()
+                + loadout.getAsJsonArray("armor").size()
+                + (loadout.has("offhand")
+                                && loadout.get("offhand").isJsonObject()
+                                && loadout.getAsJsonObject("offhand").size() > 0
+                        ? 1
+                        : 0);
+        service().sendError(player, "ccnr_rp.profession.saved_full", String.valueOf(slots), professionId);
+    }
+
+    /** 管理端操作「设置阵营出生点」：写入该阵营的出生点列表与分布规则（SPREAD/SINGLE）。 */
+    public static void onAdminFactionSpawn(ServerPlayer player, String factionId, String rule, String pointsJson) {
+        if (player == null || CCNRRPMod.factions == null) {
+            return;
+        }
+        if (!com.ccnrcom.rp.util.Permissions.canAdmin(player, com.ccnrcom.rp.util.Permissions.ADMIN_FACTION)) {
+            service().sendError(player, "ccnr_rp.command.no_permission");
+            return;
+        }
+        List<com.ccnrcom.rp.faction.FactionManager.SpawnPoint> pts = new java.util.ArrayList<>();
+        try {
+            com.google.gson.JsonArray arr =
+                    com.google.gson.JsonParser.parseString(pointsJson).getAsJsonArray();
+            for (com.google.gson.JsonElement e : arr) {
+                com.google.gson.JsonObject o = e.getAsJsonObject();
+                pts.add(new com.ccnrcom.rp.faction.FactionManager.SpawnPoint(
+                        o.has("x") ? o.get("x").getAsDouble() : 0,
+                        o.has("y") ? o.get("y").getAsDouble() : 64,
+                        o.has("z") ? o.get("z").getAsDouble() : 0,
+                        o.has("dim") && !o.get("dim").isJsonNull()
+                                ? o.get("dim").getAsString()
+                                : "minecraft:overworld"));
             }
-            var graph = CCNRRPMod.factions.graph();
-            var f = graph.factions().get(data.factionId());
-            if (f != null) {
-                en.addProperty("factionName", f.name());
-                en.addProperty("icon", f.icon());
-                en.addProperty("tier", f.tier());
-                JsonArray rel = new JsonArray();
-                for (var other : graph.factions().values()) {
-                    if (other.id().equals(f.id())) {
-                        continue;
-                    }
-                    var type = graph.resolve(f.id(), other.id());
-                    if (type != null && type != com.ccnrcom.rp.faction.RelationType.NEUTRAL) {
-                        JsonObject o = new JsonObject();
-                        o.addProperty("name", other.name());
-                        o.addProperty("type", type.name().toLowerCase(java.util.Locale.ROOT));
-                        rel.add(o);
-                    }
-                }
-                en.add("relations", rel);
-            }
+        } catch (Exception ex) {
+            service().sendError(player, "ccnr_rp.profession.error.config", "出生点数据无效");
+            return;
         }
-        en.addProperty("professionName", profName);
-        en.addProperty("music", music);
-        if (!en.has("factionName")) {
-            en.addProperty("factionName", data.factionId());
-            en.addProperty("icon", "hex");
-            en.addProperty("tier", 2);
+        var errors = CCNRRPMod.factions.setFactionSpawn(factionId, rule, pts);
+        if (!errors.isEmpty()) {
+            service().sendError(player, "ccnr_rp.profession.error.config", String.join("; ", errors));
+            return;
         }
-        String resume = data.background() == null ? "" : data.background();
-        if (CCNRRPMod.factions != null) {
-            var pd = CCNRRPMod.factions.findProfession(data.professionId()).orElse(null);
-            if (pd != null
-                    && !com.ccnrcom.rp.faction.FactionProfessions.profile(pd).isBlank()) {
-                resume = com.ccnrcom.rp.faction.FactionProfessions.profile(pd);
-            }
-        }
-        en.addProperty("background", resume);
-        RpChannels.sendTo(player, new RpPackets.CinematicS2C(en.toString()));
+        service().sendList(player);
+        service().sendError(player, "ccnr_rp.gui.admin.spawn.saved", factionId, String.valueOf(pts.size()));
     }
 
-    public static void onObserve(ServerPlayer player, String charId) {
-        CharacterService svc = service();
-        Optional<CharacterData> c = svc.store.find(charId);
-        if (c.isEmpty() || !c.get().playerUuid().equals(player.getUUID().toString())) {
-            svc.sendError(player, "ccnr_rp.character.error.ownership");
-            return;
-        }
-        CharacterData data = c.get();
-        if (data.status() == CharacterStatus.ALIVE) {
-            svc.updateCharacter(data.withStatus(CharacterStatus.OBSERVING), player);
-            svc.sendError(player, "ccnr_rp.character.observe.ok", data.name());
-        } else if (data.status() == CharacterStatus.OBSERVING) {
-            svc.sendError(player, "ccnr_rp.character.error.status", data.name(), "观察状态无需切换".toString());
-        } else {
-            svc.sendError(player, "ccnr_rp.character.error.status", data.name(), "死亡角色不可切换观察");
-        }
-    }
+    // ---------- 音乐管理（管理员上传） ----------
 
-    public static void onActivate(ServerPlayer player, String charId) {
-        CharacterService svc = service();
-        Optional<CharacterData> c = svc.store.find(charId);
-        if (c.isEmpty() || !c.get().playerUuid().equals(player.getUUID().toString())) {
-            svc.sendError(player, "ccnr_rp.character.error.ownership");
-            return;
-        }
-        CharacterData data = c.get();
-        Optional<CharacterData> alive = svc.store.findAlive(player.getUUID().toString());
-        if (data.status() != CharacterStatus.OBSERVING) {
-            svc.sendError(
-                    player,
-                    "ccnr_rp.character.error.status",
-                    data.name(),
-                    data.status().name());
-            return;
-        }
-        if (alive.isPresent()) {
-            svc.sendError(
-                    player, "ccnr_rp.character.error.alive_exists", alive.get().name());
-            return;
-        }
-        // 自己职业激活=自部署：复活冷却中拒绝（复活波/强制抽取无视冷却）
-        if (data.cooldownUntil() > System.currentTimeMillis()) {
-            long mins = (data.cooldownUntil() - System.currentTimeMillis()) / 60000L;
-            svc.sendError(player, "ccnr_rp.character.error.cooldown", data.name(), String.valueOf(Math.max(1, mins)));
-            return;
-        }
-        svc.updateCharacter(data.withStatus(CharacterStatus.ALIVE), player);
-        svc.sendError(player, "ccnr_rp.character.activate.ok", data.name());
-    }
-
-    public static void onSkinPart(ServerPlayer player, RpPackets.SkinUploadPartC2S msg) {
-        if (player == null) {
+    public static void onMusicPart(ServerPlayer player, RpPackets.MusicUploadPartC2S msg) {
+        if (player == null
+                || !com.ccnrcom.rp.util.Permissions.canAdmin(player, com.ccnrcom.rp.util.Permissions.ADMIN_FACTION)) {
             return;
         }
         CharacterService svc = service();
-        SkinUpload up = svc.uploads.getOrDefault(player.getUUID(), new SkinUpload(msg.charId, new byte[0], 0));
-        if (!up.charId().equals(msg.charId)) {
-            up = new SkinUpload(msg.charId, new byte[0], 0);
+        if (com.ccnrcom.rp.music.MusicStore.validateName(msg.name) != null) {
+            svc.musicUploads.remove(player.getUUID());
+            svc.sendError(player, "ccnr_rp.gui.admin.music.fail", "文件名非法");
+            return;
+        }
+        MusicUpload up = svc.musicUploads.getOrDefault(player.getUUID(), new MusicUpload(msg.name, new byte[0], 0));
+        if (!up.name().equals(msg.name)) {
+            up = new MusicUpload(msg.name, new byte[0], 0);
+        }
+        if (up.parts().length + msg.data.length > com.ccnrcom.rp.music.MusicStore.MAX_BYTES) {
+            svc.musicUploads.remove(player.getUUID());
+            svc.sendError(player, "ccnr_rp.gui.admin.music.fail", "分片超限");
+            return;
         }
         byte[] next = new byte[up.parts().length + msg.data.length];
         System.arraycopy(up.parts(), 0, next, 0, up.parts().length);
         System.arraycopy(msg.data, 0, next, up.parts().length, msg.data.length);
-        svc.uploads.put(player.getUUID(), new SkinUpload(msg.charId, next, msg.index + 1));
+        svc.musicUploads.put(player.getUUID(), new MusicUpload(msg.name, next, msg.index + 1));
     }
 
-    public static void onSkinCommit(ServerPlayer player, RpPackets.SkinUploadCommitC2S msg) {
-        if (player == null) {
+    public static void onMusicCommit(ServerPlayer player, RpPackets.MusicUploadCommitC2S msg) {
+        if (player == null
+                || !com.ccnrcom.rp.util.Permissions.canAdmin(player, com.ccnrcom.rp.util.Permissions.ADMIN_FACTION)) {
             return;
         }
         CharacterService svc = service();
-        SkinUpload up = svc.uploads.remove(player.getUUID());
-        if (up == null || !up.charId().equals(msg.charId) || up.parts().length != msg.expectedSize) {
-            svc.sendError(player, "ccnr_rp.character.error.skin", "数据不完整");
+        MusicUpload up = svc.musicUploads.remove(player.getUUID());
+        if (up == null || !up.name().equals(msg.name) || up.parts().length != msg.expectedSize) {
+            svc.sendError(player, "ccnr_rp.gui.admin.music.fail", "数据不完整");
             return;
         }
-        Optional<CharacterData> c = svc.store.find(msg.charId);
-        if (c.isEmpty() || !c.get().playerUuid().equals(player.getUUID().toString())) {
-            svc.sendError(player, "ccnr_rp.character.error.ownership");
+        String nameError = com.ccnrcom.rp.music.MusicStore.validateName(up.name());
+        if (nameError != null) {
+            svc.sendError(player, "ccnr_rp.gui.admin.music.fail", nameError);
             return;
         }
-        String error = svc.validateSkin(up.parts());
-        if (error != null) {
-            svc.sendError(player, "ccnr_rp.character.error.skin", error);
+        String contentError = com.ccnrcom.rp.music.MusicStore.validate(up.parts());
+        if (contentError != null) {
+            svc.sendError(player, "ccnr_rp.gui.admin.music.fail", contentError);
             return;
         }
         try {
-            Files.createDirectories(svc.skinDir);
-            String fileName = c.get().id() + ".png";
-            Files.write(svc.skinDir.resolve(fileName), up.parts());
-            String hash = sha256(up.parts());
-            CharacterData updated = c.get().withSkin(fileName, hash);
-            svc.store.update(updated);
-            svc.store.save();
-            // 在全服广播皮肤（其他玩家用于招募列表头像等）
-            RpChannels.sendToAll(new RpPackets.SkinSyncS2C(c.get().id(), up.parts(), hash));
-            svc.sendError(player, "ccnr_rp.character.skin.ok", fileName);
+            com.ccnrcom.rp.music.MusicStore.save(up.name(), up.parts());
+            RpChannels.sendToAll(new RpPackets.MusicListS2C(musicListJson()));
+            com.ccnrcom.rp.assets.AssetLibrary.broadcastManifest();
+            svc.sendError(player, "ccnr_rp.gui.admin.music.ok", up.name());
         } catch (Exception e) {
-            LOGGER.error("[CCNR-RP] 皮肤写入失败", e);
-            svc.sendError(player, "ccnr_rp.character.error.skin", e.toString());
+            svc.sendError(player, "ccnr_rp.gui.admin.music.fail", e.getMessage());
         }
     }
 
-    // ---------- 内部 ----------
-
-    private static CharacterService service() {
-        CharacterService s = CCNRRPMod.characters;
-        if (s == null) {
-            throw new IllegalStateException("角色服务未初始化");
+    public static String musicListJson() {
+        com.google.gson.JsonArray a = new com.google.gson.JsonArray();
+        for (String name : com.ccnrcom.rp.music.MusicStore.list()) {
+            a.add(name);
         }
-        return s;
+        return a.toString();
     }
 
-    private boolean owns(ServerPlayer player, String charId) {
-        return store.find(charId)
-                .map(c -> c.playerUuid().equals(player.getUUID().toString()))
-                .orElse(false);
+    // ---------- 用户档案列表（S2C） ----------
+
+    /** 阵营出生点 → 客户端 JSON（配置存在则返回对象，否则 null）。 */
+    private static com.google.gson.JsonObject factionSpawnJson(String factionId) {
+        if (CCNRRPMod.factions == null) {
+            return null;
+        }
+        var fs = CCNRRPMod.factions.factionSpawn(factionId);
+        if (fs == null) {
+            return null;
+        }
+        com.google.gson.JsonObject sp = new com.google.gson.JsonObject();
+        sp.addProperty("rule", fs.rule());
+        com.google.gson.JsonArray pts = new com.google.gson.JsonArray();
+        for (var p : fs.points()) {
+            com.google.gson.JsonObject o = new com.google.gson.JsonObject();
+            o.addProperty("x", p.x());
+            o.addProperty("y", p.y());
+            o.addProperty("z", p.z());
+            o.addProperty("dim", p.dim());
+            pts.add(o);
+        }
+        sp.add("points", pts);
+        return sp;
     }
 
-    /** 创建校验（结构化错误：键+参数，客户端直接翻译，不再泄漏原始键）。 */
-    record ValidationIssue(String key, String... args) {}
-
-    private List<ValidationIssue> validateCreate(
-            ServerPlayer player, String name, String factionId, String professionId) {
-        List<ValidationIssue> errors = new ArrayList<>();
-        if (name == null || name.trim().length() < 1 || name.trim().length() > 32) {
-            errors.add(new ValidationIssue("ccnr_rp.character.error.name"));
-        } else if (!name.matches("[\\p{L} ]+")) {
-            errors.add(new ValidationIssue("ccnr_rp.character.error.name_chars"));
-        }
-        if (CCNRRPMod.factions == null || !CCNRRPMod.factions.graph().factions().containsKey(factionId)) {
-            errors.add(new ValidationIssue("ccnr_rp.character.error.faction", factionId));
-        } else {
-            var def = CCNRRPMod.factions.findProfession(professionId);
-            if (def.isEmpty()) {
-                errors.add(new ValidationIssue("ccnr_rp.character.error.profession", professionId));
-            } else if (!factionId.equals(com.ccnrcom.rp.faction.FactionProfessions.factionId(def.get()))) {
-                errors.add(new ValidationIssue("ccnr_rp.character.error.profession", professionId));
-            }
-        }
-        if (store.countOf(player.getUUID().toString()) >= CCNRRPConfig.MAX_CHARACTERS_PER_PLAYER.get()) {
-            errors.add(new ValidationIssue(
-                    "ccnr_rp.character.error.count", String.valueOf(CCNRRPConfig.MAX_CHARACTERS_PER_PLAYER.get())));
-        }
-        return errors;
-    }
-
-    private String validateSkin(byte[] bytes) {
-        if (bytes.length == 0 || bytes.length > MAX_SKIN_BYTES) {
-            return "大小超限（≤ " + MAX_SKIN_BYTES + " 字节）";
-        }
-        if (bytes.length < 8 || bytes[0] != (byte) 0x89 || bytes[1] != 'P' || bytes[2] != 'N' || bytes[3] != 'G') {
-            return "不是 PNG 文件";
-        }
-        try {
-            BufferedImage img = ImageIO.read(new ByteArrayInputStream(bytes));
-            if (img == null) {
-                return "PNG 解码失败";
-            }
-            if (img.getWidth() > MAX_SKIN_DIMENSION || img.getHeight() > MAX_SKIN_DIMENSION) {
-                return "尺寸超限（≤ " + MAX_SKIN_DIMENSION + "×" + MAX_SKIN_DIMENSION + "）";
-            }
-        } catch (Exception e) {
-            return "PNG 解码失败: " + e.getMessage();
-        }
-        return null;
-    }
-
-    private void updateCharacter(CharacterData updated, ServerPlayer owner) {
-        updateAndBroadcast(updated, owner);
-    }
-
-    /** 更新角色并广播（公共入口：状态机/经验/刷新框架等复用）。 */
-    public static void updateAndBroadcast(CharacterData updated, ServerPlayer ownerOrNull) {
-        service().store().update(updated);
-        service().store().save();
-        if (ownerOrNull != null) {
-            RpChannels.sendTo(ownerOrNull, new RpPackets.CharacterUpdateS2C(updated.toJson()));
-        }
-    }
-
+    /**
+     * 构建并下发用户档案列表（K 面板/客户端全量初始化）：
+     * {factions, professions(含解锁等级/装备/音乐/简历), settings, admin, userXp, userLevel,
+     *  anySupportRevive, status, professionId, factionId, cooldownUntil, levelBase, levelPow, panelLocked}。
+     */
     public void sendList(ServerPlayer player) {
         JsonObject root = new JsonObject();
-        JsonArray a = new JsonArray();
-        for (CharacterData c : store.ofPlayer(player.getUUID().toString())) {
-            a.add(c.toJson());
-        }
-        root.add("characters", a);
-        root.addProperty("selected", selected.getOrDefault(player.getUUID(), ""));
-        // 附带阵容/职业数据供客户端 GUI（阵营下拉/职业下拉使用）
         JsonArray fa = new JsonArray();
         if (CCNRRPMod.factions != null) {
             CCNRRPMod.factions.graph().factions().values().forEach(f -> {
@@ -830,6 +781,12 @@ public final class CharacterService {
                 o.addProperty("color", f.color());
                 o.addProperty("icon", f.icon());
                 o.addProperty("tier", f.tier());
+                o.addProperty("description", f.description());
+                o.addProperty("music", f.music());
+                JsonObject spawn = factionSpawnJson(f.id());
+                if (spawn != null) {
+                    o.add("spawn", spawn);
+                }
                 fa.add(o);
             });
         }
@@ -842,46 +799,35 @@ public final class CharacterService {
                     o.addProperty("id", pid);
                     o.addProperty("name", com.ccnrcom.rp.faction.FactionProfessions.idsSafeName(def));
                     o.addProperty("factionId", com.ccnrcom.rp.faction.FactionProfessions.factionId(def));
-                    o.addProperty("selfDeploy", com.ccnrcom.rp.faction.FactionProfessions.selfDeploy(def));
+                    o.addProperty("unlockLevel", com.ccnrcom.rp.faction.FactionProfessions.unlockLevel(def));
                     o.addProperty("music", com.ccnrcom.rp.faction.FactionProfessions.music(def));
                     o.addProperty("profile", com.ccnrcom.rp.faction.FactionProfessions.profile(def));
+                    o.add("loadout", com.ccnrcom.rp.faction.FactionProfessions.loadout(def));
                     pa.add(o);
                 });
             }
         }
         root.add("professions", pa);
-        // 管理器设置 + 权限（客户端 K 面板与管理界面使用）
         JsonObject st = new JsonObject();
-        st.addProperty("forceObserving", true);
-        st.addProperty("openPanelOnJoin", true);
-        st.addProperty("forceRetain", true);
         if (CCNRRPMod.managerSettings != null) {
             st = CCNRRPMod.managerSettings.toJson();
         }
         root.add("settings", st);
+        root.addProperty("levelBase", com.ccnrcom.rp.config.CCNRRPConfig.LEVEL_BASE.get());
+        root.addProperty("levelPow", com.ccnrcom.rp.config.CCNRRPConfig.LEVEL_POW.get());
         root.addProperty(
                 "admin",
                 com.ccnrcom.rp.util.Permissions.canAdmin(player, com.ccnrcom.rp.util.Permissions.ADMIN_FACTION));
-        // 面板锁：有存活（非观察者）角色时禁止打开 K 面板（防自爆逃逸，服务端判定）
-        root.addProperty(
-                "panelLocked", store.findAlive(player.getUUID().toString()).isPresent());
+        root.addProperty("panelLocked", !isObserver(player));
+        String uuid = player.getUUID().toString();
+        root.addProperty("userXp", CCNRRPMod.users.userXp(uuid));
+        root.addProperty("userLevel", CCNRRPMod.users.level(uuid));
+        root.addProperty("anySupportRevive", CCNRRPMod.users.anySupportRevive(uuid));
+        root.addProperty("status", CCNRRPMod.users.status(uuid).name().toLowerCase(java.util.Locale.ROOT));
+        root.addProperty("professionId", CCNRRPMod.users.professionId(uuid));
+        root.addProperty("factionId", CCNRRPMod.users.factionId(uuid));
+        root.addProperty("cooldownUntil", CCNRRPMod.users.cooldownUntil(uuid));
+        root.addProperty("maxCharacters", CCNRRPMod.users.maxCharacters());
         RpChannels.sendTo(player, new RpPackets.CharacterListS2C(root.toString()));
-    }
-
-    public void sendError(ServerPlayer player, String key, String... args) {
-        RpChannels.sendTo(player, new RpPackets.ErrorS2C(key, args));
-    }
-
-    public static String sha256(byte[] data) {
-        try {
-            byte[] d = MessageDigest.getInstance("SHA-256").digest(data);
-            StringBuilder sb = new StringBuilder();
-            for (byte b : d) {
-                sb.append(String.format("%02x", b));
-            }
-            return sb.toString();
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
     }
 }

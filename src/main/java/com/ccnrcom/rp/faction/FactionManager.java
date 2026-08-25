@@ -86,7 +86,8 @@ public final class FactionManager {
                     str(o, "color", "#FFFFFF"),
                     str(o, "description", ""),
                     str(o, "icon", "hex"),
-                    Math.max(1, Math.min(3, intOf(o, "tier", 2)))));
+                    Math.max(1, Math.min(3, intOf(o, "tier", 2))),
+                    str(o, "music", "")));
         }
         List<FactionGroup> groups = new ArrayList<>();
         JsonArray ga = root.has("groups") ? root.getAsJsonArray("groups") : new JsonArray();
@@ -117,6 +118,15 @@ public final class FactionManager {
             rules.add(new RelationRule(o.get("from").getAsString(), o.get("to").getAsString(), type));
         }
         return FactionGraph.parse(factions, groups, rules);
+    }
+
+    /** 写入阵营音乐：空串=移除字段（与职业 music 语义一致）。 */
+    private static void putMusic(JsonObject o, String music) {
+        if (music != null && !music.isBlank()) {
+            o.addProperty("music", music);
+        } else {
+            o.remove("music");
+        }
     }
 
     private static String str(JsonObject o, String key, String def) {
@@ -207,8 +217,13 @@ public final class FactionManager {
 
     /** 职业定义管理（P2，读写同一个 factions.json）。 */
     public List<String> upsertProfession(
-            String id, String name, String factionId, boolean selfDeploy, com.google.gson.JsonObject loadout) {
-        return upsertProfession(id, name, factionId, selfDeploy, loadout, "", "");
+            String id,
+            String name,
+            String factionId,
+            boolean selfDeploy,
+            int unlockLevel,
+            com.google.gson.JsonObject loadout) {
+        return upsertProfession(id, name, factionId, selfDeploy, unlockLevel, loadout, "", "");
     }
 
     /** 职业定义管理（含出场音乐与项目简历）。 */
@@ -217,12 +232,13 @@ public final class FactionManager {
             String name,
             String factionId,
             boolean selfDeploy,
+            int unlockLevel,
             com.google.gson.JsonObject loadout,
             String music,
             String profile) {
         JsonObject candidate = root.deepCopy();
         List<String> errors = FactionProfessions.upsert(
-                candidate, id, name, factionId, selfDeploy, loadout, music, profile, f -> graph.factions()
+                candidate, id, name, factionId, selfDeploy, unlockLevel, loadout, music, profile, f -> graph.factions()
                         .containsKey(f));
         if (!errors.isEmpty()) {
             return errors;
@@ -251,8 +267,9 @@ public final class FactionManager {
 
     private static final java.util.regex.Pattern ID_PATTERN = java.util.regex.Pattern.compile("[a-z0-9_]{1,32}");
 
-    /** 创建阵营。 */
-    public List<String> createFaction(String id, String name, String color, String description, String icon, int tier) {
+    /** 创建阵营。music 为空串时不写入（不设阵营音乐）。 */
+    public List<String> createFaction(
+            String id, String name, String color, String description, String icon, int tier, String music) {
         if (id == null || !ID_PATTERN.matcher(id).matches()) {
             return List.of("阵营 id 仅允许小写字母/数字/下划线，1-32 字符");
         }
@@ -269,12 +286,14 @@ public final class FactionManager {
         o.addProperty("description", description == null ? "" : description);
         o.addProperty("icon", icon == null || icon.isBlank() ? "hex" : icon);
         o.addProperty("tier", Math.max(1, Math.min(3, tier)));
+        putMusic(o, music);
         fa.add(o);
         return commit(candidate);
     }
 
-    /** 更新阵营。 */
-    public List<String> updateFaction(String id, String name, String color, String description, String icon, int tier) {
+    /** 更新阵营。music 为空串时移除阵营音乐字段。 */
+    public List<String> updateFaction(
+            String id, String name, String color, String description, String icon, int tier, String music) {
         if (!graph.factions().containsKey(id)) {
             return List.of("未找到阵营: " + id);
         }
@@ -288,13 +307,14 @@ public final class FactionManager {
                 o.addProperty("description", description == null ? "" : description);
                 o.addProperty("icon", icon == null || icon.isBlank() ? "hex" : icon);
                 o.addProperty("tier", Math.max(1, Math.min(3, tier)));
+                putMusic(o, music);
                 return commit(candidate);
             }
         }
         return List.of("未找到阵营: " + id);
     }
 
-    /** 删除阵营（存在下属职业引用时拒绝）。 */
+    /** 删除阵营（存在下属职业/组/关系引用时拒绝，防悬空引用毁掉整份图谱）。 */
     public List<String> deleteFaction(String id) {
         if (!graph.factions().containsKey(id)) {
             return List.of("未找到阵营: " + id);
@@ -303,6 +323,24 @@ public final class FactionManager {
             var def = findProfession(pid).orElse(null);
             if (def != null && str(def, "factionId", "").equals(id)) {
                 return List.of("阵营仍有职业引用: " + pid + "，请先删除职业");
+            }
+        }
+        // 组引用检查
+        if (graph.groups().values().stream().anyMatch(g -> g.memberIds().contains(id))) {
+            return List.of("阵营仍被阵营组引用，请先从组中移除");
+        }
+        // 关系引用检查（读配置根对象）
+        if (root.has("relations") && root.get("relations").isJsonArray()) {
+            for (var el : root.getAsJsonArray("relations")) {
+                if (!el.isJsonObject()) {
+                    continue;
+                }
+                JsonObject rel = el.getAsJsonObject();
+                String from = str(rel, "from", "");
+                String to = str(rel, "to", "");
+                if (from.equals(id) || to.equals(id)) {
+                    return List.of("阵营仍被关系引用（" + from + " ↔ " + to + "），请先删除关系");
+                }
             }
         }
         JsonObject candidate = root.deepCopy();
@@ -346,6 +384,96 @@ public final class FactionManager {
         });
         if (this.root == null) {
             load();
+        }
+    }
+
+    // ---------- 阵营出生点（P9 管理面板增强） ----------
+
+    /** 出生点规则：SPREAD=多地随机分摊；SINGLE=随机一点集中部署。 */
+    public static final String SPAWN_RULE_SPREAD = "SPREAD";
+
+    public static final String SPAWN_RULE_SINGLE = "SINGLE";
+
+    /** 单个出生点（纯数据，无 MC 依赖）。 */
+    public record SpawnPoint(double x, double y, double z, String dim) {}
+
+    /** 阵营出生点配置：points 列表 + rule（SPREAD/SINGLE）。 */
+    public record FactionSpawn(List<SpawnPoint> points, String rule) {
+        public FactionSpawn {
+            points = points == null ? List.of() : List.copyOf(points);
+            rule = rule == null || rule.isBlank() ? SPAWN_RULE_SPREAD : rule;
+        }
+    }
+
+    /** 读取阵营出生点配置；未配置返回 null（调用方回退部署点/世界出生点）。 */
+    public FactionSpawn factionSpawn(String factionId) {
+        if (root == null || factionId == null || factionId.isBlank()) {
+            return null;
+        }
+        JsonArray fa = root.has("factions") ? root.getAsJsonArray("factions") : new JsonArray();
+        for (int i = 0; i < fa.size(); i++) {
+            JsonObject o = fa.get(i).getAsJsonObject();
+            if (str(o, "id", "").equals(factionId)
+                    && o.has("spawn")
+                    && o.get("spawn").isJsonObject()) {
+                JsonObject sp = o.getAsJsonObject("spawn");
+                String rule =
+                        SPAWN_RULE_SINGLE.equalsIgnoreCase(str(sp, "rule", "")) ? SPAWN_RULE_SINGLE : SPAWN_RULE_SPREAD;
+                List<SpawnPoint> pts = new ArrayList<>();
+                if (sp.has("points") && sp.get("points").isJsonArray()) {
+                    for (JsonElement e : sp.getAsJsonArray("points")) {
+                        if (e.isJsonObject()) {
+                            JsonObject pp = e.getAsJsonObject();
+                            pts.add(new SpawnPoint(
+                                    dbl(pp, "x", 0),
+                                    dbl(pp, "y", 64),
+                                    dbl(pp, "z", 0),
+                                    str(pp, "dim", "minecraft:overworld")));
+                        }
+                    }
+                }
+                return new FactionSpawn(pts, rule);
+            }
+        }
+        return null;
+    }
+
+    /** 写入阵营出生点配置；校验阵营存在，失败回滚不写盘。 */
+    public List<String> setFactionSpawn(String factionId, String rule, List<SpawnPoint> points) {
+        if (!graph.factions().containsKey(factionId)) {
+            return List.of("未找到阵营: " + factionId);
+        }
+        String normRule = SPAWN_RULE_SINGLE.equalsIgnoreCase(rule) ? SPAWN_RULE_SINGLE : SPAWN_RULE_SPREAD;
+        JsonObject candidate = root.deepCopy();
+        JsonArray fa = candidate.has("factions") ? candidate.getAsJsonArray("factions") : new JsonArray();
+        for (int i = 0; i < fa.size(); i++) {
+            JsonObject o = fa.get(i).getAsJsonObject();
+            if (!str(o, "id", "").equals(factionId)) {
+                continue;
+            }
+            JsonObject spawn = new JsonObject();
+            spawn.addProperty("rule", normRule);
+            JsonArray pts = new JsonArray();
+            for (SpawnPoint sp : points) {
+                JsonObject p = new JsonObject();
+                p.addProperty("x", sp.x());
+                p.addProperty("y", sp.y());
+                p.addProperty("z", sp.z());
+                p.addProperty("dim", sp.dim());
+                pts.add(p);
+            }
+            spawn.add("points", pts);
+            o.add("spawn", spawn);
+            return commit(candidate);
+        }
+        return List.of("未找到阵营: " + factionId);
+    }
+
+    private static double dbl(JsonObject o, String key, double def) {
+        try {
+            return o.has(key) ? o.get(key).getAsDouble() : def;
+        } catch (Exception e) {
+            return def; // 畸形配置（非数字）不崩服
         }
     }
 }

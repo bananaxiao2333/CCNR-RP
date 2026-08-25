@@ -9,13 +9,18 @@
 
 | 迁移 | 触发 | 附带动作 |
 | --- | --- | --- |
-| OBSERVING → ALIVE | 自刷新部署 / 复活波 / 招募接受（P8） | 装备发放+传送+player_spawn 动画 |
-| ALIVE → DEAD | 玩家死亡事件 / **掉线、踢出（含断连）直接判死** | 生成遗体、冷却开始、player_death 动画、任务中止 |
-| ALIVE → OBSERVING | 玩家主动切换（下班/换角色） | 清空在场状态、状态广播 |
-| DEAD → ALIVE | 复活波/招募部署（冷却结束才可被选） | 同 OBSERVING→ALIVE |
+| OBSERVING → ALIVE | 自刷新部署 / 复活波 / 招募接受（P8，观察中需冷却结束才可自部署） | 装备发放+传送+player_spawn 动画 |
+| ALIVE → DEAD | 玩家死亡事件 / **掉线、踢出（含断连）直接判死**（事件主路径） | 生成遗体、复活冷却开始、player_death 动画、任务中止 |
+| ALIVE → OBSERVING | 玩家死亡/判死（事件主路径）/ 主动切换（下班/换角色） | 状态写观察模式（OBSERVING）+ 复活冷却标记；在线死亡强制旁观者模式，复活后传送回死亡地点（尸体旁旁观，不改变出生点）；右下角 HUD 套用「观察者/观察模式/不适用」 |
+| DEAD → ALIVE | 复活波/招募部署（复活波/FORCE_PICK 无视冷却强制复活） | 同 OBSERVING→ALIVE |
 
 非法迁移（如 DEAD→OBSERVING）一律拒绝并日志 WARN。冷却不构成独立状态（由 `cooldownUntil` 派生），
 但刷新池选人时作为过滤条件。
+
+**死亡 → 观察模式（P4 运行时主路径，不走 StatusMachine 的 DEAD 分支）**：死亡事件（handle）直接把 ALIVE 写为
+OBSERVING + 复活冷却标记（不可自部署，等冷却结束或复活波/FORCE_PICK 强制复活）；轮询兜底（每 5 秒）把旧存档残留的
+DEAD 归一化为观察者（保留冷却标记）。两路双保险保证死亡后角色一定是观察模式。结算（死亡/断联/退役）完成后
+再次强制刷成观察者身份；观察者身份自动刷成旁观者模式（每 2 秒轮询兜底：未部署玩家强制旁观，防漂移回生存）。
 
 ## 3. Corpse 联动（可选依赖）
 - 探测：`ModList.get().isLoaded("corpse")`；存在 → `CorpseBridge`：

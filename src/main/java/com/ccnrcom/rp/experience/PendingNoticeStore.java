@@ -44,20 +44,32 @@ public final class PendingNoticeStore {
         save();
     }
 
-    /** 取出并移除该玩家的全部挂起通知（Object[]={key, String[] args}）。 */
+    /** 取出并移除该玩家的全部挂起通知（Object[]={key, String[] args}）；键存在但为坏值（非数组）也一并清除。 */
     public List<Object[]> drain(String playerUuid) {
         List<Object[]> out = new ArrayList<>();
-        if (root.has(playerUuid) && root.get(playerUuid).isJsonArray()) {
-            for (var e : root.getAsJsonArray(playerUuid)) {
-                if (e.isJsonObject()) {
+        if (root.has(playerUuid)) {
+            if (root.get(playerUuid).isJsonArray()) {
+                for (var e : root.getAsJsonArray(playerUuid)) {
+                    if (!e.isJsonObject()) {
+                        continue;
+                    }
                     JsonObject n = e.getAsJsonObject();
-                    String key = n.has("key") ? n.get("key").getAsString() : "";
+                    String key = "";
+                    try {
+                        key = n.has("key") ? n.get("key").getAsString() : "";
+                    } catch (Exception ignored) {
+                        key = "";
+                    }
                     String[] args = new String[0];
                     if (n.has("args") && n.get("args").isJsonArray()) {
                         JsonArray a = n.getAsJsonArray("args");
                         args = new String[a.size()];
                         for (int i = 0; i < args.length; i++) {
-                            args[i] = a.get(i).getAsString();
+                            try {
+                                args[i] = a.get(i).getAsString();
+                            } catch (Exception ignored) {
+                                args[i] = "";
+                            }
                         }
                     }
                     out.add(new Object[] {key, args});

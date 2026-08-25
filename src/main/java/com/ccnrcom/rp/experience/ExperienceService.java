@@ -5,8 +5,6 @@
 package com.ccnrcom.rp.experience;
 
 import com.ccnrcom.rp.CCNRRPMod;
-import com.ccnrcom.rp.character.CharacterData;
-import com.ccnrcom.rp.character.CharacterService;
 import com.ccnrcom.rp.config.CCNRRPConfig;
 import com.ccnrcom.rp.experience.SettlementCalcs.EvacuationMethod;
 import com.ccnrcom.rp.experience.SettlementCalcs.Result;
@@ -14,6 +12,7 @@ import com.ccnrcom.rp.experience.SettlementCalcs.Weights;
 import com.ccnrcom.rp.network.RpChannels;
 import com.ccnrcom.rp.network.RpPackets;
 import com.ccnrcom.rp.status.CharacterStatus;
+import com.ccnrcom.rp.user.UserService;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.server.MinecraftServer;
@@ -24,11 +23,18 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 /**
- * 经验服务（P5）：值班时间累加 / 任务登记 / 疏散裁定 / 命令结算（增量幂等）。
+ * 经验服务（P5，v2 按用户结算）：值班时间累加 / 任务登记 / 疏散裁定 / 命令结算（增量幂等）。
  * 结算 = (dutyNow - ledger.duty) * rate + (taskNow - ledger.taskXp) + evacXp（每人每局一次）。
+ * 经验随用户走：结算直接写入 UserService.UserProfile。
  */
 public final class ExperienceService {
     private static final Logger LOGGER = LogManager.getLogger();
+
+    /** 一条结算明细（key + 带符号值 + 展示参数）。 */
+    public record SettleLine(String key, long value, String[] args) {}
+
+    /** 一次用户结算的汇总结果。 */
+    public record SettleSummary(long totalXp, int newLevel, List<SettleLine> lines) {}
 
     private final MinecraftServer server;
     private final LedgerStore ledger;
@@ -46,93 +52,63 @@ public final class ExperienceService {
         return ledger;
     }
 
-    /** 值班时间累加（ALIVE 角色每秒 +1）。 */
+    /** 值班时间累加（ALIVE 用户每秒 +1，写入 UserProfile）。 */
     @SubscribeEvent
     public void onServerTick(TickEvent.ServerTickEvent event) {
-        if (event.phase != TickEvent.Phase.END || CCNRRPMod.characters == null) {
+        if (event.phase != TickEvent.Phase.END || CCNRRPMod.users == null) {
             return;
         }
         if (++tickCounter < 20) {
             return;
         }
         tickCounter = 0;
-        for (CharacterData c : CCNRRPMod.characters.store().all()) {
-            if (c.status() == CharacterStatus.ALIVE) {
-                CharacterData updated = c.withXpDuty(c.xp() + 0, c.dutySeconds() + 1);
-                CCNRRPMod.characters.store().update(updated);
+        UserService users = CCNRRPMod.users;
+        for (String uuid : users.uuids()) {
+            if (users.status(uuid) == CharacterStatus.ALIVE) {
+                users.setXpDuty(uuid, users.userXp(uuid), users.dutySeconds(uuid) + 1);
             }
         }
     }
 
-    /** 事件系统调用：任务行为登记（xp 可为默认值，事件定义可覆盖）。 */
-    public static void markTask(String charId, String taskId, Integer xpOverride) {
-        CharacterService svc = CCNRRPMod.characters;
-        if (svc == null || charId == null) {
+    /** 事件系统调用：任务行为登记（xp 可为默认值，事件定义可覆盖）。keyed by playerUuid。 */
+    public static void markTask(String playerUuid, String taskId, Integer xpOverride) {
+        if (CCNRRPMod.users == null || playerUuid == null) {
             return;
         }
-        svc.store().find(charId).ifPresent(c -> {
-            int xp = xpOverride != null ? xpOverride : CCNRRPConfig.XP_TASK_DEFAULT.get();
-            java.util.Map<String, Integer> tasks = new java.util.HashMap<>(c.tasks());
-            tasks.merge(taskId, xp, Integer::sum);
-            CharacterData updated = new CharacterData(
-                    c.id(),
-                    c.playerUuid(),
-                    c.name(),
-                    c.factionId(),
-                    c.professionId(),
-                    c.background(),
-                    c.skin(),
-                    c.skinHash(),
-                    c.status(),
-                    c.xp(),
-                    c.dutySeconds(),
-                    c.cooldownUntil(),
-                    tasks,
-                    c.evacuation(),
-                    c.createdAt());
-            svc.store().update(updated);
-            svc.store().save();
-        });
+        UserService users = CCNRRPMod.users;
+        int xp = xpOverride != null ? xpOverride : CCNRRPConfig.XP_TASK_DEFAULT.get();
+        java.util.Map<String, Integer> tasks = new java.util.HashMap<>(users.tasks(playerUuid));
+        tasks.merge(taskId, xp, Integer::sum);
+        users.setXpDuty(playerUuid, users.userXp(playerUuid), users.dutySeconds(playerUuid));
+        users.tasks(playerUuid).clear();
+        users.tasks(playerUuid).putAll(tasks);
+        users.save();
     }
 
-    /** 疏散裁定（管理覆盖或系统自动）。 */
-    public static void setEvacuation(String charId, EvacuationMethod method) {
-        CharacterService svc = CCNRRPMod.characters;
-        if (svc == null) {
+    /** 疏散裁定（管理覆盖或系统自动）。keyed by playerUuid。 */
+    public static void setEvacuation(String playerUuid, EvacuationMethod method) {
+        if (CCNRRPMod.users == null || playerUuid == null) {
             return;
         }
-        svc.store().find(charId).ifPresent(c -> {
-            CharacterData updated = new CharacterData(
-                    c.id(),
-                    c.playerUuid(),
-                    c.name(),
-                    c.factionId(),
-                    c.professionId(),
-                    c.background(),
-                    c.skin(),
-                    c.skinHash(),
-                    c.status(),
-                    c.xp(),
-                    c.dutySeconds(),
-                    c.cooldownUntil(),
-                    c.tasks(),
-                    method.name(),
-                    c.createdAt());
-            svc.store().update(updated);
-            svc.store().save();
-        });
+        CCNRRPMod.users.setEvacuation(playerUuid, method.name());
+        CCNRRPMod.users.save();
     }
 
-    /** 结算某角色（增量幂等）；返回结算结果文本（空 = 无角色）。 */
-    public List<String> settleCharacter(String charId, boolean notifyOwner) {
-        CharacterService svc = CCNRRPMod.characters;
-        if (svc == null) {
-            return List.of();
+    /** 在线玩家（按 uuid）；不存在返回 null。 */
+    private ServerPlayer online(String playerUuid) {
+        try {
+            return server.getPlayerList().getPlayer(java.util.UUID.fromString(playerUuid));
+        } catch (IllegalArgumentException e) {
+            return null;
         }
-        CharacterData c = svc.store().find(charId).orElse(null);
-        if (c == null) {
-            return List.of();
+    }
+
+    /** 结算某用户（增量幂等）；返回汇总（null = 用户服务未就绪）。 */
+    public SettleSummary settleUser(String playerUuid, boolean notifyOwner) {
+        if (CCNRRPMod.users == null) {
+            return null;
         }
+        UserService users = CCNRRPMod.users;
         Weights w = new Weights(
                 CCNRRPConfig.XP_DUTY_PER_SECOND.get(),
                 CCNRRPConfig.XP_TASK_DEFAULT.get(),
@@ -140,17 +116,20 @@ public final class ExperienceService {
                 CCNRRPConfig.XP_EVAC_DIED.get(),
                 CCNRRPConfig.XP_EVAC_OBSERVING.get(),
                 CCNRRPConfig.XP_EVAC_STAY_BEHIND.get());
-        long dutyDelta = c.dutySeconds() - ledger.dutySeconds(charId);
-        int taskSum = c.tasks().values().stream().mapToInt(Integer::intValue).sum();
-        int taskDelta = taskSum - ledger.taskXp(charId);
+        long dutyNow = users.dutySeconds(playerUuid);
+        long dutyDelta = dutyNow - ledger.dutySeconds(playerUuid);
+        int taskSum = users.tasks(playerUuid).values().stream()
+                .mapToInt(Integer::intValue)
+                .sum();
+        int taskDelta = taskSum - ledger.taskXp(playerUuid);
         EvacuationMethod evac = EvacuationMethod.NONE;
         try {
-            evac = EvacuationMethod.valueOf(c.evacuation());
+            evac = EvacuationMethod.valueOf(users.evacuation(playerUuid));
         } catch (Exception ignored) {
             evac = EvacuationMethod.NONE;
         }
-        boolean evacFirstTime = evac != EvacuationMethod.NONE && !ledger.evacSettled(charId);
-        if (!evacFirstTime) {
+        boolean evacFirst = evac != EvacuationMethod.NONE && !ledger.evacSettled(playerUuid);
+        if (!evacFirst) {
             evac = EvacuationMethod.NONE;
         }
         if (dutyDelta < 0) {
@@ -161,63 +140,115 @@ public final class ExperienceService {
         }
         Result r = SettlementCalcs.calculate(dutyDelta, taskDelta, evac, w);
         LevelCurve curve = new LevelCurve(CCNRRPConfig.LEVEL_BASE.get(), CCNRRPConfig.LEVEL_POW.get());
-        int before = curve.level(c.xp());
-        long newXp = c.xp() + r.totalXp();
-        int after = curve.level(newXp);
+        long before = users.userXp(playerUuid);
+        long newXp = users.addXp(playerUuid, r.totalXp());
+        int newLevel = curve.level(newXp);
 
-        CharacterData updated = new CharacterData(
-                c.id(),
-                c.playerUuid(),
-                c.name(),
-                c.factionId(),
-                c.professionId(),
-                c.background(),
-                c.skin(),
-                c.skinHash(),
-                c.status(),
-                newXp,
-                c.dutySeconds(),
-                c.cooldownUntil(),
-                c.tasks(),
-                c.evacuation(),
-                c.createdAt());
-        svc.store().update(updated);
-        svc.store().save();
-        ledger.setDutySeconds(charId, c.dutySeconds());
-        ledger.setTaskXp(charId, taskSum);
-        if (evacFirstTime) {
-            ledger.setEvacSettled(charId, true);
+        // 结算顺序（统一流程）：ledger 基线（防重复）→ 用户经验落盘 → 用户档案复位
+        ledger.setDutySeconds(playerUuid, dutyNow);
+        ledger.setTaskXp(playerUuid, taskSum);
+        if (evacFirst) {
+            ledger.setEvacSettled(playerUuid, true);
         }
         ledger.save();
 
-        ServerPlayer owner = server.getPlayerList().getPlayer(java.util.UUID.fromString(c.playerUuid()));
+        // 用户档案：同步 xp/duty，疏散裁定重置（每局重新发放）
+        users.setXpDuty(playerUuid, newXp, dutyNow);
+        if (evacFirst) {
+            users.setEvacuation(playerUuid, "none");
+        }
+        users.save();
+
+        ServerPlayer owner = online(playerUuid);
         if (owner != null) {
-            RpChannels.sendTo(owner, new RpPackets.XpUpdateS2C(charId, newXp, after));
+            RpChannels.sendTo(owner, new RpPackets.UserXpS2C(newXp, newLevel));
         }
-        if (after > before) {
-            com.ccnrcom.rp.animation.AnimationHooks.levelUp(owner, after);
+
+        List<SettleLine> lines = new ArrayList<>();
+        lines.add(new SettleLine("duty", r.dutyXp(), new String[] {String.valueOf(dutyDelta)}));
+        if (r.taskXp() != 0) {
+            lines.add(new SettleLine("task", r.taskXp(), new String[] {String.valueOf(taskDelta)}));
         }
-        return List.of(
-                charId,
-                String.valueOf(r.totalXp()),
-                String.valueOf(newXp),
-                String.valueOf(after),
-                String.valueOf(r.dutyXp()),
-                String.valueOf(r.taskXp()),
-                String.valueOf(r.evacXp()));
+        if (r.evacXp() != 0) {
+            lines.add(new SettleLine("evac", r.evacXp(), new String[] {evac.name()}));
+        }
+        if (owner != null) {
+            submitLines(owner, new SettleSummary(newXp, newLevel, lines));
+        }
+        if (curve.level(before) < newLevel) {
+            com.ccnrcom.rp.animation.AnimationHooks.levelUp(owner, newLevel);
+        }
+        return new SettleSummary(newXp, newLevel, lines);
     }
 
-    /** 死亡/断联/退役落定：结算该角色并把明细发给拥有者（离线则挂起，上线补发）。 */
-    public void settleForDown(CharacterData c, ServerPlayer ownerOrNull, String resultKey) {
-        List<String> v = settleCharacter(c.id(), true);
-        if (v.isEmpty()) {
+    /** 把结算明细下发为 XpLinesS2C（每行 "sign|value|key|args"）。 */
+    private void submitLines(ServerPlayer owner, SettleSummary s) {
+        String[] lines = s.lines().stream().map(ExperienceService::lineString).toArray(String[]::new);
+        RpChannels.sendTo(owner, new RpPackets.XpLinesS2C(lines));
+    }
+
+    private static String lineString(SettleLine l) {
+        String sign = l.value() >= 0 ? "+" : "-";
+        StringBuilder sb = new StringBuilder();
+        sb.append(sign)
+                .append('|')
+                .append(Math.abs(l.value()))
+                .append('|')
+                .append("ccnr_rp.xp.line.")
+                .append(l.key());
+        if (l.args() != null && l.args().length > 0) {
+            sb.append('|').append(String.join(",", l.args()));
+        } else {
+            sb.append('|');
+        }
+        return sb.toString();
+    }
+
+    /** 征召兵死亡结算：与普通用户死亡走同一流程（settleUserDown）。只把征召执勤时长并入用户档案执勤，交给统一结算函数。 */
+    public void settleConscriptDeath(String playerUuid, ServerPlayer ownerOrNull, long conscriptDuty) {
+        if (CCNRRPMod.users == null || conscriptDuty <= 0) {
             return;
         }
-        String[] args = {c.name(), v.get(1), v.get(4), v.get(5), v.get(6), v.get(2), v.get(3)};
-        if (ownerOrNull != null) {
-            RpChannels.sendTo(ownerOrNull, new RpPackets.ErrorS2C(resultKey, args));
-        } else {
-            pending.store(c.playerUuid(), resultKey, args);
+        // 征召执勤时长并入用户档案，随后与普通死亡完全相同的流程（同函数、同逐行绿/红链路）
+        long duty = CCNRRPMod.users.dutySeconds(playerUuid) + conscriptDuty;
+        CCNRRPMod.users.setXpDuty(playerUuid, CCNRRPMod.users.userXp(playerUuid), duty);
+        settleUserDown(playerUuid, ownerOrNull, "ccnr_rp.xp.settle.death");
+    }
+
+    /** 死亡/断联/退役落定：结算该用户并把明细发给拥有者（离线则挂起，上线补发）。 */
+    public void settleUserDown(String playerUuid, ServerPlayer ownerOrNull, String resultKey) {
+        SettleSummary s = settleUser(playerUuid, true);
+        if (s == null) {
+            return;
+        }
+        // 结算完成后强制刷成观察者身份（防任何路径残留非观察状态）
+        if (CCNRRPMod.users != null && CCNRRPMod.users.status(playerUuid) != CharacterStatus.OBSERVING) {
+            CCNRRPMod.users.setStatus(playerUuid, CharacterStatus.OBSERVING);
+            CCNRRPMod.users.save();
+        }
+        long dutyXp = 0;
+        long taskXp = 0;
+        long evacXp = 0;
+        for (SettleLine l : s.lines()) {
+            switch (l.key()) {
+                case "duty" -> dutyXp = l.value();
+                case "task" -> taskXp = l.value();
+                case "evac" -> evacXp = l.value();
+                default -> {}
+            }
+        }
+        String[] args = {
+            String.valueOf(s.totalXp()),
+            String.valueOf(dutyXp),
+            String.valueOf(taskXp),
+            String.valueOf(evacXp),
+            String.valueOf(s.totalXp()),
+            String.valueOf(s.newLevel())
+        };
+        // 在线：已由 settleUser 下发逐行 XpLinesS2C（右下角逐行红/绿显示），不再发旧汇总聊天气泡。
+        // 离线：挂起，登录补发（flushPending）。
+        if (ownerOrNull == null) {
+            pending.store(playerUuid, resultKey, args);
         }
     }
 
@@ -228,12 +259,19 @@ public final class ExperienceService {
         }
     }
 
-    /** 结算全部（all）或单个玩家。 */
-    public List<List<String>> settleAll(String playerUuidOrNull) {
-        List<List<String>> results = new ArrayList<>();
-        for (CharacterData c : CCNRRPMod.characters.store().all()) {
-            if (playerUuidOrNull == null || c.playerUuid().equals(playerUuidOrNull)) {
-                results.add(settleCharacter(c.id(), true));
+    /** 结算全部（all）或单个玩家；单条坏档异常隔离，不阻塞整批。 */
+    public List<SettleSummary> settleAll(String playerUuidOrNull) {
+        List<SettleSummary> results = new ArrayList<>();
+        if (CCNRRPMod.users == null) {
+            return results;
+        }
+        for (String uuid : CCNRRPMod.users.uuids()) {
+            if (playerUuidOrNull == null || uuid.equals(playerUuidOrNull)) {
+                try {
+                    results.add(settleUser(uuid, false));
+                } catch (Exception ex) {
+                    LOGGER.error("[CCNR-RP] 结算失败（跳过该用户，不影响整批）: {}", uuid, ex);
+                }
             }
         }
         return results;
