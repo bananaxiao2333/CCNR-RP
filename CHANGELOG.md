@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.2.0（部署前清空背包：防止死亡/观察期间遗留物品带进新岗位）
+- 统一部署核心 applyDeployCore 在发放职位装备前先清空玩家背包/护甲/副手（0-40 槽），
+  覆盖自部署/复活波/强制征召/管理员部署全部路径（都汇入 deploy()）。
+- 构建：compileJava / spotlessCheck / test -PrunTests 全绿。
+
 ## 2.1.0（统一部署/退场/结算管道：一个函数 + 行为 flag，删除征召分支文案）
 - **唯一部署入口 deploy()**：自部署 / 管理员刷人 / 复活波 / 强制征召 / 手动部署全部收敛为 SpawnFramework.deploy(player, professionId, wave, Set<DeployFlag>)；
   行为差异由 DeployFlag 控制（SKIP_CINEMATIC 取消开局黑屏 / FORCE_DEPLOY 强制部署不论存活 / NO_MUSIC 关闭部署音乐 / QUIET 不刷提示 / TEMP 临时征召身份），

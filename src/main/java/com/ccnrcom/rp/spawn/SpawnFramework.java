@@ -368,6 +368,8 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
             Wave wave,
             boolean cinematic,
             boolean musicOn) {
+        // 部署前清空背包（含护甲/副手）：防止死亡/观察期间遗留物品带进新岗位
+        clearInventory(p);
         if (CCNRRPMod.factions != null) {
             CCNRRPMod.factions.findProfession(professionId).ifPresent(def -> {
                 LoadoutManager.apply(p, FactionProfessions.loadout(def));
@@ -425,6 +427,14 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
             }
         } catch (Exception ex) {
             LOGGER.warn("[CCNR-RP] 入场电影数据异常，跳过动画", ex);
+        }
+    }
+
+    /** 清空玩家背包/护甲/副手（部署前防遗留物品）。 */
+    private static void clearInventory(ServerPlayer p) {
+        net.minecraft.world.entity.player.Inventory inv = p.getInventory();
+        for (int i = 0; i < 41; i++) { // 0-35 背包 + 36-39 护甲 + 40 副手
+            inv.setItem(i, net.minecraft.world.item.ItemStack.EMPTY);
         }
     }
 
