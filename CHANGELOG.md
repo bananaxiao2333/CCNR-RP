@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.3.0（观察者拾取拦截：better_looting 等模组绕过旁观模式拾取的修复）
+- StatusManager 新增 EntityItemPickupEvent 监听：观察者（无在场身份的用户）一律取消拾取事件。
+  原版旁观者模式本身不能拾取，但 better_looting-1.20.1-forge-2.1.1-hotfix 会绕过游戏模式判断直接给物品；
+  Forge 拾取事件层统一取消，覆盖所有拾取来源。
+- 构建：compileJava / spotlessCheck / test -PrunTests 全绿。
+
 ## 2.2.0（部署前清空背包：防止死亡/观察期间遗留物品带进新岗位）
 - 统一部署核心 applyDeployCore 在发放职位装备前先清空玩家背包/护甲/副手（0-40 槽），
   覆盖自部署/复活波/强制征召/管理员部署全部路径（都汇入 deploy()）。

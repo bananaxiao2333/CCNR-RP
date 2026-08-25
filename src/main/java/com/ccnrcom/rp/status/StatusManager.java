@@ -20,6 +20,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.GameType;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
+import net.minecraftforge.event.entity.player.EntityItemPickupEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import org.apache.logging.log4j.LogManager;
@@ -211,6 +212,23 @@ public final class StatusManager {
                     CCNRRPMod.users.isAlive(uuid) || com.ccnrcom.rp.sequence.SequenceEngine.isConscripted(uuid);
             if (!deployed && p.gameMode.getGameModeForPlayer() != GameType.SPECTATOR) {
                 p.setGameMode(GameType.SPECTATOR);
+            }
+        }
+    }
+
+    /**
+     * 观察者拾取拦截：观察者（无在场身份的用户）禁止拾取任何物品实体。
+     * 原版旁观者模式本身不能拾取，但部分模组（如 better_looting）会绕过游戏模式判断直接给物品，
+     * 这里在 Forge 拾取事件层统一取消，覆盖所有拾取来源。
+     */
+    @SubscribeEvent
+    public void onEntityItemPickup(EntityItemPickupEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player && CCNRRPMod.users != null) {
+            String uuid = player.getUUID().toString();
+            boolean deployed =
+                    CCNRRPMod.users.isAlive(uuid) || com.ccnrcom.rp.sequence.SequenceEngine.isConscripted(uuid);
+            if (!deployed) {
+                event.setCanceled(true); // 观察者不可拾取（含 better_looting 等模组的拾取路径）
             }
         }
     }
