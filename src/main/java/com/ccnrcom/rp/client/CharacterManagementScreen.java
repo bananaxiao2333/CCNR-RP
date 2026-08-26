@@ -267,6 +267,11 @@ public class CharacterManagementScreen extends Screen {
         if (super.mouseClicked(mx, my, button)) {
             return true;
         }
+        // 标题栏 ✕：点击关闭（悬停只高亮，不关闭）
+        if (mx >= px2 - 28 && mx <= px2 - 10 && my >= hdrY1 - 1 && my <= hdrY1 + 17) {
+            onClose();
+            return true;
+        }
         // 管理按钮
         if (mx >= mgrX1 && mx <= mgrX2 && my >= mgrY1 && my <= mgrY2) {
             if (ClientCharacterState.isAdmin()) {
@@ -431,9 +436,7 @@ public class CharacterManagementScreen extends Screen {
             g.fill(px2 - 30, hdrY1 - 2, px2 - 8, hdrY1 + 18, 0xE66F1613);
         }
         g.drawString(font, "X", px2 - 20, hdrY1 + 4, hover ? 0xFFFFFFFF : RpTheme.TEXT_SECONDARY, true);
-        if (hover && mx >= px2 - 28 && mx <= px2 - 10 && my >= hdrY1 - 1 && my <= hdrY1 + 17) {
-            onClose();
-        }
+        // 关闭由 mouseClicked 处理（点击才关；悬停只高亮，不关闭）
     }
 
     private void renderColHeaders(GuiGraphics g) {
