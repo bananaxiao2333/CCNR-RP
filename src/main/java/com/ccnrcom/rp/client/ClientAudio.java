@@ -4,8 +4,11 @@
  */
 package com.ccnrcom.rp.client;
 
+import java.io.ByteArrayInputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Locale;
+import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.Clip;
@@ -14,8 +17,11 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 /**
- * 客户端配置音乐播放器：出场音乐（WAV）。相对路径 = 服务器下发的素材（自动下载缓存）；
+ * 客户端配置音乐播放器：出场音乐（OGG 为主，兼容 WAV）。相对路径 = 服务器下发的素材（自动下载缓存）；
  * 绝对路径 = 启动程序/启动器指定（本地媒体，优先级最高）。play() 60 秒后淡出（1.5s）。
+ *
+ * <p>javax.sound 原生不支持 OGG（Minecraft SoundEngine 支持，但那是资源包/音效系统，不适用动态下载的
+ * 配置文件音乐）；OGG 用内嵌的 jorbis（纯 Java 解码）转为 PCM 后走同一 Clip 播放。
  */
 public final class ClientAudio {
     private static final Logger LOGGER = LogManager.getLogger();
@@ -48,7 +54,7 @@ public final class ClientAudio {
         Thread t = new Thread(
                 () -> {
                     try {
-                        try (AudioInputStream in = AudioSystem.getAudioInputStream(p.toFile())) {
+                        try (AudioInputStream in = openAudio(p)) {
                             Clip clip = AudioSystem.getClip();
                             clip.open(in);
                             synchronized (ClientAudio.class) {
@@ -77,6 +83,29 @@ public final class ClientAudio {
         t.setDaemon(true);
         activeThread = t;
         t.start();
+    }
+
+    /** OGG 用 jorbis 解码为 PCM（javax.sound 不原生支持 OGG）；其余格式（WAV/AIFF 等）走 AudioSystem。 */
+    private static AudioInputStream openAudio(Path p) throws Exception {
+        if (p.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".ogg")) {
+            return decodeOgg(p);
+        }
+        return AudioSystem.getAudioInputStream(p.toFile());
+    }
+
+    /** jorbis 解码 OGG → 16bit 小端 PCM AudioInputStream（整段解码到内存，播放逻辑与 WAV 一致）。 */
+    private static AudioInputStream decodeOgg(Path p) throws Exception {
+        com.jcraft.jorbis.VorbisFile vf = new com.jcraft.jorbis.VorbisFile(Files.newInputStream(p), null, 0);
+        try {
+            Object[] r = com.jcraft.jorbis.OggPcm.decodeAll(vf);
+            byte[] raw = (byte[]) r[0];
+            int channels = (Integer) r[1];
+            int rate = (Integer) r[2];
+            AudioFormat fmt = new AudioFormat((float) rate, 16, channels, true, true); // signed + little-endian
+            return new AudioInputStream(new ByteArrayInputStream(raw), fmt, raw.length / fmt.getFrameSize());
+        } finally {
+            vf.close();
+        }
     }
 
     private static boolean same(Clip clip) {

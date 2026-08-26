@@ -60,6 +60,8 @@ dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
     // Mixin 注解处理器（InventoryObserverMixin：观察者禁止入包）
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+    // OGG Vorbis 解码（纯 Java；javax.sound 不原生支持 OGG，音乐上传/存储已切 OGG）——libs/ 模式（同 corpse）
+    compileOnly fileTree(dir: 'libs', include: 'jorbis-*.jar')
 
     // Corpse（henkelmax，Forge 1.20.1）——可选联动依赖，仅编译期；
     // 运行时玩家可自行安装；未安装时模组降级为原生死亡处理。
@@ -73,6 +75,11 @@ dependencies {
 
 jar {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    // 内嵌 jorbis（OGG 解码）类文件，产出自包含单 jar（与 corpse 同 libs/ 模式）
+    from(fileTree(dir: 'libs', include: 'jorbis-*.jar').collect { zipTree(it) }) {
+        exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA', 'META-INF/maven/**', 'META-INF/versions/**'
+    }
 
     manifest {
         attributes([

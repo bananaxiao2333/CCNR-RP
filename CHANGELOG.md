@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.14.3（音乐格式全面切换 OGG：WAV 体积过大弃用）
+- 上传/存储/清单：config/ccnr_rp/audio/*.wav → *.ogg（OggS 魔数校验；AssetLibrary 清单同切 .ogg）。
+- 播放：javax.sound 不原生支持 OGG——内嵌 jorbis（纯 Java Vorbis 解码）转为 PCM 后走同一 Clip 播放
+  （淡出/音量逻辑不变；兼容 WAV/AIFF 走 AudioSystem）。
+- 管理面板文案/语言包/单测同步 .ogg；新增 scripts/convert-music-to-ogg.sh（oggenc/libvorbis 自动探测）
+  供服务端把既有 WAV 批量转 OGG；转换后客户端按清单哈希自动下载 OGG。
+- 构建：compileJava / spotlessCheck / test -PrunTests 全绿。
+
 ## 2.14.2（观察者拾取真正禁止：Inventory.add mixin）
 - 上版（2.14.1）用 PlayerEvent.ItemPickupEvent 事后取回——better_looting 忽略 add 返回值、批拾取每次都会
   触发物理化模组（ItemPhysic）动画，反复拾取/掉落导致物品在地上「跳舞」。

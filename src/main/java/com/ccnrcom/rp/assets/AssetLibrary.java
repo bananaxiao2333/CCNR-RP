@@ -19,7 +19,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 /**
- * 素材库（服务端权威）：config/ccnr_rp/audio/*.wav（音乐）与 config/ccnr_rp/textures/*.png（阵营图标）。
+ * 素材库（服务端权威）：config/ccnr_rp/audio/*.ogg（音乐）与 config/ccnr_rp/textures/*.png（阵营图标）。
  * 全部素材由服务器控制：客户端按清单（AssetManifestS2C）对比本地缓存，缺失/变更时逐个请求下载
  * （AssetRequestC2S → AssetPartS2C 分片），播放/渲染一律使用服务器下发版本。
  */
@@ -28,9 +28,9 @@ public final class AssetLibrary {
 
     /** 分片大小（与皮肤/音乐上传一致）。 */
     public static final int PART_SIZE = 32 * 1024;
-    /** 素材名：字母/数字/下划线/连字符 ≤64 字符，.wav（音乐）或 .png（图标）。 */
+    /** 素材名：字母/数字/下划线/连字符 ≤64 字符，.ogg（音乐）或 .png（图标）。 */
     private static final java.util.regex.Pattern NAME_PATTERN =
-            java.util.regex.Pattern.compile("[A-Za-z0-9_-]{1,64}\\.(wav|png)");
+            java.util.regex.Pattern.compile("[A-Za-z0-9_-]{1,64}\\.(ogg|png)");
     /** 内嵌默认阵营图标（首次启动写入服务器素材目录，保证 img: 图标开箱可用且受服务器控制）。 */
     private static final String[] DEFAULT_ICONS = {"admin_hq", "madison"};
     /** 同步完成确认超时（毫秒）：超时自动放行部署，防老客户端/异常永久锁死。 */
@@ -86,13 +86,13 @@ public final class AssetLibrary {
         }
     }
 
-    /** 素材文件列表：audio/*.wav + textures/*.png。 */
+    /** 素材文件列表：audio/*.ogg + textures/*.png。 */
     private static List<Path> files() {
         List<Path> out = new ArrayList<>();
         try {
             if (Files.isDirectory(audioDir())) {
                 try (var s = Files.list(audioDir())) {
-                    s.filter(p -> p.getFileName().toString().endsWith(".wav")).forEach(out::add);
+                    s.filter(p -> p.getFileName().toString().endsWith(".ogg")).forEach(out::add);
                 }
             }
         } catch (Exception ignored) {
