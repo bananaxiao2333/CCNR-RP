@@ -242,6 +242,11 @@ public final class RpChannels {
                 .decoder(RpPackets.FactionGraphOpenS2C::new)
                 .consumerNetworkThread(RpPackets.FactionGraphOpenS2C::handle)
                 .add();
+        CHANNEL.messageBuilder(RpPackets.RelationEditC2S.class, id++, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(RpPackets.RelationEditC2S::encode)
+                .decoder(RpPackets.RelationEditC2S::new)
+                .consumerNetworkThread(RpPackets.RelationEditC2S::handle)
+                .add();
     }
 
     public static void sendTo(ServerPlayer player, Object msg) {

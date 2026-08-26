@@ -243,6 +243,162 @@ public final class FactionManager {
                         && to.get(0).equals(a));
     }
 
+    /**
+     * 关系规则 CRUD（管理面板 RelationEditC2S 服务端入口）：payload = {action, rule?{from,to,type}}。
+     * action: add / update / remove。update 与 remove 按 from/to 列表集合匹配定位（方向对称）。
+     * 返回错误列表（空 = 成功）。
+     */
+    public static void onRelationEdit(net.minecraft.server.level.ServerPlayer player, String payload) {
+        if (player == null || com.ccnrcom.rp.CCNRRPMod.factions == null) {
+            return;
+        }
+        if (!com.ccnrcom.rp.util.Permissions.canAdmin(player, com.ccnrcom.rp.util.Permissions.ADMIN_FACTION)) {
+            com.ccnrcom.rp.network.RpChannels.sendTo(
+                    player, new com.ccnrcom.rp.network.RpPackets.ErrorS2C("ccnr_rp.command.no_permission"));
+            return;
+        }
+        JsonObject req = null;
+        try {
+            req = JsonUtil.GSON.fromJson(payload, JsonObject.class);
+        } catch (Exception ignored) {
+            // 解析失败按空载荷处理
+        }
+        if (req == null) {
+            com.ccnrcom.rp.network.RpChannels.sendTo(
+                    player, new com.ccnrcom.rp.network.RpPackets.ErrorS2C("ccnr_rp.error.invalid_argument", "载荷为空"));
+            return;
+        }
+        String action = str(req, "action", "");
+        List<String> errors;
+        if ("remove".equals(action)) {
+            errors = com.ccnrcom.rp.CCNRRPMod.factions.removeRelation(req);
+        } else if ("add".equals(action) || "update".equals(action)) {
+            errors = com.ccnrcom.rp.CCNRRPMod.factions.upsertRelation(req);
+        } else {
+            errors = List.of("未知操作: " + action);
+        }
+        if (errors.isEmpty()) {
+            com.ccnrcom.rp.network.RpChannels.sendTo(
+                    player, new com.ccnrcom.rp.network.RpPackets.ErrorS2C("ccnr_rp.faction.relation.saved"));
+        } else {
+            for (String e2 : errors) {
+                com.ccnrcom.rp.network.RpChannels.sendTo(
+                        player, new com.ccnrcom.rp.network.RpPackets.ErrorS2C("ccnr_rp.faction.error.config", e2));
+            }
+        }
+    }
+
+    /** 新增或更新一条多对多关系规则（按 from/to 列表集合匹配，方向对称）；返回错误列表（空=成功）。 */
+    public List<String> upsertRelation(JsonObject rule) {
+        List<String> errors = new ArrayList<>();
+        List<String> from = idList(rule.get("from"));
+        List<String> to = rule.has("to") ? idList(rule.get("to")) : from;
+        RelationType type = RelationType.parse(str(rule, "type", ""));
+        if (from.isEmpty() || to.isEmpty()) {
+            return List.of("from/to 不能为空");
+        }
+        if (type == null) {
+            return List.of("无效关系类型");
+        }
+        for (String s : from) {
+            if (!hasFactionOrGroup(s)) {
+                errors.add("未知的 from 项: " + s);
+            }
+        }
+        for (String s : to) {
+            if (!hasFactionOrGroup(s)) {
+                errors.add("未知的 to 项: " + s);
+            }
+        }
+        if (!errors.isEmpty()) {
+            return errors;
+        }
+        JsonObject candidate = root.deepCopy();
+        JsonArray relations = candidate.has("relations") ? candidate.getAsJsonArray("relations") : new JsonArray();
+        candidate.add("relations", relations);
+        boolean replaced = false;
+        for (int i = 0; i < relations.size(); i++) {
+            if (matchesLists(relations.get(i).getAsJsonObject(), from, to)) {
+                JsonObject o = relations.get(i).getAsJsonObject();
+                o.remove("from");
+                o.remove("to");
+                JsonArray fa = new JsonArray();
+                from.forEach(fa::add);
+                JsonArray ta = new JsonArray();
+                to.forEach(ta::add);
+                o.add("from", fa);
+                o.add("to", ta);
+                o.addProperty("type", type.name().toLowerCase(java.util.Locale.ROOT));
+                replaced = true;
+                break;
+            }
+        }
+        if (!replaced) {
+            JsonObject o = new JsonObject();
+            JsonArray fa = new JsonArray();
+            from.forEach(fa::add);
+            JsonArray ta = new JsonArray();
+            to.forEach(ta::add);
+            o.add("from", fa);
+            o.add("to", ta);
+            o.addProperty("type", type.name().toLowerCase(java.util.Locale.ROOT));
+            relations.add(o);
+        }
+        ParseResult result = parse(candidate);
+        if (!result.success()) {
+            return result.errors();
+        }
+        JsonUtil.atomicWrite(file, candidate);
+        this.root = candidate;
+        this.graph = result.graph();
+        return List.of();
+    }
+
+    /** 删除关系规则（按 from/to 列表集合匹配，方向对称）；返回错误列表（空=成功）。 */
+    public List<String> removeRelation(JsonObject rule) {
+        List<String> from = idList(rule.get("from"));
+        List<String> to = rule.has("to") ? idList(rule.get("to")) : from;
+        JsonObject candidate = root.deepCopy();
+        JsonArray relations = candidate.has("relations") ? candidate.getAsJsonArray("relations") : new JsonArray();
+        boolean removed = false;
+        for (int i = 0; i < relations.size(); i++) {
+            if (matchesLists(relations.get(i).getAsJsonObject(), from, to)) {
+                relations.remove(i);
+                removed = true;
+                break;
+            }
+        }
+        if (!removed) {
+            return List.of("未找到该关系规则");
+        }
+        ParseResult result = parse(candidate);
+        if (!result.success()) {
+            return result.errors();
+        }
+        JsonUtil.atomicWrite(file, candidate);
+        this.root = candidate;
+        this.graph = result.graph();
+        return List.of();
+    }
+
+    /** 关系条目是否声明了相同的 from/to 列表集合（方向对称）。 */
+    private static boolean matchesLists(JsonObject o, List<String> from, List<String> to) {
+        List<String> of = idList(o.get("from"));
+        List<String> ot = idList(o.get("to"));
+        return sameSet(of, from) && sameSet(ot, to) || sameSet(of, to) && sameSet(ot, from);
+    }
+
+    private static boolean sameSet(List<String> a, List<String> b) {
+        if (a.size() != b.size()) {
+            return false;
+        }
+        List<String> sa = new ArrayList<>(a);
+        List<String> sb = new ArrayList<>(b);
+        java.util.Collections.sort(sa);
+        java.util.Collections.sort(sb);
+        return sa.equals(sb);
+    }
+
     /** 创建阵营组并落盘。 */
     public List<String> createGroup(String id, List<String> members) {
         if (graph.factions().containsKey(id) || graph.groups().containsKey(id)) {

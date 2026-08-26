@@ -894,6 +894,30 @@ public final class RpPackets {
         }
     }
 
+    /** 关系规则编辑（C2S）：{action: add|update|remove, rule: {from[],to?,type}}；服务端校验+落盘+回执。 */
+    public static final class RelationEditC2S {
+        public final String payload;
+
+        public RelationEditC2S(String payload) {
+            this.payload = payload;
+        }
+
+        public RelationEditC2S(FriendlyByteBuf buf) {
+            this(buf.readUtf(8192));
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(payload, 8192);
+        }
+
+        public static void handle(RelationEditC2S msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> com.ccnrcom.rp.faction.FactionManager.onRelationEdit(
+                            ctx.get().getSender(), msg.payload));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
     public static final class ErrorS2C {
         public final String messageKey;
         public final String[] args;

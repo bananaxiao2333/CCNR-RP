@@ -40,8 +40,16 @@ public final class FactionGraphScreen extends Screen {
     private static final int CLOSE_X = 8;
     private static final int CLOSE_Y = 8;
 
+    private final Screen parent;
+
     public FactionGraphScreen() {
+        this(Minecraft.getInstance().screen);
+    }
+
+    /** 从上层界面打开（关闭时返回该界面）；命令打开时上层为 null → 关闭回游戏。 */
+    public FactionGraphScreen(Screen parent) {
         super(Component.translatable("ccnr_rp.gui.admin.graph.title"));
+        this.parent = parent;
         buildNodes();
     }
 
@@ -136,7 +144,7 @@ public final class FactionGraphScreen extends Screen {
 
     @Override
     public void onClose() {
-        Minecraft.getInstance().setScreen(null);
+        Minecraft.getInstance().setScreen(parent); // 返回上层（管理面板/关系管理面板）；无上层则回游戏
     }
 
     @Override

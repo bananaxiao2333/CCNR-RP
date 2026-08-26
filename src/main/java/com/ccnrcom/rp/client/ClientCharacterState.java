@@ -53,6 +53,8 @@ public final class ClientCharacterState {
     private static boolean anySupportRevive = false;
     /** 关系测定图边（a↔b 生效关系；来自 CharacterListS2C 的 relations）。 */
     private static final List<JsonObject> relations = new ArrayList<>();
+    /** 原始关系规则（管理面板编辑用；来自 CharacterListS2C 的 relationRules）。 */
+    private static final List<JsonObject> relationRules = new ArrayList<>();
     /** 是否已在本连接内武装过入服自动开面板（每登录一次，防每次列表同步反复弹面板）。 */
     private static boolean autoOpenArmed = false;
     // 用户级身份（v2：删除角色实体后唯一身份）
@@ -140,6 +142,14 @@ public final class ClientCharacterState {
             for (JsonElement e : root.getAsJsonArray("relations")) {
                 if (e.isJsonObject()) {
                     relations.add(e.getAsJsonObject());
+                }
+            }
+        }
+        relationRules.clear();
+        if (root.has("relationRules") && root.get("relationRules").isJsonArray()) {
+            for (JsonElement e : root.getAsJsonArray("relationRules")) {
+                if (e.isJsonObject()) {
+                    relationRules.add(e.getAsJsonObject());
                 }
             }
         }
@@ -330,6 +340,11 @@ public final class ClientCharacterState {
     /** 关系测定图边（阵营对 + 生效类型）。 */
     public static synchronized List<JsonObject> relations() {
         return List.copyOf(relations);
+    }
+
+    /** 原始关系规则（管理面板编辑用）。 */
+    public static synchronized List<JsonObject> relationRules() {
+        return List.copyOf(relationRules);
     }
 
     /** 面板锁（v2：已取消打开限制，恒为 false，K 面板任意时刻可开）。 */

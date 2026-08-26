@@ -979,6 +979,23 @@ public final class CharacterService {
             }
         }
         root.add("relations", rela);
+        // 原始关系规则（管理面板编辑用）：{from[], to?, type}，含内部关系（省略 to）与组引用
+        JsonArray relRules = new JsonArray();
+        if (CCNRRPMod.factions != null) {
+            for (com.ccnrcom.rp.faction.FactionModels.RelationRule rr :
+                    CCNRRPMod.factions.graph().rules()) {
+                JsonObject o = new JsonObject();
+                JsonArray from = new JsonArray();
+                rr.from().forEach(from::add);
+                JsonArray to = new JsonArray();
+                rr.to().forEach(to::add);
+                o.add("from", from);
+                o.add("to", to);
+                o.addProperty("type", rr.type().name().toLowerCase(java.util.Locale.ROOT));
+                relRules.add(o);
+            }
+        }
+        root.add("relationRules", relRules);
         JsonArray pa = new JsonArray();
         if (CCNRRPMod.factions != null) {
             for (String pid : CCNRRPMod.factions.professionIds()) {
