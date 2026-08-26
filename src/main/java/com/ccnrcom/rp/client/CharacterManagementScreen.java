@@ -630,6 +630,22 @@ public class CharacterManagementScreen extends Screen {
         int contentTop = bodyY1 + 50;
         int contentBottom = deployY - 12;
         int modelW = Math.max(88, w * 38 / 100);
+        // 预览区背景阵营徽章（身份归属视觉提示，参考 t-mt8dmt3a 统一徽章封装）：
+        // 大号半透明水印徽章置于装备槽区右侧空白背景，先画背景再画内容（模型/装备槽在上层不遮挡）；
+        // 用 bigBadge(alpha) 实现半透明水印；未知阵营（无元数据）跳过。
+        JsonObject facMeta = factionMeta(str(p, "factionId"));
+        if (facMeta != null) {
+            g.enableScissor(x, contentTop, x + w, contentBottom);
+            String fIcon = facMeta.has("icon") && !facMeta.get("icon").isJsonNull()
+                    ? facMeta.get("icon").getAsString()
+                    : "hex";
+            int fTier = facMeta.has("tier") ? facMeta.get("tier").getAsInt() : 2;
+            int badgeCx = x + modelW + (w - modelW) * 3 / 4;
+            int badgeCy = contentBottom - 26;
+            int badgeR = Math.max(22, Math.min(40, (contentBottom - contentTop) / 4));
+            com.ccnrcom.rp.client.RpIcons.bigBadge(g, badgeCx, badgeCy, badgeR, fIcon, fTier, 36);
+            g.disableScissor();
+        }
         // 3D 人物立绘（使用玩家自己的皮肤，来自 CharacterPreview）
         g.enableScissor(x, contentTop, x + modelW, contentBottom);
         JsonObject ch = new JsonObject();

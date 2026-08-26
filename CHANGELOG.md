@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.17.4（身份数据库：装备预览区背景显示阵营图标）
+- K 面板（身份数据库）装备预览区（右侧 3D 模型 + 头/胸/腿/靴/枪装备槽区域）背景绘制当前职位所属阵营徽章：
+  大号半透明水印徽章（RpIcons.bigBadge alpha 水印），置于装备槽区右侧空白背景，先画背景再画内容，不遮挡模型与装备槽。
+- 复用统一徽章封装（t-mt8dmt3a）：职位 → factionId → factionMeta（icon/tier）→ factionBadge/bigBadge；未知阵营跳过。
+- scissor 限定在预览区内（不溢出到详情卡片外）。
+- 构建：spotlessApply / clean build / test -PrunTests 全绿（83 tests）。
+
 ## 2.17.3（管理面板补全增强：限制目标/刷新波职业与阵营/维度/设置职业/序列弹窗波与职业与阵营补全）
 - 限制页「目标」输入框补全：按当前类型（FACTION/PROFESSION）过滤对应阵营/职业，显示「名字(id)」，点击/回车填入原始 id；GLOBAL 无目标不触发。
 - 刷新波表单：维度（固定三主维度）、职业ID（逗号多值，追加/替换末尾词）、阵营ID（逗号多值）补全；
