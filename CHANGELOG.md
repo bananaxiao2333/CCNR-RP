@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.15.2（处决转职：在场玩家可点击部署，确认后服务端处死旧角色再部署为选定职位）
+- K 面板「部署」按钮对在场（ALIVE）玩家可用（按钮文案变「处决转职」），点击弹出确认框；
+  确认后客户端发 KillDeployC2S → 服务端先统一退场处死旧角色（状态→观察+复活冷却+遗体+死亡结算，
+  遗体 2 tick 后生成、复制旧背包与旧职位名），再延迟 1s 走统一 deploy()（清背包 → 新职位装备 → 传送 →
+  入场电影 → ALIVE，冷却清零）。
+- 服务端：CharacterService.onKillDeploy（校验在场/职位/等级）+ SpawnFramework.queueRedeploy/checkRedeploys
+  （延迟等遗体生成完再清背包，防遗体复制到空背包/新职位名）；SpawnFramework 波次选择统一为 selfDeployWave()。
+- 客户端：CharacterManagementScreen 弹窗（确认/取消，遮罩吞点击）；语言包新增 deploy_kill / kill_confirm_* /
+  spawn.error.alive_only / spawn.redeploy.started（zh/en 同步）。
+- 构建：compileJava / spotlessCheck / test -PrunTests 全绿。
+
 ## 2.15.1（管理面板「设置」页泛化：bool 开关 / string 文本输入 / 数值输入框全部可编辑）
 - 设置页按类型渲染所有配置项：settings.json 项 bool=开关行、string=文本输入行（如 firstJoinProfession），
   与 serverconfig 数值行统一滚动 + 一个保存按钮；保存按 key 分流（settings.json → ManagerSetC2S，serverconfig → ServerConfigSetC2S）。

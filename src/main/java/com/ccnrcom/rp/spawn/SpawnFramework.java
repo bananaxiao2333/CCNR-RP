@@ -67,6 +67,14 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
     /** 首次入服自动部署的最小等待（ms）：给客户端登录/素材同步留时间，避免入服瞬间抢占。 */
     private static final long FIRST_JOIN_MIN_WAIT_MS = 2_000L;
 
+    /** 处决转职待部署（professionId + 入队时刻）：处死旧角色后延迟部署，等遗体生成完再清背包/换职位。 */
+    private record RedeployPending(String professionId, long at) {}
+
+    private final Map<UUID, RedeployPending> pendingRedeploy = new HashMap<>();
+
+    /** 处决转职部署延迟（ms）：必须大于遗体生成延迟（2 tick≈100ms），让遗体先复制旧背包与旧职位名。 */
+    private static final long REDEPLOY_DELAY_MS = 1_000L;
+
     public SpawnFramework(MinecraftServer server) {
         this.server = server;
         this.recruit = new RecruitManager(this);
@@ -287,6 +295,7 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
         }
         checkPendingLandings(); // 部署落位超时兜底（每 tick，开销可忽略）
         checkFirstJoinDeploys(); // 首次入服自动部署（等素材同步后执行，每 tick 开销可忽略）
+        checkRedeploys(); // 处决转职延迟部署（等遗体生成后执行，每 tick 开销可忽略）
         int interval = Math.max(1, CCNRRPConfig.SPAWN_POLL_TICKS.get());
         if (++pollCounter < interval) {
             return;
@@ -548,6 +557,7 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
         if (event.getEntity() instanceof ServerPlayer player) {
             pendingLandings.remove(player.getUUID());
             pendingFirstJoin.remove(player.getUUID());
+            pendingRedeploy.remove(player.getUUID());
         }
     }
 
@@ -629,13 +639,7 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
         }
         String factionId = FactionProfessions.factionId(def);
         // 找用于部署的刷新波（SELF_DEPLOY/BOTH 且职位匹配）；无匹配默认世界原点
-        Wave wave = waves.stream()
-                .filter(Wave::enabled)
-                .filter(w -> w.mode().selfDeployAllowed())
-                .filter(w -> w.matchesProfession(professionId, factionId))
-                .findFirst()
-                .orElse(createDefaultSelfWave());
-        return deploy(player, professionId, wave, DeployFlag.of());
+        return deploy(player, professionId, selfDeployWave(professionId, factionId), DeployFlag.of());
     }
 
     /** 默认自部署波（世界出生点；管理刷人/无匹配波时用）。 */
@@ -809,7 +813,7 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
                 continue;
             }
             String factionId = com.ccnrcom.rp.faction.FactionProfessions.factionId(def);
-            boolean ok = deploy(p, profId, firstJoinWave(profId, factionId), DeployFlag.of());
+            boolean ok = deploy(p, profId, selfDeployWave(profId, factionId), DeployFlag.of());
             it.remove();
             LOGGER.info(
                     "[CCNR-RP] 首次入服自动部署{}: {} → {}（{}）",
@@ -820,14 +824,76 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
         }
     }
 
-    /** 首次入服部署落点：首个启用且允许自部署并匹配该职业的刷新波，否则默认自部署波（世界出生点）。 */
-    private Wave firstJoinWave(String professionId, String factionId) {
+    /** 自部署落点：首个启用且允许自部署并匹配该职业的刷新波，否则默认自部署波（世界出生点）。 */
+    private Wave selfDeployWave(String professionId, String factionId) {
         return waves.stream()
                 .filter(Wave::enabled)
                 .filter(w -> w.mode().selfDeployAllowed())
                 .filter(w -> w.matchesProfession(professionId, factionId))
                 .findFirst()
                 .orElse(createDefaultSelfWave());
+    }
+
+    // ---------- 处决转职部署 ----------
+
+    /**
+     * 处决转职部署入队（onKillDeploy 调用）：处死旧角色（统一退场，遗体 2 tick 后生成）后延迟部署，
+     * 等遗体先复制旧背包与旧职位名，再走统一 deploy()（清背包 → 新职位装备 → 传送 → 入场电影 → ALIVE）。
+     */
+    public void queueRedeploy(ServerPlayer player, String professionId) {
+        if (player == null || professionId == null || professionId.isBlank()) {
+            return;
+        }
+        pendingRedeploy.put(player.getUUID(), new RedeployPending(professionId, System.currentTimeMillis()));
+        LOGGER.info("[CCNR-RP] 处决转职已入队: {} → {}", player.getName().getString(), professionId);
+    }
+
+    /** 每 tick：处决转职延迟部署（遗体生成延迟 2 tick≈100ms，此处 1s 后执行，清背包在遗体复制之后）。 */
+    private void checkRedeploys() {
+        if (pendingRedeploy.isEmpty()) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        var it = pendingRedeploy.entrySet().iterator();
+        while (it.hasNext()) {
+            var e = it.next();
+            UUID uuid = e.getKey();
+            ServerPlayer p = server.getPlayerList().getPlayer(uuid);
+            if (p == null) {
+                it.remove(); // 已离线（onPlayerLoggedOut 兜底清理）
+                continue;
+            }
+            RedeployPending rd = e.getValue();
+            if (now - rd.at() < REDEPLOY_DELAY_MS) {
+                continue;
+            }
+            String suuid = uuid.toString();
+            // 处死未生效（仍 ALIVE，如退场被跳过）或期间已自行部署/被复活波接管 → 取消
+            if (CCNRRPMod.users == null
+                    || CCNRRPMod.users.isAlive(suuid)
+                    || com.ccnrcom.rp.sequence.SequenceEngine.isConscripted(suuid)) {
+                it.remove();
+                continue;
+            }
+            String profId = rd.professionId();
+            var def = CCNRRPMod.factions == null || profId.isBlank()
+                    ? null
+                    : CCNRRPMod.factions.findProfession(profId).orElse(null);
+            if (def == null) {
+                LOGGER.warn("[CCNR-RP] 处决转职职业无效，取消: {}（{}）", p.getName().getString(), profId);
+                it.remove();
+                continue;
+            }
+            String factionId = com.ccnrcom.rp.faction.FactionProfessions.factionId(def);
+            boolean ok = deploy(p, profId, selfDeployWave(profId, factionId), DeployFlag.of());
+            it.remove();
+            LOGGER.info(
+                    "[CCNR-RP] 处决转职部署{}: {} → {}（{}）",
+                    ok ? "完成" : "失败",
+                    p.getName().getString(),
+                    profId,
+                    factionId);
+        }
     }
 
     public boolean setEnabled(String waveId, boolean on) {

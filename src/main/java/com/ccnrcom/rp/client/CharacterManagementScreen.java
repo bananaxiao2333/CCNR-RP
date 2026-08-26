@@ -38,6 +38,8 @@ public class CharacterManagementScreen extends Screen {
     private int navScroll = 0;
     private String notice = "";
     private long noticeUntil = 0;
+    /** 处决转职确认弹窗：非空=正在确认该职位（玩家在场时点部署弹出，确认后发 KillDeployC2S）。 */
+    private String confirmDeployId = "";
 
     // 布局几何
     private int px1, py1, px2, py2;
@@ -145,22 +147,32 @@ public class CharacterManagementScreen extends Screen {
         if (p != null) {
             int ay = deployY;
             boolean met = userLevel() >= unlockLevel(p);
-            boolean observing = ClientCharacterState.userStatus() == CharacterStatus.OBSERVING;
+            CharacterStatus st = ClientCharacterState.userStatus();
+            boolean observing = st == CharacterStatus.OBSERVING;
+            boolean alive = st == CharacterStatus.ALIVE;
             boolean onCd = ClientCharacterState.userCooldownUntil() > System.currentTimeMillis();
-            boolean canDeploy = met && observing && !onCd;
+            boolean canDeploy = met && (observing || alive) && !onCd;
             RpButton deploy =
                     RpButton.primary(x, ay, w, 22, Component.translatable("ccnr_rp.gui.character.deploy"), b -> {
-                        RpChannels.sendToServer(new RpPackets.DeployPositionC2S(selectedId));
+                        if (ClientCharacterState.userStatus() == CharacterStatus.ALIVE) {
+                            // 在场：弹处决转职确认框（服务端处死旧角色后部署）
+                            confirmDeployId = selectedId;
+                        } else {
+                            RpChannels.sendToServer(new RpPackets.DeployPositionC2S(selectedId));
+                        }
                         notice("");
                     });
             deploy.active = canDeploy;
             if (!met) {
                 // 等级未达标：按钮置红并提示需要等级
                 deploy.setMessage(Component.translatable("ccnr_rp.gui.character.need_level", unlockLevel(p)));
-            } else if (!observing) {
-                // 等级达标但当前已在场/阴间：禁用部署（不误标为等级问题）
+            } else if (!observing && !alive) {
+                // 等级达标但当前状态不可部署（阴间等）：禁用（不误标为等级问题）
                 deploy.setMessage(Component.translatable("ccnr_rp.gui.character.deploy"));
                 deploy.active = false;
+            } else if (alive) {
+                // 在场可部署：按钮提示处决转职（点击弹确认框）
+                deploy.setMessage(Component.translatable("ccnr_rp.gui.character.deploy_kill"));
             }
             addRenderableWidget(deploy);
         }
@@ -217,6 +229,19 @@ public class CharacterManagementScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
+        if (!confirmDeployId.isEmpty()) {
+            // 处决转职确认弹窗：确认/取消按钮，弹窗期间吞掉其余点击
+            int[][] rects = confirmButtonRects();
+            if (mx >= rects[0][0] && mx <= rects[0][2] && my >= rects[0][1] && my <= rects[0][3]) {
+                String id = confirmDeployId;
+                confirmDeployId = "";
+                RpChannels.sendToServer(new RpPackets.KillDeployC2S(id));
+                notice("");
+            } else if (mx >= rects[1][0] && mx <= rects[1][2] && my >= rects[1][1] && my <= rects[1][3]) {
+                confirmDeployId = "";
+            }
+            return true;
+        }
         if (super.mouseClicked(mx, my, button)) {
             return true;
         }
@@ -343,6 +368,9 @@ public class CharacterManagementScreen extends Screen {
         renderDetail(g, mx, my);
         renderNotice(g);
         super.render(g, mx, my, partial);
+        if (!confirmDeployId.isEmpty()) {
+            renderKillConfirm(g, mx, my);
+        }
     }
 
     private void renderHeader(GuiGraphics g, int mx, int my) {
@@ -686,6 +714,104 @@ public class CharacterManagementScreen extends Screen {
         if (!notice.isBlank() && System.currentTimeMillis() < noticeUntil) {
             g.drawCenteredString(font, "[ 系统 ] " + notice, (px1 + px2) / 2, py2 - 20, RpTheme.RED_LINE);
         }
+    }
+
+    // ---------- 处决转职确认弹窗 ----------
+
+    /** 确认弹窗两个按钮矩形（确认/取消），渲染与点击共用。 */
+    private int[][] confirmButtonRects() {
+        int cw = Math.min(420, px2 - px1 - 40);
+        int ch = 130;
+        int cx = px1 + (px2 - px1 - cw) / 2;
+        int cy = py1 + (py2 - py1 - ch) / 2;
+        int bw = (cw - 40) / 2;
+        int by = cy + ch - 36;
+        return new int[][] {
+            {cx + 12, by, cx + 12 + bw, by + 22},
+            {cx + cw - 12 - bw, by, cx + cw - 12, by + 22}
+        };
+    }
+
+    private void renderKillConfirm(GuiGraphics g, int mx, int my) {
+        int cw = Math.min(420, px2 - px1 - 40);
+        int ch = 130;
+        int cx = px1 + (px2 - px1 - cw) / 2;
+        int cy = py1 + (py2 - py1 - ch) / 2;
+        g.fill(0, 0, width, height, 0x99000000); // 半透明遮罩
+        RpTheme.terminalPanel(g, cx, cy, cx + cw, cy + ch, 10f);
+        g.drawString(
+                font,
+                Component.translatable("ccnr_rp.gui.character.kill_confirm_title")
+                        .getString(),
+                cx + 14,
+                cy + 12,
+                RpTheme.RED_LINE,
+                true);
+        JsonObject p = findProfession(confirmDeployId);
+        String name = p == null ? confirmDeployId : str(p, "name");
+        String msg = Component.translatable("ccnr_rp.gui.character.kill_confirm_msg", name)
+                .getString();
+        int ly = cy + 40;
+        for (String line : wrapText(msg, cw - 28)) {
+            g.drawString(font, line, cx + 14, ly, RpTheme.TEXT_PRIMARY, true);
+            ly += 13;
+        }
+        int[][] rects = confirmButtonRects();
+        boolean hYes = mx >= rects[0][0] && mx <= rects[0][2] && my >= rects[0][1] && my <= rects[0][3];
+        boolean hNo = mx >= rects[1][0] && mx <= rects[1][2] && my >= rects[1][1] && my <= rects[1][3];
+        RpRoundRect.fill(
+                g,
+                rects[0][0],
+                rects[0][1],
+                rects[0][2],
+                rects[0][3],
+                5f,
+                hYes ? RpTheme.RED_LINE : RpTheme.alphaBlend(RpTheme.RED_LINE, 0xAA));
+        g.drawCenteredString(
+                font,
+                Component.translatable("ccnr_rp.gui.character.kill_confirm_yes").getString(),
+                (rects[0][0] + rects[0][2]) / 2,
+                rects[0][1] + 6,
+                0xFFFFFFFF);
+        RpRoundRect.fill(
+                g,
+                rects[1][0],
+                rects[1][1],
+                rects[1][2],
+                rects[1][3],
+                5f,
+                hNo ? RpTheme.PANEL_BORDER_BRIGHT : RpTheme.PANEL_BORDER);
+        g.drawCenteredString(
+                font,
+                Component.translatable("ccnr_rp.gui.character.kill_confirm_no").getString(),
+                (rects[1][0] + rects[1][2]) / 2,
+                rects[1][1] + 6,
+                RpTheme.TEXT_PRIMARY);
+    }
+
+    /** 按像素宽度折行（中文/长职位名）。 */
+    private java.util.List<String> wrapText(String text, int maxW) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        if (text == null || text.isBlank()) {
+            out.add("");
+            return out;
+        }
+        StringBuilder cur = new StringBuilder();
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '\n' || font.width(cur.toString() + c) > maxW) {
+                out.add(cur.toString());
+                cur.setLength(0);
+                if (c == '\n') {
+                    continue;
+                }
+            }
+            cur.append(c);
+        }
+        if (cur.length() > 0) {
+            out.add(cur.toString());
+        }
+        return out;
     }
 
     private static String str(JsonObject o, String key) {
