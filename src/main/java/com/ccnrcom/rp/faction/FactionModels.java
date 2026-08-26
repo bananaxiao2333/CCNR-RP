@@ -28,8 +28,27 @@ public final class FactionModels {
     /** 阵营组：批量声明关系的容器。 */
     public record FactionGroup(String id, List<String> memberIds) {}
 
-    /** 关系声明：from/to 可以是阵营或组（两端同种类），type 为关系类型；组×组覆盖全成员组合。 */
-    public record RelationRule(String from, String to, RelationType type) {}
+    /**
+     * 关系声明（多对多）：from/to 各为一个 id 列表，列表项可以是阵营 id 或组 id（组自动展开为成员）；
+     * 生效范围 = from 列表 × to 列表的**笛卡尔积**（双方所有组合），关系双向对称。
+     * **内部关系**：省略 to（或 from=to 同一列表）时 = 该列表内所有阵营**两两互设**该关系
+     * （如 {from:[a,b,c], type:friendly} → a↔b、a↔c、b↔c 全部友好）。
+     * 列表按**从上到下优先级**：先声明（靠前）的规则优先，命中即生效，后面重复声明被忽略并 WARN。
+     */
+    public record RelationRule(List<String> from, List<String> to, RelationType type) {
+        /** 兼容单对声明（命令/旧配置/测试）。 */
+        public RelationRule(String from, String to, RelationType type) {
+            this(List.of(from), List.of(to), type);
+        }
+
+        /** 内部关系：单列表内两两互设。 */
+        public RelationRule(List<String> members, RelationType type) {
+            this(members, members, type);
+        }
+    }
+
+    /** 图边（已解析到阵营对，供关系测定图渲染）：a ↔ b 之间的生效关系。 */
+    public record RelationEdge(String a, String b, RelationType type) {}
 
     /** 图解析结果：成功时为图；失败时给出错误（拒绝加载）+ 警告。 */
     public record ParseResult(FactionGraph graph, List<String> errors, List<String> warnings) {

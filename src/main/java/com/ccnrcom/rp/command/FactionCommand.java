@@ -26,6 +26,10 @@ final class FactionCommand {
         LiteralArgumentBuilder<CommandSourceStack> base = Commands.literal("faction")
                 .executes(ctx -> RpCommand.usageHint(ctx.getSource(), "ccnr_rp.command.usage.faction"));
         base.then(Commands.literal("list").executes(ctx -> list(ctx.getSource())));
+        // 关系测定图：仅管理员；服务端下发打开指令，客户端全屏展示阵营徽章+连线（可拖动/缩放）
+        base.then(Commands.literal("graph")
+                .requires(RpCommand.admin(Permissions.ADMIN_FACTION))
+                .executes(ctx -> openGraph(ctx.getSource())));
 
         base.then(Commands.literal("relation")
                 .executes(ctx -> RpCommand.usageHint(ctx.getSource(), "ccnr_rp.command.usage.faction"))
@@ -75,6 +79,17 @@ final class FactionCommand {
 
     private static FactionManager manager() {
         return CCNRRPMod.factions;
+    }
+
+    /** /rp faction graph：管理员打开关系测定图（全屏）。 */
+    private static int openGraph(CommandSourceStack source) {
+        if (source.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
+            com.ccnrcom.rp.network.RpChannels.sendTo(
+                    player, new com.ccnrcom.rp.network.RpPackets.FactionGraphOpenS2C());
+            return 1;
+        }
+        source.sendSuccess(() -> Component.translatable("ccnr_rp.faction.error.console"), false);
+        return 0;
     }
 
     private static int list(CommandSourceStack source) {

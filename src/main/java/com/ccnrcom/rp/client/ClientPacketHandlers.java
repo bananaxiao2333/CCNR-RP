@@ -48,6 +48,11 @@ public final class ClientPacketHandlers {
         XpHudOverlay.playSettle(payload);
     }
 
+    /** 打开关系测定图（全屏，管理命令/面板按钮触发）。 */
+    public static void onFactionGraphOpen() {
+        Minecraft.getInstance().setScreen(new FactionGraphScreen());
+    }
+
     /** 经验规则集（管理面板「经验规则」页）。 */
     public static void onRulesState(String payload) {
         ClientCharacterState.setXpRules(payload);
