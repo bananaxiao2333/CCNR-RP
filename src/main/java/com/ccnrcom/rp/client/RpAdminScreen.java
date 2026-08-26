@@ -7,6 +7,7 @@ package com.ccnrcom.rp.client;
 import com.ccnrcom.rp.network.RpChannels;
 import com.ccnrcom.rp.network.RpPackets;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import java.util.ArrayList;
 import java.util.List;
@@ -67,6 +68,26 @@ public class RpAdminScreen extends Screen {
     private int spSaveX1, spSaveY1, spSaveX2, spSaveY2;
     private int spCancelX1, spCancelY1, spCancelX2, spCancelY2;
     private final List<int[]> spRemoveBounds = new ArrayList<>();
+
+    // 行为序列编辑器（流程编辑器，P1.4）：弹窗管理 WAIT/WAVE/COMMAND/FORCE_PICK 步骤（仿出生点弹窗）
+    private boolean seqModalOpen = false;
+    private String seqModalTitle = "";
+    private final List<JsonObject> seqSteps = new ArrayList<>();
+    private int stepSel = -1;
+    private int seqScroll = 0;
+    private JsonArray editedSequence = null; // 弹窗保存后的序列（主表单保存时优先写入 "sequence"）
+    private final java.util.Map<String, EditBox> seqBoxes = new java.util.LinkedHashMap<>();
+    private int sqX1, sqY1, sqX2, sqY2;
+    private int sqListY1, sqListY2;
+    private int sqFieldX1, sqFieldY1, sqFieldX2, sqFieldY2;
+    private int sqRuleX1, sqRuleY1, sqRuleX2, sqRuleY2;
+    private int sqAddX1, sqAddY1, sqAddX2, sqAddY2;
+    private int sqSaveX1, sqSaveY1, sqSaveX2, sqSaveY2;
+    private int sqCancelX1, sqCancelY1, sqCancelX2, sqCancelY2;
+    private final List<int[]> sqStepBounds = new ArrayList<>();
+    private final List<int[]> sqUpBounds = new ArrayList<>();
+    private final List<int[]> sqDownBounds = new ArrayList<>();
+    private final List<int[]> sqDelBounds = new ArrayList<>();
 
     private EditBox idBox;
     private EditBox nameBox;
@@ -323,6 +344,11 @@ public class RpAdminScreen extends Screen {
         y += 30;
         fld3Box = mkBox(x, y, w, "时长(秒,0=事件持续时间)", ev == null ? "0" : num(ev, "durationSeconds", 0), false);
         y += 30;
+        addRenderableWidget(
+                RpButton.secondary(x, y, w, 18, Component.literal("编辑行为序列…（WAIT/WAVE/COMMAND/FORCE_PICK）"), b -> {
+                    openSequenceModal();
+                }));
+        y += 26;
         actionRow(x, y, w, edit);
         // 管理快捷操作：手动触发事件
         y += 26;
@@ -351,6 +377,11 @@ public class RpAdminScreen extends Screen {
         y += 30;
         fld3Box = mkBox(x, y, w, "时长(分钟)", ph == null ? "30" : num(ph, "durationMinutes", 30), false);
         y += 30;
+        addRenderableWidget(
+                RpButton.secondary(x, y, w, 18, Component.literal("编辑行为序列…（WAIT/WAVE/COMMAND/FORCE_PICK）"), b -> {
+                    openSequenceModal();
+                }));
+        y += 26;
         actionRow(x, y, w, edit);
     }
 
@@ -393,6 +424,11 @@ public class RpAdminScreen extends Screen {
         camSceneBox =
                 mkBox(x, y, w, "ccnr_rp.gui.admin.field.cam_scene", wv == null ? "" : str(wv, "cmdcamScene"), false);
         y += 30;
+        addRenderableWidget(
+                RpButton.secondary(x, y, w, 18, Component.literal("编辑行为序列…（WAIT/WAVE/COMMAND/FORCE_PICK）"), b -> {
+                    openSequenceModal();
+                }));
+        y += 26;
         actionRow(x, y, w, edit);
         // 管理快捷操作：手动召唤复活波
         y += 26;
@@ -432,6 +468,7 @@ public class RpAdminScreen extends Screen {
                     selProfId = "";
                     selFactionId = "";
                     selSelId = "";
+                    editedSequence = null; // 新建：丢弃流程编辑缓存
                     modeIdx = 0;
                     deployIdx = 0;
                     evState = true;
@@ -503,9 +540,7 @@ public class RpAdminScreen extends Screen {
                     p.addProperty("durationSeconds", parseInt(fld3Box));
                     p.addProperty("settleOnEnd", endSettle);
                 }
-                if (src != null && src.has("sequence")) {
-                    p.add("sequence", src.getAsJsonArray("sequence")); // 行为序列不在面板编辑，保存时透传保留
-                }
+                addSequenceField(p, src);
                 yield p;
             }
             case TAB_PHASE -> {
@@ -514,9 +549,7 @@ public class RpAdminScreen extends Screen {
                 p.addProperty("order", parseInt(fld2Box));
                 p.addProperty("durationMinutes", parseInt(fld3Box));
                 JsonObject phSrc = selItem();
-                if (phSrc != null && phSrc.has("sequence")) {
-                    p.add("sequence", phSrc.getAsJsonArray("sequence"));
-                }
+                addSequenceField(p, phSrc);
                 yield p;
             }
             case TAB_WAVE -> {
@@ -551,13 +584,23 @@ public class RpAdminScreen extends Screen {
                 p.add("professionIds", csvArray(descBox.getValue()));
                 p.add("factionIds", csvArray(musicBox.getValue()));
                 p.addProperty("cmdcamScene", camSceneBox == null ? "" : camSceneBox.getValue());
-                if (src != null && src.has("sequence")) {
-                    p.add("sequence", src.getAsJsonArray("sequence"));
-                }
+                addSequenceField(p, src);
                 yield p;
             }
             default -> payload();
         };
+    }
+
+    /**
+     * 行为序列写入 payload：流程编辑器弹窗保存过（editedSequence 非空）→ 用编辑结果；
+     * 否则透传原条目的 sequence（保留旧配置）。
+     */
+    private void addSequenceField(JsonObject p, JsonObject src) {
+        if (editedSequence != null) {
+            p.add("sequence", editedSequence.deepCopy());
+        } else if (src != null && src.has("sequence")) {
+            p.add("sequence", src.getAsJsonArray("sequence"));
+        }
     }
 
     private static int parseInt(EditBox box) {
@@ -1050,6 +1093,437 @@ public class RpAdminScreen extends Screen {
         return false;
     }
 
+    // ---------- 行为序列编辑器（流程编辑器，仿出生点弹窗） ----------
+
+    private static final String[] SEQ_TYPES = {"WAIT", "WAVE", "COMMAND", "FORCE_PICK"};
+
+    /** 打开流程编辑器弹窗：载入当前选中条目（事件/阶段/刷新波）的 sequence 数组到工作副本。 */
+    private void openSequenceModal() {
+        JsonObject it = selItem();
+        if (it == null || str(it, "id").isBlank()) {
+            notice = "请先在左侧选择条目";
+            return;
+        }
+        seqModalTitle = kindLabel(crudKind()) + " " + str(it, "id");
+        seqSteps.clear();
+        if (it.has("sequence") && it.get("sequence").isJsonArray()) {
+            for (JsonElement e : it.getAsJsonArray("sequence")) {
+                if (e.isJsonObject()) {
+                    seqSteps.add(e.getAsJsonObject().deepCopy());
+                }
+            }
+        }
+        stepSel = seqSteps.isEmpty() ? -1 : 0;
+        seqScroll = 0;
+        seqModalOpen = true;
+        notice = "";
+        rebuildSeqBoxes();
+    }
+
+    private static String kindLabel(String kind) {
+        return switch (kind) {
+            case "event" -> "事件";
+            case "phase" -> "阶段";
+            case "wave" -> "刷新波";
+            default -> kind;
+        };
+    }
+
+    private static JsonObject defaultStep(String type) {
+        JsonObject o = new JsonObject();
+        o.addProperty("type", type);
+        switch (type) {
+            case "WAIT" -> o.addProperty("seconds", 10);
+            case "WAVE" -> o.addProperty("wave", "");
+            case "COMMAND" -> o.addProperty("command", "");
+            case "FORCE_PICK" -> {
+                o.addProperty("count", 1);
+                o.addProperty("professions", "");
+                o.addProperty("faction", "");
+            }
+            default -> {}
+        }
+        return o;
+    }
+
+    /** 步骤摘要（列表行显示）。 */
+    private static String stepSummary(JsonObject s) {
+        String type = str(s, "type", "WAIT").toUpperCase(java.util.Locale.ROOT);
+        return switch (type) {
+            case "WAIT" -> "等待 " + num(s, "seconds", 10) + "s";
+            case "WAVE" -> "召唤波 " + str(s, "wave");
+            case "COMMAND" -> "命令 " + str(s, "command");
+            case "FORCE_PICK" -> "征召 " + num(s, "count", 1) + " 人 [" + str(s, "professions") + "] (" + str(s, "faction")
+                    + ")";
+            default -> type;
+        };
+    }
+
+    private void cycleStepType() {
+        if (stepSel < 0 || stepSel >= seqSteps.size()) {
+            return;
+        }
+        String cur = str(seqSteps.get(stepSel), "type", "WAIT").toUpperCase(java.util.Locale.ROOT);
+        int idx = 0;
+        for (int i = 0; i < SEQ_TYPES.length; i++) {
+            if (SEQ_TYPES[i].equals(cur)) {
+                idx = i;
+            }
+        }
+        seqSteps.set(stepSel, defaultStep(SEQ_TYPES[(idx + 1) % SEQ_TYPES.length]));
+        rebuildSeqBoxes();
+    }
+
+    private void addSeqStep() {
+        seqSteps.add(defaultStep("WAIT"));
+        stepSel = seqSteps.size() - 1;
+        seqScroll = Math.max(0, seqSteps.size() - seqMaxVisible());
+        rebuildSeqBoxes();
+    }
+
+    /** 弹窗几何（渲染与输入框重建共用，随窗口大小变化重算）。 */
+    private void layoutSeqModal() {
+        int w = Math.min(560, width - 40);
+        int h = Math.min(420, height - 40);
+        sqX1 = (width - w) / 2;
+        sqY1 = (height - h) / 2;
+        sqX2 = sqX1 + w;
+        sqY2 = sqY1 + h;
+        sqListY1 = sqY1 + 84;
+        sqListY2 = sqY2 - 128;
+        sqFieldX1 = sqX1 + 14;
+        sqFieldY1 = sqY2 - 112;
+        sqFieldX2 = sqX2 - 14;
+        sqFieldY2 = sqY2 - 14;
+    }
+
+    private int seqMaxVisible() {
+        int rowH = 22;
+        int h = sqListY2 - sqListY1;
+        return Math.max(1, (h + 2) / rowH);
+    }
+
+    /** 重建选中步骤的参数字段输入框（打开/点选/切类型/添加时调用）。 */
+    private void rebuildSeqBoxes() {
+        layoutSeqModal(); // 先算弹窗几何（输入框按弹窗内坐标定位）
+        for (EditBox b : seqBoxes.values()) {
+            removeWidget(b);
+        }
+        seqBoxes.clear();
+        if (!seqModalOpen || stepSel < 0 || stepSel >= seqSteps.size()) {
+            return;
+        }
+        JsonObject s = seqSteps.get(stepSel);
+        String type = str(s, "type", "WAIT").toUpperCase(java.util.Locale.ROOT);
+        int x = sqFieldX1;
+        int w = sqFieldX2 - sqFieldX1;
+        int bw2 = (w - 4) / 2;
+        switch (type) {
+            case "WAIT" -> seqBoxes.put(
+                    "seconds", mkBox(x, sqFieldY1, w, "", String.valueOf(num(s, "seconds", 10)), false));
+            case "WAVE" -> seqBoxes.put("wave", mkBox(x, sqFieldY1, w, "", str(s, "wave"), false));
+            case "COMMAND" -> seqBoxes.put("command", mkBox(x, sqFieldY1, w, "", str(s, "command"), false));
+            case "FORCE_PICK" -> {
+                seqBoxes.put("count", mkBox(x, sqFieldY1, bw2, "", String.valueOf(num(s, "count", 1)), false));
+                seqBoxes.put("professions", mkBox(x + bw2 + 4, sqFieldY1, bw2, "", str(s, "professions"), false));
+                seqBoxes.put("faction", mkBox(x, sqFieldY1 + 24, w, "", str(s, "faction"), false));
+            }
+            default -> {}
+        }
+    }
+
+    /** 把选中步骤的输入框值写回工作副本（保存/切行/切类型前调用）。 */
+    private void collectSeqFields() {
+        if (stepSel < 0 || stepSel >= seqSteps.size()) {
+            return;
+        }
+        JsonObject s = seqSteps.get(stepSel);
+        for (java.util.Map.Entry<String, EditBox> e : seqBoxes.entrySet()) {
+            String v = e.getValue().getValue().trim();
+            if ("count".equals(e.getKey()) || "seconds".equals(e.getKey())) {
+                try {
+                    s.addProperty(e.getKey(), Integer.parseInt(v));
+                } catch (Exception ignored) {
+                    // 非法数字保留原值
+                }
+            } else {
+                s.addProperty(e.getKey(), v);
+            }
+        }
+    }
+
+    /** 保存流程：收集字段 → 写 editedSequence → 复用主表单 CRUD 保存（payload 带上 sequence）→ 关闭。 */
+    private void saveSequenceModal() {
+        collectSeqFields();
+        JsonArray arr = new JsonArray();
+        for (JsonObject s : seqSteps) {
+            arr.add(s.deepCopy());
+        }
+        editedSequence = arr;
+        seqModalOpen = false;
+        String kind = crudKind();
+        boolean edit = !idBox.getValue().isBlank();
+        requestCrud(kind, edit ? "update" : "create", buildPayload());
+        rebuild();
+    }
+
+    /** 渲染流程编辑器弹窗（每帧；按钮手动绘制，命中在 sequenceModalClick）。 */
+    private void renderSequenceModal(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+        g.fill(0, 0, width, height, 0xA6000000);
+        layoutSeqModal();
+        RpTheme.terminalPanel(g, sqX1, sqY1, sqX2, sqY2, RpTheme.RADIUS_LARGE);
+        g.drawString(font, "行为序列 — " + seqModalTitle, sqX1 + 14, sqY1 + 10, RpTheme.CYAN, true);
+        g.fill(sqX1 + 8, sqY1 + 26, sqX2 - 8, sqY1 + 27, RpTheme.CYAN_DIM);
+
+        int cx = sqX1 + 14;
+        int cw = sqX2 - 14;
+        int cy = sqY1 + 38;
+        int bw = Math.max(76, (cw - cx - 12) / 4);
+        int border = RpTheme.PANEL_BORDER;
+        int borderHover = RpTheme.PANEL_BORDER_BRIGHT;
+        String typeCur = stepSel >= 0 && stepSel < seqSteps.size()
+                ? str(seqSteps.get(stepSel), "type", "WAIT").toUpperCase(java.util.Locale.ROOT)
+                : "—";
+        // 类型切换
+        sqRuleX1 = cx;
+        sqRuleY1 = cy;
+        sqRuleX2 = cx + bw;
+        sqRuleY2 = cy + 18;
+        RpButton.draw(
+                g,
+                sqRuleX1,
+                sqRuleY1,
+                sqRuleX2,
+                sqRuleY2,
+                "类型: " + typeCur,
+                inRect(mouseX, mouseY, sqRuleX1, sqRuleY1, sqRuleX2, sqRuleY2) ? borderHover : border,
+                stepSel >= 0);
+        // 添加步骤
+        sqAddX1 = sqRuleX2 + 4;
+        sqAddY1 = cy;
+        sqAddX2 = sqAddX1 + bw;
+        sqAddY2 = cy + 18;
+        RpButton.draw(
+                g,
+                sqAddX1,
+                sqAddY1,
+                sqAddX2,
+                sqAddY2,
+                "+ 添加步骤",
+                inRect(mouseX, mouseY, sqAddX1, sqAddY1, sqAddX2, sqAddY2) ? borderHover : border,
+                false);
+        // 保存
+        sqSaveX1 = sqAddX2 + 4;
+        sqSaveY1 = cy;
+        sqSaveX2 = sqSaveX1 + bw;
+        sqSaveY2 = cy + 18;
+        RpButton.draw(
+                g,
+                sqSaveX1,
+                sqSaveY1,
+                sqSaveX2,
+                sqSaveY2,
+                "保存",
+                inRect(mouseX, mouseY, sqSaveX1, sqSaveY1, sqSaveX2, sqSaveY2) ? borderHover : border,
+                true);
+        // 关闭
+        sqCancelX1 = sqSaveX2 + 4;
+        sqCancelY1 = cy;
+        sqCancelX2 = sqCancelX1 + bw;
+        sqCancelY2 = cy + 18;
+        RpButton.draw(
+                g,
+                sqCancelX1,
+                sqCancelY1,
+                sqCancelX2,
+                sqCancelY2,
+                "关闭",
+                inRect(mouseX, mouseY, sqCancelX1, sqCancelY1, sqCancelX2, sqCancelY2) ? borderHover : border,
+                false);
+        g.drawString(
+                font,
+                "提示：点击步骤行选中编辑；WAIT=等待秒数 / WAVE=召唤刷新波 / COMMAND=执行命令（{{event}} {{phase}} {{seq}} 变量）/ FORCE_PICK=强制征召。",
+                cx,
+                cy + 24,
+                RpTheme.TEXT_DIM);
+
+        // 步骤列表（滚动，行高 22）：点选 / 上移 / 下移 / 删除
+        sqStepBounds.clear();
+        sqUpBounds.clear();
+        sqDownBounds.clear();
+        sqDelBounds.clear();
+        int ry = sqListY1;
+        int maxVis = seqMaxVisible();
+        int off = Math.min(seqScroll, Math.max(0, seqSteps.size() - maxVis));
+        for (int i = 0; i < maxVis; i++) {
+            int idx = off + i;
+            if (idx >= seqSteps.size()) {
+                break;
+            }
+            JsonObject s = seqSteps.get(idx);
+            boolean sel = idx == stepSel;
+            int rowX1 = cx;
+            int rowX2 = cw - 158; // 右侧留按钮区
+            if (sel) {
+                RpTheme.selectedBar(g, rowX1, ry, rowX2, ry + 20, 6f);
+            } else {
+                RpRoundRect.outlined(
+                        g,
+                        rowX1,
+                        ry,
+                        rowX2,
+                        ry + 20,
+                        6f,
+                        inRect(mouseX, mouseY, rowX1, ry, rowX2, ry + 20) ? borderHover : border,
+                        i % 2 == 0 ? RpTheme.PANEL_BG : RpTheme.PANEL_BG_EVEN);
+            }
+            g.drawString(
+                    font,
+                    "[" + idx + "] " + stepSummary(s),
+                    rowX1 + 6,
+                    ry + 5,
+                    sel ? 0xFFFFFFFF : RpTheme.TEXT_PRIMARY);
+            sqStepBounds.add(new int[] {rowX1, ry, rowX2, ry + 20});
+            int bx = rowX2 + 4;
+            int bw3 = Math.max(30, (cw - bx - 4) / 3);
+            sqUpBounds.add(new int[] {bx, ry, bx + bw3, ry + 20});
+            RpButton.draw(
+                    g,
+                    bx,
+                    ry,
+                    bx + bw3,
+                    ry + 20,
+                    "↑",
+                    inRect(mouseX, mouseY, bx, ry, bx + bw3, ry + 20) ? borderHover : border,
+                    false);
+            sqDownBounds.add(new int[] {bx + bw3 + 2, ry, bx + bw3 * 2 + 2, ry + 20});
+            RpButton.draw(
+                    g,
+                    bx + bw3 + 2,
+                    ry,
+                    bx + bw3 * 2 + 2,
+                    ry + 20,
+                    "↓",
+                    inRect(mouseX, mouseY, bx + bw3 + 2, ry, bx + bw3 * 2 + 2, ry + 20) ? borderHover : border,
+                    false);
+            sqDelBounds.add(new int[] {bx + bw3 * 2 + 4, ry, bx + bw3 * 3 + 4, ry + 20});
+            RpButton.draw(
+                    g,
+                    bx + bw3 * 2 + 4,
+                    ry,
+                    bx + bw3 * 3 + 4,
+                    ry + 20,
+                    "删",
+                    inRect(mouseX, mouseY, bx + bw3 * 2 + 4, ry, bx + bw3 * 3 + 4, ry + 20) ? borderHover : border,
+                    false);
+            ry += 22;
+        }
+        if (seqSteps.isEmpty()) {
+            g.drawString(font, "（空：点「+ 添加步骤」开始编排）", cx, sqListY1 + 4, RpTheme.TEXT_DIM);
+        }
+        RpScrollbar.draw(g, cw - 8, sqListY1, sqListY2, seqSteps.size(), maxVis, off);
+
+        // 选中步骤参数字段（输入框 + 手动标签；输入框由 rebuildSeqBoxes 生成）
+        if (stepSel >= 0 && stepSel < seqSteps.size()) {
+            String type = str(seqSteps.get(stepSel), "type", "WAIT").toUpperCase(java.util.Locale.ROOT);
+            g.drawString(font, "步骤参数（" + type + "）：", sqFieldX1, sqFieldY1 - 12, RpTheme.TEXT_DIM);
+            switch (type) {
+                case "WAIT" -> g.drawString(font, "等待秒数", sqFieldX1, sqFieldY1 + 4, RpTheme.TEXT_DIM);
+                case "WAVE" -> g.drawString(font, "刷新波 ID", sqFieldX1, sqFieldY1 + 4, RpTheme.TEXT_DIM);
+                case "COMMAND" -> g.drawString(
+                        font, "命令文本（可用 {{event}} {{phase}} {{seq}} 变量）", sqFieldX1, sqFieldY1 + 4, RpTheme.TEXT_DIM);
+                case "FORCE_PICK" -> {
+                    g.drawString(font, "数量", sqFieldX1, sqFieldY1 + 4, RpTheme.TEXT_DIM);
+                    int bw2 = (sqFieldX2 - sqFieldX1 - 4) / 2;
+                    g.drawString(font, "职业ID(逗号)", sqFieldX1 + bw2 + 4, sqFieldY1 + 4, RpTheme.TEXT_DIM);
+                    g.drawString(font, "阵营ID", sqFieldX1, sqFieldY1 + 28, RpTheme.TEXT_DIM);
+                }
+                default -> {}
+            }
+            for (EditBox b : seqBoxes.values()) {
+                b.render(g, mouseX, mouseY, partialTick);
+            }
+        }
+    }
+
+    /** 流程编辑器弹窗命中（在 mouseClicked 顶部调用，弹窗期间吞掉底层点击）。 */
+    private boolean sequenceModalClick(double mx, double my, int button) {
+        if (inRect((int) mx, (int) my, sqRuleX1, sqRuleY1, sqRuleX2, sqRuleY2)) {
+            cycleStepType();
+            return true;
+        }
+        if (inRect((int) mx, (int) my, sqAddX1, sqAddY1, sqAddX2, sqAddY2)) {
+            addSeqStep();
+            return true;
+        }
+        if (inRect((int) mx, (int) my, sqSaveX1, sqSaveY1, sqSaveX2, sqSaveY2)) {
+            saveSequenceModal();
+            return true;
+        }
+        if (inRect((int) mx, (int) my, sqCancelX1, sqCancelY1, sqCancelX2, sqCancelY2)) {
+            seqModalOpen = false;
+            return true;
+        }
+        for (int i = 0; i < sqUpBounds.size(); i++) {
+            int[] b = sqUpBounds.get(i);
+            if (inRect((int) mx, (int) my, b[0], b[1], b[2], b[3])) {
+                collectSeqFields();
+                int idx = Math.min(seqScroll, Math.max(0, seqSteps.size() - seqMaxVisible())) + i;
+                if (idx > 0 && idx < seqSteps.size()) {
+                    java.util.Collections.swap(seqSteps, idx, idx - 1);
+                    stepSel = idx - 1;
+                }
+                rebuildSeqBoxes();
+                return true;
+            }
+        }
+        for (int i = 0; i < sqDownBounds.size(); i++) {
+            int[] b = sqDownBounds.get(i);
+            if (inRect((int) mx, (int) my, b[0], b[1], b[2], b[3])) {
+                collectSeqFields();
+                int idx = Math.min(seqScroll, Math.max(0, seqSteps.size() - seqMaxVisible())) + i;
+                if (idx >= 0 && idx + 1 < seqSteps.size()) {
+                    java.util.Collections.swap(seqSteps, idx, idx + 1);
+                    stepSel = idx + 1;
+                }
+                rebuildSeqBoxes();
+                return true;
+            }
+        }
+        for (int i = 0; i < sqDelBounds.size(); i++) {
+            int[] b = sqDelBounds.get(i);
+            if (inRect((int) mx, (int) my, b[0], b[1], b[2], b[3])) {
+                int idx = Math.min(seqScroll, Math.max(0, seqSteps.size() - seqMaxVisible())) + i;
+                if (idx >= 0 && idx < seqSteps.size()) {
+                    seqSteps.remove(idx);
+                    if (stepSel >= seqSteps.size()) {
+                        stepSel = seqSteps.size() - 1;
+                    }
+                }
+                rebuildSeqBoxes();
+                return true;
+            }
+        }
+        for (int i = 0; i < sqStepBounds.size(); i++) {
+            int[] b = sqStepBounds.get(i);
+            if (inRect((int) mx, (int) my, b[0], b[1], b[2], b[3])) {
+                collectSeqFields();
+                int idx = Math.min(seqScroll, Math.max(0, seqSteps.size() - seqMaxVisible())) + i;
+                if (idx >= 0 && idx < seqSteps.size()) {
+                    stepSel = idx;
+                }
+                rebuildSeqBoxes();
+                return true;
+            }
+        }
+        for (EditBox box : seqBoxes.values()) {
+            if (box.mouseClicked(mx, my, button)) {
+                return true;
+            }
+        }
+        return true;
+    }
+
     private JsonObject selFaction() {
         for (JsonObject f : ClientCharacterState.factions()) {
             if (str(f, "id").equals(selFactionId)) {
@@ -1372,6 +1846,10 @@ public class RpAdminScreen extends Screen {
             }
             return true;
         }
+        if (seqModalOpen) {
+            sequenceModalClick(mx, my, button); // 流程编辑器弹窗：命中按钮/输入框处理，未命中也不放行到底层
+            return true;
+        }
         if (spawnModalOpen) {
             spawnModalClick(mx, my); // 命中弹窗按钮则处理；未命中也不放行到底层
             return true;
@@ -1476,6 +1954,7 @@ public class RpAdminScreen extends Screen {
     }
 
     private void selectItem(JsonObject item) {
+        editedSequence = null; // 切换条目：丢弃未保存的流程编辑结果（避免串到其他条目）
         if (tab == TAB_PROFESSION) {
             selectProfession(item);
             return;
@@ -1553,6 +2032,14 @@ public class RpAdminScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+        if (seqModalOpen) {
+            // 流程编辑器：仅步骤列表区滚动
+            if (mouseY >= sqListY1 && mouseY <= sqListY2) {
+                seqScroll = (int)
+                        Math.max(0, Math.min(seqScroll - delta / 8, Math.max(0, seqSteps.size() - seqMaxVisible())));
+            }
+            return true;
+        }
         if (impactOpen || spawnModalOpen) {
             return true; // 弹窗打开时不滚动底层列表
         }
@@ -1626,7 +2113,7 @@ public class RpAdminScreen extends Screen {
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         renderBackground(g);
         // 模态（弹窗）打开时，仅保留深色背景 + 弹窗本身，彻底隐藏下层管理界面
-        boolean modal = impactOpen || spawnModalOpen;
+        boolean modal = impactOpen || spawnModalOpen || seqModalOpen;
         if (!modal) {
             RpTheme.terminalPanel(g, px1, py1, px2, py2, RpTheme.RADIUS_LARGE);
             g.drawString(
@@ -1699,6 +2186,9 @@ public class RpAdminScreen extends Screen {
         }
         if (spawnModalOpen) {
             renderSpawnModal(g, mouseX, mouseY);
+        }
+        if (seqModalOpen) {
+            renderSequenceModal(g, mouseX, mouseY, partialTick);
         }
     }
 
