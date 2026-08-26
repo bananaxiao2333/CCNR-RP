@@ -1,5 +1,30 @@
 # Changelog
 
+## 2.15.1（管理面板「设置」页泛化：bool 开关 / string 文本输入 / 数值输入框全部可编辑）
+- 设置页按类型渲染所有配置项：settings.json 项 bool=开关行、string=文本输入行（如 firstJoinProfession），
+  与 serverconfig 数值行统一滚动 + 一个保存按钮；保存按 key 分流（settings.json → ManagerSetC2S，serverconfig → ServerConfigSetC2S）。
+- ManagerSettings 类型化：新增 type(key)（bool/string），set() 按类型分流校验（bool 需 true/false，string 直接写入）。
+- ManagerSetC2S 值长度上限 16 → 128（支持任意字符串设置项）；firstJoinProfession 改为管理面板可编辑（不再只改 settings.json 文件）。
+- 构建：compileJava / spotlessCheck / test -PrunTests 全绿。
+
+## 2.15.0（首次入服自动部署：新玩家自动部署为可配置职业，默认 m5_intern 访客/实习生）
+- 首次进入设施（本世界无用户档案）的玩家自动部署为配置职业：登录时入队 → 等素材同步完成（60s 超时兜底）
+  且入服稳定（≥2s）后走统一 deploy()（装备 → 传送落点 → 入场电影 HUD + 出场音乐 → 状态 ALIVE → 广播）。
+- 可配置（config/ccnr_rp/settings.json）：firstJoinAutoDeploy（bool，默认 true）总开关；
+  firstJoinProfession（string，默认 m5_intern）自动部署职业 id，空串=关闭（2.15.1 起管理面板可编辑）。
+- 细节：首次判定用 UserService.hasProfile()（不惰性创建档案，登录处理须先于档案创建调用）；
+  已被其他入口部署（管理刷人/复活波/手动）时自动跳过；掉线清理队列；落点=首个匹配刷新波否则世界出生点。
+- 构建：compileJava / spotlessCheck / test -PrunTests 全绿。
+
+## 2.14.5（部署入场电影/音乐与 CMDCam 解耦：无 CMDCam 场景也播电影 HUD 与出场音乐）
+- 修复「未配置 CMDCam 场景（或未装 CMDCam）时入场音乐与电影式 HUD 开场消失」：
+  2.14.0 起 CinematicS2C（电影 HUD + 出场音乐）仅在「场景名非空且 CMDCam 已装」时才下发；
+  本版改为电影 HUD + 音乐始终播放（未 SKIP_CINEMATIC / NO_MUSIC），CMDCam 场景降为可选叠加层。
+- 时序：有场景 → 强制旁观者 + 电影与场景同刻播放 → 全部播完落位（不变）；
+  无场景 → 强制旁观者 + 电影 HUD/音乐播放 → HUD 播完客户端即发 DeployLandC2S 落位（不等待场景）。
+- 客户端无改动（空白 cmdcamScene 分支本就支持「HUD 播完即落位」），纯服务端 SpawnFramework 解耦。
+- 构建：compileJava / spotlessCheck / test -PrunTests 全绿。
+
 ## 2.14.4（修复 OGG 播放电流声：改用 Minecraft 原生 OggAudioStream 解码）
 - 2.14.3 内嵌的 jorbis（googlecode soundlibs 0.0.17.4 fork）解码立体声时左右声道塌缩为同一值（解码器 bug），
   叠加字节序错配 → 播放电流声。

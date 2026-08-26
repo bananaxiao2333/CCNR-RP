@@ -61,6 +61,12 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
 
     private final Map<UUID, PendingLanding> pendingLandings = new HashMap<>();
 
+    /** 首次入服自动部署（入队时刻 → 等素材同步完成且入服稳定后执行 deploy）。 */
+    private final Map<UUID, Long> pendingFirstJoin = new HashMap<>();
+
+    /** 首次入服自动部署的最小等待（ms）：给客户端登录/素材同步留时间，避免入服瞬间抢占。 */
+    private static final long FIRST_JOIN_MIN_WAIT_MS = 2_000L;
+
     public SpawnFramework(MinecraftServer server) {
         this.server = server;
         this.recruit = new RecruitManager(this);
@@ -280,6 +286,7 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
             return;
         }
         checkPendingLandings(); // 部署落位超时兜底（每 tick，开销可忽略）
+        checkFirstJoinDeploys(); // 首次入服自动部署（等素材同步后执行，每 tick 开销可忽略）
         int interval = Math.max(1, CCNRRPConfig.SPAWN_POLL_TICKS.get());
         if (++pollCounter < interval) {
             return;
@@ -388,25 +395,28 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
                 LoadoutManager.apply(p, FactionProfessions.loadout(def));
             });
         }
-        // 入场 CMDCam 场景（覆盖优先级：阵营 < 刷新波 < 职业，职业最高）
+        // 入场 CMDCam 场景（覆盖优先级：阵营 < 刷新波 < 职业，职业最高）；仅作可选叠加层，不决定是否播电影
         String cmdcamScene = resolveCmdcamScene(factionId, wave, professionId);
-        // 时序（用户确认）：
-        // - 已设定 CMDCam（场景名非空且 CMDCam 已装）→ 完整入场动画：强制旁观者 + 电影 HUD 与 CMDCam 场景同一时刻播放
-        //   → 全部播完（客户端检测 HUD 结束 + 场景结束）发 DeployLandC2S → 移动玩家到部署点 → 设置生存；
-        // - 未设定 CMDCam（无场景名 / 未装 CMDCam）或 SKIP_CINEMATIC → 开局直接落位切生存（不播动画、不等待）。
-        boolean deferred = cinematic && !cmdcamScene.isBlank() && com.ccnrcom.rp.cmdcam.CamSceneBridge.available();
+        boolean sceneReady = !cmdcamScene.isBlank() && com.ccnrcom.rp.cmdcam.CamSceneBridge.available();
+        // 时序（2.14.0 起「先播后落位」；2.14.5 起电影 HUD/音乐与 CMDCam 解耦）：
+        // - 电影 HUD + 出场音乐始终播放（未 SKIP_CINEMATIC/NO_MUSIC）；CMDCam 场景为可选叠加层：
+        //   场景已配置且 CMDCam 已装 → 强制旁观者 + 电影 HUD 与场景同一时刻播放 → 全部播完
+        //   （客户端检测 HUD 结束 + 场景结束）发 DeployLandC2S → 移动玩家到部署点 → 设置生存；
+        // - 未配置场景 / 未装 CMDCam → 强制旁观者 + 电影 HUD/音乐播放 → HUD 播完客户端即发 DeployLandC2S 落位（不等待场景）；
+        // - SKIP_CINEMATIC → 开局直接落位切生存（不播动画、不等待）。
+        boolean deferred = cinematic;
         if (deferred) {
             p.setGameMode(GameType.SPECTATOR); // 动画全程强制旁观者（不可见/不可交互/不可被打）
             pendingLandings.put(
                     p.getUUID(), new PendingLanding(wave, factionId, System.currentTimeMillis() + LANDING_TIMEOUT_MS));
             LOGGER.info(
-                    "[CCNR-RP] 部署入场动画（旁观者 + 同刻播电影/场景）: {} → 场景 {}", p.getName().getString(), cmdcamScene);
-        } else {
-            teleport(p, wave, factionId); // 开局直接落位：移动玩家到部署点 + 切生存（teleport 内含 SURVIVAL）
-            LOGGER.info(
-                    "[CCNR-RP] 部署直接落位（未设定 CMDCam/跳过动画）: {} → 场景 {}",
+                    "[CCNR-RP] 部署入场动画（旁观者 + 电影 HUD{}）: {} → 场景 {}",
+                    sceneReady ? " + CMDCam 场景" : "（无场景）",
                     p.getName().getString(),
                     cmdcamScene.isBlank() ? "（无）" : cmdcamScene);
+        } else {
+            teleport(p, wave, factionId); // 开局直接落位：移动玩家到部署点 + 切生存（teleport 内含 SURVIVAL）
+            LOGGER.info("[CCNR-RP] 部署直接落位（SKIP_CINEMATIC/跳过动画）: {}", p.getName().getString());
         }
         // 入场电影（统一组装：名字/职业/阵营/关系推导/背景）
         try {
@@ -455,9 +465,9 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
             en.add("relations", relations);
             en.addProperty("background", background == null ? "" : background);
             if (deferred) {
-                // 电影 HUD 与 CMDCam 场景同一时刻开始播放（场景在目标维度查取）
+                // 电影 HUD 与（可选）CMDCam 场景同一时刻开始播放（场景在目标维度查取）
                 RpChannels.sendTo(p, new RpPackets.CinematicS2C(en.toString()));
-                if (!cmdcamScene.isBlank()) {
+                if (sceneReady) {
                     com.ccnrcom.rp.cmdcam.CamSceneBridge.playScene(resolveDeployLevel(wave, factionId), cmdcamScene, p);
                 }
             }
@@ -537,6 +547,7 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
     public void onPlayerLoggedOut(net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
             pendingLandings.remove(player.getUUID());
+            pendingFirstJoin.remove(player.getUUID());
         }
     }
 
@@ -727,6 +738,96 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
             CCNRRPMod.characters.broadcastPlayerTags();
         }
         return true;
+    }
+
+    // ---------- 首次入服自动部署 ----------
+
+    /**
+     * 首次入服自动部署入队（登录时调用；必须在用户档案被惰性创建前判定「首次」）：
+     * 玩家无用户档案（首次进入设施）且设置了自动部署职业 → 入队，等素材同步完成且入服稳定后走统一 deploy()。
+     * 后续入服已有档案不再触发；已被其他入口部署（管理刷人/复活波）时入队扫描自动跳过。
+     */
+    public void maybeQueueFirstJoin(ServerPlayer player) {
+        if (player == null
+                || CCNRRPMod.users == null
+                || CCNRRPMod.factions == null
+                || CCNRRPMod.managerSettings == null) {
+            return;
+        }
+        if (!CCNRRPMod.managerSettings.firstJoinAutoDeploy()) {
+            return;
+        }
+        String uuid = player.getUUID().toString();
+        if (CCNRRPMod.users.hasProfile(uuid)) {
+            return; // 非首次入服（已有档案）
+        }
+        String profId = CCNRRPMod.managerSettings.firstJoinProfession();
+        if (profId == null || profId.isBlank()) {
+            return; // 未配置自动部署职业（空串 = 关闭）
+        }
+        if (CCNRRPMod.factions.findProfession(profId).isEmpty()) {
+            LOGGER.warn("[CCNR-RP] 首次入服自动部署职业不存在（跳过）: {}", profId);
+            return;
+        }
+        pendingFirstJoin.put(player.getUUID(), System.currentTimeMillis());
+        LOGGER.info("[CCNR-RP] 首次入服玩家已入队自动部署: {} → {}", player.getName().getString(), profId);
+    }
+
+    /** 每 tick：等素材同步完成（客户端异步下载中，60s 超时兜底）且过最小等待后执行自动部署。 */
+    private void checkFirstJoinDeploys() {
+        if (pendingFirstJoin.isEmpty()) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        var it = pendingFirstJoin.entrySet().iterator();
+        while (it.hasNext()) {
+            var e = it.next();
+            UUID uuid = e.getKey();
+            ServerPlayer p = server.getPlayerList().getPlayer(uuid);
+            if (p == null) {
+                it.remove(); // 已离线（onPlayerLoggedOut 兜底清理）
+                continue;
+            }
+            String suuid = uuid.toString();
+            // 已被其他入口部署（管理刷人/复活波/手动部署）→ 不再自动部署
+            if (CCNRRPMod.users == null
+                    || CCNRRPMod.users.isAlive(suuid)
+                    || com.ccnrcom.rp.sequence.SequenceEngine.isConscripted(suuid)) {
+                it.remove();
+                continue;
+            }
+            if (now - e.getValue() < FIRST_JOIN_MIN_WAIT_MS || !com.ccnrcom.rp.assets.AssetLibrary.isSynced(p)) {
+                continue; // 未到最小等待 / 素材未同步完成
+            }
+            String profId = CCNRRPMod.managerSettings == null ? "" : CCNRRPMod.managerSettings.firstJoinProfession();
+            var def = CCNRRPMod.factions == null || profId.isBlank()
+                    ? null
+                    : CCNRRPMod.factions.findProfession(profId).orElse(null);
+            if (def == null) {
+                LOGGER.warn("[CCNR-RP] 首次入服自动部署职业无效，取消: {}（{}）", p.getName().getString(), profId);
+                it.remove();
+                continue;
+            }
+            String factionId = com.ccnrcom.rp.faction.FactionProfessions.factionId(def);
+            boolean ok = deploy(p, profId, firstJoinWave(profId, factionId), DeployFlag.of());
+            it.remove();
+            LOGGER.info(
+                    "[CCNR-RP] 首次入服自动部署{}: {} → {}（{}）",
+                    ok ? "完成" : "失败",
+                    p.getName().getString(),
+                    profId,
+                    factionId);
+        }
+    }
+
+    /** 首次入服部署落点：首个启用且允许自部署并匹配该职业的刷新波，否则默认自部署波（世界出生点）。 */
+    private Wave firstJoinWave(String professionId, String factionId) {
+        return waves.stream()
+                .filter(Wave::enabled)
+                .filter(w -> w.mode().selfDeployAllowed())
+                .filter(w -> w.matchesProfession(professionId, factionId))
+                .findFirst()
+                .orElse(createDefaultSelfWave());
     }
 
     public boolean setEnabled(String waveId, boolean on) {

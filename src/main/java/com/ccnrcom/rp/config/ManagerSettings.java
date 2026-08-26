@@ -18,6 +18,8 @@ import org.apache.logging.log4j.Logger;
  * - forceObserving  : 入服强制观察者状态（默认开启）
  * - openPanelOnJoin : 入服默认打开角色面板（选择部署）
  * - forceRetain     : 强制保留角色（转生/弃演/离服 → 直接判定死亡并留遗体）
+ * - firstJoinAutoDeploy : 首次入服自动部署（默认开启；职业 id 见 firstJoinProfession）
+ * - firstJoinProfession : 首次入服自动部署的职业 id（默认 m5_intern，管理面板可编辑）
  */
 public final class ManagerSettings {
     private static final Logger LOGGER = LogManager.getLogger();
@@ -41,6 +43,8 @@ public final class ManagerSettings {
         o.addProperty("hudProfessionText", true);
         o.addProperty("hudFactionText", false);
         o.addProperty("hudHealthText", false);
+        o.addProperty("firstJoinAutoDeploy", true);
+        o.addProperty("firstJoinProfession", "m5_intern");
         return o;
     }
 
@@ -103,9 +107,27 @@ public final class ManagerSettings {
         return bool("hudHealthText", false);
     }
 
-    /** 设置项键列表（管理面板展示顺序，程序化生成开关 UI 用）。 */
+    /** 首次入服自动部署开关（true=首次入服玩家自动部署为 firstJoinProfession 职业）。 */
+    public boolean firstJoinAutoDeploy() {
+        return bool("firstJoinAutoDeploy", true);
+    }
+
+    /** 首次入服自动部署的职业 id（管理面板「设置」页可编辑；空串=关闭自动部署）。 */
+    public String firstJoinProfession() {
+        try {
+            return state.has("firstJoinProfession")
+                    ? state.get("firstJoinProfession").getAsString()
+                    : "m5_intern";
+        } catch (Exception e) {
+            return "m5_intern";
+        }
+    }
+
+    /** 设置项键列表（管理面板展示顺序，程序化生成开关/输入行 UI 用）。 */
     public static List<String> keys() {
         return List.of(
+                "firstJoinAutoDeploy",
+                "firstJoinProfession",
                 "forceObserving",
                 "openPanelOnJoin",
                 "forceRetain",
@@ -116,15 +138,24 @@ public final class ManagerSettings {
                 "hudHealthText");
     }
 
-    /** 设置单个键（仅 bool 支持），返回错误列表（空=成功）。 */
+    /** 设置项类型（管理面板渲染用）：bool=开关行，string=文本输入行。 */
+    public static String type(String key) {
+        return "firstJoinProfession".equals(key) ? "string" : "bool";
+    }
+
+    /** 设置单个键（bool=开关 / string=文本），返回错误列表（空=成功）。 */
     public List<String> set(String key, String value) {
         if (!keys().contains(key)) {
             return List.of("未知设置项: " + key);
         }
-        if (!"true".equalsIgnoreCase(value) && !"false".equalsIgnoreCase(value)) {
-            return List.of("设置值需为 true/false: " + value);
+        if ("string".equals(type(key))) {
+            state.addProperty(key, value == null ? "" : value);
+        } else {
+            if (!"true".equalsIgnoreCase(value) && !"false".equalsIgnoreCase(value)) {
+                return List.of("设置值需为 true/false: " + value);
+            }
+            state.addProperty(key, "true".equalsIgnoreCase(value));
         }
-        state.addProperty(key, "true".equalsIgnoreCase(value));
         if (!JsonUtil.atomicWrite(file, state)) {
             return List.of("设置写入失败");
         }

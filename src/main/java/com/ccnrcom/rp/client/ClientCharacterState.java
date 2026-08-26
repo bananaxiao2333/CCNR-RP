@@ -290,6 +290,18 @@ public final class ClientCharacterState {
         }
     }
 
+    /** 字符串设置项当前值（缺省按 ManagerSettings 默认值，与服务端一致）。 */
+    public static synchronized String settingString(String key, String def) {
+        try {
+            if (!settings.has(key)) {
+                return def;
+            }
+            return settings.get(key).getAsString();
+        } catch (Exception e) {
+            return def;
+        }
+    }
+
     public static synchronized List<JsonObject> factions() {
         return List.copyOf(factions);
     }

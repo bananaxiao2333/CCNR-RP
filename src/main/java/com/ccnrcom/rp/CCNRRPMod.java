@@ -101,6 +101,12 @@ public class CCNRRPMod {
 
     @SubscribeEvent
     public void onPlayerLoggedIn(net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent event) {
+        if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
+            // 首次入服自动部署入队：必须在用户档案被惰性创建（下方 status/cooldown 查询）之前判定「首次」
+            if (spawnFramework != null) {
+                spawnFramework.maybeQueueFirstJoin(player);
+            }
+        }
         if (characters != null && event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
             // 登录归一化：用户级状态 DEAD 且冷却结束 → 立即回观察者（阴间），随后同步档案
             long now = System.currentTimeMillis();
