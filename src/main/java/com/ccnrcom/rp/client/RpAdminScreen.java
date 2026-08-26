@@ -1113,7 +1113,13 @@ public class RpAdminScreen extends Screen {
                 }
             }
         }
-        stepSel = seqSteps.isEmpty() ? -1 : 0;
+        if (seqSteps.isEmpty()) {
+            // 空序列：自动加一个 WAIT 起始步骤（直接可编辑；只点「关闭」则不保存，原配置保持无 sequence）
+            seqSteps.add(defaultStep("WAIT"));
+            stepSel = 0;
+        } else {
+            stepSel = 0;
+        }
         seqScroll = 0;
         seqModalOpen = true;
         notice = "";
