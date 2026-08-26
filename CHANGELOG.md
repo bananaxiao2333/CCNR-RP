@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.17.1（修复：管理面板所有列表点击偏移 1 位）
+- 根因：新增「限制」页后 tab 数从 6 增至 7，列表点击命中循环已改为从 TABS.length 起，
+  但 visibleItem(i - 6) 仍用硬编码 6（未随 TABS.length 同步），导致所有列表（职业/阵营/事件/阶段/刷新波/限制）
+  的点击命中偏移 1 行（点第 N 行实际选中第 N+1 行）。
+- 修复：visibleItem(i - TABS.length) 与渲染基准 rowBounds.get(TABS.length + i) 对齐；
+  全量核对列表索引基准已统一为 TABS.length（渲染/点击/滚动）。
+- 构建：compileJava / spotlessCheck / test -PrunTests 全绿。
+
 ## 2.17.0（部署人数限制：限制编辑器 + 选岗显示在职/上限 + 部署前统一检测）
 - 数据模型：新增 config/ccnr_rp/limits.json 规则列表（复用 ConfigCrud 管道），规则 = 类型 + 目标 + 人数上限：
   GLOBAL（通用角色上限，职业未配置专属时兜底）/ FACTION（阵营上限）/ PROFESSION（职业上限）。
