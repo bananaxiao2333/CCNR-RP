@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.18.8（修复：K 面板 ✕ 悬停即关闭——改为点击才关闭）
+- 修复：角色管理面板（K）标题栏 ✕ 悬停即触发 onClose（误写在每帧 render 的 hover 判定里），
+  鼠标移到 ✕ 上不点击也会关闭面板；已改为与管理面板一致：渲染只高亮、mouseClicked 点击才关闭。
+- 构建：spotlessApply / build -PrunTests 全绿。
+
 ## 2.18.7（关系系统重写：多对多 + 从上到下优先级 + 关系测定图）
 - 关系声明改为**多对多**：`RelationRule {from[], to?, type}`，from/to 各为一个 id 列表
   （阵营或组，组自动展开），生效范围 = from × to 笛卡尔积、关系双向对称；兼容旧格式单字符串。
