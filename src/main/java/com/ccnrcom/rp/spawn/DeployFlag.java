@@ -23,7 +23,9 @@ public enum DeployFlag {
     /** 不刷额外提示（安静部署：不广播部署成功文案）。 */
     QUIET,
     /** 临时身份部署（征召兵：不写用户库角色，推送征召身份给客户端）。 */
-    TEMP;
+    TEMP,
+    /** 跳过部署人数限制（管理员刷人/强制征召等系统强制操作；玩家自部署/重新部署不设此 flag）。 */
+    LIMIT_SKIP;
 
     public static Set<DeployFlag> of(DeployFlag... flags) {
         return flags.length == 0 ? EnumSet.noneOf(DeployFlag.class) : EnumSet.of(flags[0], flags);

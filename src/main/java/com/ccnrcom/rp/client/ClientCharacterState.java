@@ -29,6 +29,10 @@ public final class ClientCharacterState {
     private static final List<JsonObject> managerEvents = new ArrayList<>();
     private static final List<JsonObject> managerPhases = new ArrayList<>();
     private static final List<JsonObject> managerWaves = new ArrayList<>();
+    /** 部署人数限制规则（limits.json rules，K 面板展示用）。 */
+    private static final List<JsonObject> deployLimits = new ArrayList<>();
+    /** 当前在职统计（occupancy：professions/factions → 人数，K 面板展示用）。 */
+    private static JsonObject occupancy = new JsonObject();
     /** 已上传音乐名（管理面板补全提示）。 */
     private static final List<String> musicList = new ArrayList<>();
     /** CMDCam 已保存场景名（管理面板 CMDCam 场景输入项补全提示；未装/读取失败=空）。 */
@@ -112,6 +116,17 @@ public final class ClientCharacterState {
                 professions.add(e.getAsJsonObject());
             }
         }
+        deployLimits.clear();
+        if (root.has("limits") && root.get("limits").isJsonArray()) {
+            for (JsonElement e : root.getAsJsonArray("limits")) {
+                if (e.isJsonObject()) {
+                    deployLimits.add(e.getAsJsonObject());
+                }
+            }
+        }
+        occupancy = root.has("occupancy") && root.get("occupancy").isJsonObject()
+                ? root.getAsJsonObject("occupancy")
+                : new JsonObject();
         if (root.has("settings") && root.get("settings").isJsonObject()) {
             settings = root.getAsJsonObject("settings");
         }
@@ -452,6 +467,76 @@ public final class ClientCharacterState {
 
     public static synchronized List<JsonObject> managerWaves() {
         return List.copyOf(managerWaves);
+    }
+
+    // ---------- 部署人数限制（K 面板展示） ----------
+
+    /** 部署人数限制规则列表（limits.json rules 原始 JSON，客户端展示用）。 */
+    public static synchronized List<JsonObject> deployLimits() {
+        return List.copyOf(deployLimits);
+    }
+
+    /** 当前在职统计（occupancy JSON：professions/factions → 人数）。 */
+    public static synchronized JsonObject occupancy() {
+        return occupancy;
+    }
+
+    /** 指定职业当前在职人数（无统计时 0）。 */
+    public static synchronized int professionOccupied(String professionId) {
+        return occNum("professions", professionId);
+    }
+
+    /** 指定阵营当前在职人数（无统计时 0）。 */
+    public static synchronized int factionOccupied(String factionId) {
+        return occNum("factions", factionId);
+    }
+
+    /** 职业维度有效上限（PROFESSION 专属或 GLOBAL 兜底；无则 -1=不限）。 */
+    public static synchronized int professionLimit(String professionId) {
+        int global = -1;
+        for (JsonObject r : deployLimits) {
+            String type = str(r, "type", "").toUpperCase(java.util.Locale.ROOT);
+            if ("PROFESSION".equals(type) && professionId.equals(str(r, "target", ""))) {
+                return num(r, "limit", -1);
+            }
+            if ("GLOBAL".equals(type)) {
+                global = num(r, "limit", -1);
+            }
+        }
+        return global;
+    }
+
+    /** 阵营维度有效上限（FACTION 专属；无则 -1=不限）。 */
+    public static synchronized int factionLimit(String factionId) {
+        for (JsonObject r : deployLimits) {
+            String type = str(r, "type", "").toUpperCase(java.util.Locale.ROOT);
+            if ("FACTION".equals(type) && factionId.equals(str(r, "target", ""))) {
+                return num(r, "limit", -1);
+            }
+        }
+        return -1;
+    }
+
+    private static int occNum(String group, String id) {
+        try {
+            if (occupancy.has(group) && occupancy.get(group).isJsonObject()) {
+                JsonObject g = occupancy.getAsJsonObject(group);
+                if (g.has(id)) {
+                    return g.get(id).getAsInt();
+                }
+            }
+        } catch (Exception e) {
+            // 畸形统计忽略
+        }
+        return 0;
+    }
+
+    private static int num(JsonObject o, String key, int def) {
+        try {
+            return o.has(key) ? o.get(key).getAsInt() : def;
+        } catch (Exception e) {
+            return def;
+        }
     }
 
     public static synchronized List<JsonObject> managerSequences() {

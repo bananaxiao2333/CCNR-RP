@@ -331,6 +331,36 @@ public final class UserService {
         return java.util.Set.copyOf(profiles.keySet());
     }
 
+    // ---------- 在职统计（部署人数限制用） ----------
+
+    /** 指定职业的当前在职人数（status==ALIVE 且职业匹配；不含 TEMP 征召，征召不进用户库）。 */
+    public int aliveCountByProfession(String professionId) {
+        if (professionId == null) {
+            return 0;
+        }
+        int n = 0;
+        for (UserProfile p : profiles.values()) {
+            if (p.status() == CharacterStatus.ALIVE && professionId.equals(p.professionId())) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    /** 指定阵营的当前在职人数（status==ALIVE 且阵营匹配）。 */
+    public int aliveCountByFaction(String factionId) {
+        if (factionId == null) {
+            return 0;
+        }
+        int n = 0;
+        for (UserProfile p : profiles.values()) {
+            if (p.status() == CharacterStatus.ALIVE && factionId.equals(p.factionId())) {
+                n++;
+            }
+        }
+        return n;
+    }
+
     // ---------- 支援身份开关 ----------
 
     public boolean anySupportRevive(String playerUuid) {

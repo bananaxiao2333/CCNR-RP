@@ -151,7 +151,18 @@ public class CharacterManagementScreen extends Screen {
             boolean observing = st == CharacterStatus.OBSERVING;
             boolean alive = st == CharacterStatus.ALIVE;
             boolean onCd = ClientCharacterState.userCooldownUntil() > System.currentTimeMillis();
-            boolean canDeploy = met && (observing || alive) && !onCd;
+            // 部署人数限制（全局性，客户端预览；服务端 deploy 统一入口仍会强校验）：
+            // 重新部署（在场换岗）时自己已占旧职业/阵营位，目标职业/阵营在职数按「不含自己」计算
+            boolean selfAlive = alive;
+            boolean selfInProf = selfAlive && selectedId.equals(ClientCharacterState.userProfessionId());
+            boolean selfInFac = selfAlive && str(p, "factionId").equals(ClientCharacterState.userFactionId());
+            int profOccupied = ClientCharacterState.professionOccupied(selectedId) - (selfInProf ? 1 : 0);
+            int facOccupied = ClientCharacterState.factionOccupied(str(p, "factionId")) - (selfInFac ? 1 : 0);
+            int profLimit = ClientCharacterState.professionLimit(selectedId);
+            int facLimit = ClientCharacterState.factionLimit(str(p, "factionId"));
+            boolean profFull = profLimit >= 0 && profOccupied >= profLimit;
+            boolean facFull = facLimit >= 0 && facOccupied >= facLimit;
+            boolean canDeploy = met && (observing || alive) && !onCd && !profFull && !facFull;
             RpButton deploy =
                     RpButton.primary(x, ay, w, 22, Component.translatable("ccnr_rp.gui.character.deploy"), b -> {
                         if (ClientCharacterState.userStatus() == CharacterStatus.ALIVE) {
@@ -167,6 +178,16 @@ public class CharacterManagementScreen extends Screen {
             if (!met) {
                 // 等级未达标：按钮置红并提示需要等级
                 deploy.setMessage(Component.translatable("ccnr_rp.gui.character.need_level", unlockLevel(p)));
+            } else if (profFull || facFull) {
+                // 空位不足：禁用并提示限制（优先职业上限，其次阵营上限）
+                if (profFull) {
+                    deploy.setMessage(
+                            Component.translatable("ccnr_rp.spawn.limit.profession_full", str(p, "name"), profLimit));
+                } else {
+                    deploy.setMessage(Component.translatable(
+                            "ccnr_rp.spawn.limit.faction_full", factionName(p, factionMeta), facLimit));
+                }
+                deploy.active = false;
             } else if (!observing && !alive) {
                 // 等级达标但当前状态不可部署（阴间等）：禁用（不误标为等级问题）
                 deploy.setMessage(Component.translatable("ccnr_rp.gui.character.deploy"));
@@ -531,6 +552,19 @@ public class CharacterManagementScreen extends Screen {
             int color = met ? RpTheme.STATUS_ALIVE : RpTheme.RED_LINE;
             RpRoundRect.fill(g, tx2 - tagW, b[1] + 6, tx2, b[1] + 18, 3f, RpTheme.alphaBlend(color, met ? 0x66 : 0xFF));
             g.drawString(font, tag, tx2 - tagW + 4, b[1] + 8, met ? color : 0xFFFFFFFF, true);
+            // 在职/上限小标签（部署限制预览；服务端 deploy 强校验）
+            int lim = ClientCharacterState.professionLimit(str(p, "id"));
+            if (lim >= 0) {
+                int occ = ClientCharacterState.professionOccupied(str(p, "id"));
+                String occTag = occ + "/" + lim;
+                boolean full = occ >= lim;
+                int oTagW = font.width(occTag) + 8;
+                int ox2 = tx2 - tagW - 8;
+                int oCol = full ? RpTheme.RED_LINE : RpTheme.STATUS_ALIVE;
+                RpRoundRect.fill(
+                        g, ox2 - oTagW, b[1] + 6, ox2, b[1] + 18, 3f, RpTheme.alphaBlend(oCol, full ? 0xFF : 0x66));
+                g.drawString(font, occTag, ox2 - oTagW + 4, b[1] + 8, full ? 0xFFFFFFFF : oCol, true);
+            }
         }
         // 职位列表滚动条（可拖拽）
         RpScrollbar.draw(g, mlX2 - 7, bodyY1, bodyY2, visible.size(), maxVisibleRows(), offsetOfRows());
@@ -567,11 +601,29 @@ public class CharacterManagementScreen extends Screen {
         boolean met = userLevel() >= unlockLevel(p);
         String req = "需求等级：Lv " + unlockLevel(p) + "（当前 Lv " + userLevel() + "）";
         g.drawString(font, req, x + 8, y + 24, met ? RpTheme.STATUS_ALIVE : RpTheme.RED_LINE);
+        // 部署限制与当前在职（全局性限制预览；服务端 deploy 统一入口强校验）
+        int profLimit = ClientCharacterState.professionLimit(str(p, "id"));
+        int facLimit = ClientCharacterState.factionLimit(str(p, "factionId"));
+        int profOcc = ClientCharacterState.professionOccupied(str(p, "id"));
+        int facOcc = ClientCharacterState.factionOccupied(str(p, "factionId"));
+        StringBuilder lim = new StringBuilder("在职 ");
+        if (profLimit >= 0) {
+            lim.append(profOcc).append("/").append(profLimit).append(" 职业");
+        } else {
+            lim.append(profOcc).append("（职业不限）");
+        }
+        if (facLimit >= 0) {
+            lim.append("  ·  阵营 ").append(facOcc).append("/").append(facLimit);
+        }
+        boolean profFull = profLimit >= 0 && profOcc >= profLimit;
+        boolean facFull = facLimit >= 0 && facOcc >= facLimit;
+        g.drawString(
+                font, lim.toString(), x + 8, y + 36, (profFull || facFull) ? RpTheme.RED_LINE : RpTheme.STATUS_ALIVE);
         g.drawString(
                 font,
                 Component.translatable("ccnr_rp.gui.character.preview").getString(),
                 x + 8,
-                y + 36,
+                y + 48,
                 RpTheme.TEXT_DIM,
                 true);
         JsonObject loadout = loadoutOf(p);

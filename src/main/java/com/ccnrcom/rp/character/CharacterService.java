@@ -262,6 +262,9 @@ public final class CharacterService {
         JsonArray wav = new JsonArray();
         com.ccnrcom.rp.util.ConfigCrud.items("spawn_waves.json", "waves").forEach(wav::add);
         pay.add("waves", wav);
+        JsonArray lim = new JsonArray();
+        com.ccnrcom.rp.util.ConfigCrud.items("limits.json", "rules").forEach(lim::add);
+        pay.add("limits", lim);
         // serverconfig 程序化设定（管理面板「设定」标签）
         pay.add("serverConfig", com.ccnrcom.rp.config.CCNRRPConfig.values());
         // CMDCam 已保存场景名（管理面板 CMDCam 场景输入项补全提示；未装/读取失败=空列表）
@@ -396,6 +399,20 @@ public final class CharacterService {
                     }
                     if (!o.has("recruitTimeoutSeconds")) {
                         o.addProperty("recruitTimeoutSeconds", 60);
+                    }
+                });
+            }
+            case "limit" -> {
+                String id = str(p, "id", "");
+                errors = crudArray("limits.json", "rules", action, id, p, o -> {
+                    if (!o.has("type")) {
+                        o.addProperty("type", "GLOBAL");
+                    }
+                    if (!o.has("target")) {
+                        o.addProperty("target", "");
+                    }
+                    if (!o.has("limit")) {
+                        o.addProperty("limit", 1);
                     }
                 });
             }
@@ -667,7 +684,8 @@ public final class CharacterService {
                         com.ccnrcom.rp.spawn.DeployFlag.FORCE_DEPLOY,
                         com.ccnrcom.rp.spawn.DeployFlag.SKIP_CINEMATIC,
                         com.ccnrcom.rp.spawn.DeployFlag.NO_MUSIC,
-                        com.ccnrcom.rp.spawn.DeployFlag.QUIET));
+                        com.ccnrcom.rp.spawn.DeployFlag.QUIET,
+                        com.ccnrcom.rp.spawn.DeployFlag.LIMIT_SKIP));
         if (!ok) {
             service().sendError(player, "ccnr_rp.spawn.error.self_deploy");
             return;
@@ -928,6 +946,24 @@ public final class CharacterService {
             }
         }
         root.add("professions", pa);
+        // 部署人数限制规则 + 当前在职统计（K 面板「限制与在职」展示用）
+        JsonArray lim = new JsonArray();
+        com.ccnrcom.rp.util.ConfigCrud.items("limits.json", "rules").forEach(lim::add);
+        root.add("limits", lim);
+        JsonObject occ = new JsonObject();
+        JsonObject occProf = new JsonObject();
+        if (CCNRRPMod.users != null && CCNRRPMod.factions != null) {
+            for (String pid : CCNRRPMod.factions.professionIds()) {
+                occProf.addProperty(pid, CCNRRPMod.users.aliveCountByProfession(pid));
+            }
+            JsonObject occFac = new JsonObject();
+            for (String fid : CCNRRPMod.factions.graph().factions().keySet()) {
+                occFac.addProperty(fid, CCNRRPMod.users.aliveCountByFaction(fid));
+            }
+            occ.add("professions", occProf);
+            occ.add("factions", occFac);
+        }
+        root.add("occupancy", occ);
         JsonObject st = new JsonObject();
         if (CCNRRPMod.managerSettings != null) {
             st = CCNRRPMod.managerSettings.toJson();
