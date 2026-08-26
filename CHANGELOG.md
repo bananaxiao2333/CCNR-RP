@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.17.13（悬浮标签状态变化即时刷新 + 异步广播；管理面板配置中文标签补全）
+- 悬浮标签刷新时机：UserService.setStatus/setRole 值真正变化时（部署/死亡/复活/换岗/下班）自动触发
+  全服标签刷新，其他玩家头顶标签立即同步（不再残留「人死了头顶还挂标签」的过期数据）；幂等去重。
+- 广播异步化：独立线程构建 payload（人多不阻塞主线程），构建完成后回主线程发网络包；合并去重。
+- 管理面板「设定」页：新增 nametag 配置（enabled/badgeSize/offset）补全中文标签
+  （头顶标签开关 / 头顶标签徽章大小 / 头顶标签高度(格)）。
+- 构建：spotlessApply / build / test -PrunTests 全绿；jar 已部署 .minecraft/mods/ccnr_rp-2.17.13.jar。
+
 ## 2.17.12（头顶标签可配置化：显示开关/徽章大小/标签高度，服务端权威同步；清理硬编码）
 - 新增服务端配置（serverconfig/ccnr_rp-server.toml → nametag 段，随 CharacterListS2C 同步全员）：
   - enabled：头顶悬浮标签总开关（false=完全关闭）。
