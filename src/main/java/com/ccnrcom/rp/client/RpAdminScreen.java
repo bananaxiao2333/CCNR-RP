@@ -1096,6 +1096,35 @@ public class RpAdminScreen extends Screen {
     // ---------- 行为序列编辑器（流程编辑器，仿出生点弹窗） ----------
 
     private static final String[] SEQ_TYPES = {"WAIT", "WAVE", "COMMAND", "FORCE_PICK"};
+    /** 「触发事件」锚点步骤类型：序列中的只读锚点，不可删除/不可改类型/不可编辑参数，但可上移下移调整位置。 */
+    private static final String TRIGGER_TYPE = "TRIGGER";
+
+    /** 生成「触发事件」锚点步骤（只读）：source=kind:id，label=显示名。 */
+    private JsonObject makeTriggerAnchor() {
+        JsonObject it = selItem();
+        String id = it == null ? idBox.getValue() : str(it, "id");
+        JsonObject a = new JsonObject();
+        a.addProperty("type", TRIGGER_TYPE);
+        a.addProperty("source", crudKind() + ":" + id);
+        a.addProperty("label", kindLabel(crudKind()) + " " + id);
+        return a;
+    }
+
+    private boolean isTriggerStep(int idx) {
+        return idx >= 0
+                && idx < seqSteps.size()
+                && TRIGGER_TYPE.equals(str(seqSteps.get(idx), "type", "").toUpperCase(java.util.Locale.ROOT));
+    }
+
+    /** 第一个可编辑（非锚点）步骤下标；无则 -1。 */
+    private int firstEditableStep() {
+        for (int i = 0; i < seqSteps.size(); i++) {
+            if (!isTriggerStep(i)) {
+                return i;
+            }
+        }
+        return -1;
+    }
 
     /** 打开流程编辑器弹窗：载入当前选中条目（事件/阶段/刷新波）的 sequence 数组到工作副本。 */
     private void openSequenceModal() {
@@ -1113,13 +1142,21 @@ public class RpAdminScreen extends Screen {
                 }
             }
         }
-        if (seqSteps.isEmpty()) {
-            // 空序列：自动加一个 WAIT 起始步骤（直接可编辑；只点「关闭」则不保存，原配置保持无 sequence）
-            seqSteps.add(defaultStep("WAIT"));
-            stepSel = 0;
-        } else {
-            stepSel = 0;
+        // 「触发事件」锚点：序列中必须保留一个（不可删/不可改类型/不可编辑参数，可上移下移）。
+        // 旧数据缺失时补插为首项；已有则保留原位置，仅刷新 source/label 与当前上下文对齐
+        boolean hasTrigger = false;
+        for (int i = 0; i < seqSteps.size(); i++) {
+            if (isTriggerStep(i)) {
+                seqSteps.set(i, makeTriggerAnchor());
+                hasTrigger = true;
+                break;
+            }
         }
+        if (!hasTrigger) {
+            seqSteps.add(0, makeTriggerAnchor());
+        }
+        // 默认选中第一个可编辑步骤（锚点只读）
+        stepSel = firstEditableStep();
         seqScroll = 0;
         seqModalOpen = true;
         notice = "";
@@ -1156,6 +1193,7 @@ public class RpAdminScreen extends Screen {
     private static String stepSummary(JsonObject s) {
         String type = str(s, "type", "WAIT").toUpperCase(java.util.Locale.ROOT);
         return switch (type) {
+            case "TRIGGER" -> "触发事件：" + str(s, "label");
             case "WAIT" -> "等待 " + num(s, "seconds", 10) + "s";
             case "WAVE" -> "召唤波 " + str(s, "wave");
             case "COMMAND" -> "命令 " + str(s, "command");
@@ -1166,6 +1204,9 @@ public class RpAdminScreen extends Screen {
     }
 
     private void cycleStepType() {
+        if (isTriggerStep(stepSel)) {
+            return; // 锚点不可改类型
+        }
         if (stepSel < 0 || stepSel >= seqSteps.size()) {
             return;
         }
@@ -1203,20 +1244,21 @@ public class RpAdminScreen extends Screen {
         sqFieldY2 = sqY2 - 14;
     }
 
+    /** 步骤列表可见行数。 */
     private int seqMaxVisible() {
         int rowH = 22;
         int h = sqListY2 - sqListY1;
         return Math.max(1, (h + 2) / rowH);
     }
 
-    /** 重建选中步骤的参数字段输入框（打开/点选/切类型/添加时调用）。 */
+    /** 重建选中步骤的参数字段输入框（打开/点选/切类型/添加时调用；锚点只读无输入框）。 */
     private void rebuildSeqBoxes() {
         layoutSeqModal(); // 先算弹窗几何（输入框按弹窗内坐标定位）
         for (EditBox b : seqBoxes.values()) {
             removeWidget(b);
         }
         seqBoxes.clear();
-        if (!seqModalOpen || stepSel < 0 || stepSel >= seqSteps.size()) {
+        if (!seqModalOpen || isTriggerStep(stepSel)) {
             return;
         }
         JsonObject s = seqSteps.get(stepSel);
@@ -1261,6 +1303,20 @@ public class RpAdminScreen extends Screen {
     /** 保存流程：收集字段 → 写 editedSequence → 复用主表单 CRUD 保存（payload 带上 sequence）→ 关闭。 */
     private void saveSequenceModal() {
         collectSeqFields();
+        // 锚点（触发事件）原位对齐当前上下文：source/label 由容器 id 生成，位置保留用户调整结果；缺失补插为首项
+        JsonObject anchor = makeTriggerAnchor();
+        boolean refreshed = false;
+        for (int i = 0; i < seqSteps.size(); i++) {
+            if (isTriggerStep(i)) {
+                seqSteps.get(i).addProperty("source", anchor.get("source").getAsString());
+                seqSteps.get(i).addProperty("label", anchor.get("label").getAsString());
+                refreshed = true;
+                break;
+            }
+        }
+        if (!refreshed) {
+            seqSteps.add(0, anchor);
+        }
         JsonArray arr = new JsonArray();
         for (JsonObject s : seqSteps) {
             arr.add(s.deepCopy());
@@ -1303,7 +1359,7 @@ public class RpAdminScreen extends Screen {
                 sqRuleY2,
                 "类型: " + typeCur,
                 inRect(mouseX, mouseY, sqRuleX1, sqRuleY1, sqRuleX2, sqRuleY2) ? borderHover : border,
-                stepSel >= 0);
+                stepSel >= 1); // 锚点不可改类型
         // 添加步骤
         sqAddX1 = sqRuleX2 + 4;
         sqAddY1 = cy;
@@ -1353,7 +1409,8 @@ public class RpAdminScreen extends Screen {
                 cy + 24,
                 RpTheme.TEXT_DIM);
 
-        // 步骤列表（滚动，行高 22）：点选 / 上移 / 下移 / 删除
+        // 步骤列表（滚动，行高 22）：点选 / 上移 / 下移 / 删除；
+        // 「触发事件」锚点行为只读行（🔒 锁定样式，无删除按钮，但可上移下移调整位置）
         sqStepBounds.clear();
         sqUpBounds.clear();
         sqDownBounds.clear();
@@ -1368,31 +1425,42 @@ public class RpAdminScreen extends Screen {
             }
             JsonObject s = seqSteps.get(idx);
             boolean sel = idx == stepSel;
-            int rowX1 = cx;
-            int rowX2 = cw - 158; // 右侧留按钮区
+            boolean anchor = isTriggerStep(idx);
+            int rX1 = cx;
+            int rX2 = cw - 158; // 右侧留按钮区（锚点少一个「删」，按钮区仍对齐）
             if (sel) {
-                RpTheme.selectedBar(g, rowX1, ry, rowX2, ry + 20, 6f);
+                RpTheme.selectedBar(g, rX1, ry, rX2, ry + 20, 6f);
+            } else if (anchor) {
+                RpRoundRect.outlined(
+                        g,
+                        rX1,
+                        ry,
+                        rX2,
+                        ry + 20,
+                        6f,
+                        inRect(mouseX, mouseY, rX1, ry, rX2, ry + 20) ? RpTheme.CYAN_DIM : border,
+                        RpTheme.alphaBlend(RpTheme.CYAN, 0x18));
             } else {
                 RpRoundRect.outlined(
                         g,
-                        rowX1,
+                        rX1,
                         ry,
-                        rowX2,
+                        rX2,
                         ry + 20,
                         6f,
-                        inRect(mouseX, mouseY, rowX1, ry, rowX2, ry + 20) ? borderHover : border,
+                        inRect(mouseX, mouseY, rX1, ry, rX2, ry + 20) ? borderHover : border,
                         i % 2 == 0 ? RpTheme.PANEL_BG : RpTheme.PANEL_BG_EVEN);
             }
+            String label = anchor
+                    ? "🔒 " + stepSummary(s) + "（只读，触发来源 " + str(s, "source") + "）"
+                    : "[" + idx + "] " + stepSummary(s);
             g.drawString(
-                    font,
-                    "[" + idx + "] " + stepSummary(s),
-                    rowX1 + 6,
-                    ry + 5,
-                    sel ? 0xFFFFFFFF : RpTheme.TEXT_PRIMARY);
-            sqStepBounds.add(new int[] {rowX1, ry, rowX2, ry + 20});
-            int bx = rowX2 + 4;
+                    font, label, rX1 + 6, ry + 5, sel ? 0xFFFFFFFF : (anchor ? RpTheme.CYAN : RpTheme.TEXT_PRIMARY));
+            // 5 元素：x1,y1,x2,y2,absIdx（绝对下标，供点击映射；锚点含 ↑↓ 不含 删）
+            sqStepBounds.add(new int[] {rX1, ry, rX2, ry + 20, idx});
+            int bx = rX2 + 4;
             int bw3 = Math.max(30, (cw - bx - 4) / 3);
-            sqUpBounds.add(new int[] {bx, ry, bx + bw3, ry + 20});
+            sqUpBounds.add(new int[] {bx, ry, bx + bw3, ry + 20, idx});
             RpButton.draw(
                     g,
                     bx,
@@ -1402,7 +1470,7 @@ public class RpAdminScreen extends Screen {
                     "↑",
                     inRect(mouseX, mouseY, bx, ry, bx + bw3, ry + 20) ? borderHover : border,
                     false);
-            sqDownBounds.add(new int[] {bx + bw3 + 2, ry, bx + bw3 * 2 + 2, ry + 20});
+            sqDownBounds.add(new int[] {bx + bw3 + 2, ry, bx + bw3 * 2 + 2, ry + 20, idx});
             RpButton.draw(
                     g,
                     bx + bw3 + 2,
@@ -1412,16 +1480,18 @@ public class RpAdminScreen extends Screen {
                     "↓",
                     inRect(mouseX, mouseY, bx + bw3 + 2, ry, bx + bw3 * 2 + 2, ry + 20) ? borderHover : border,
                     false);
-            sqDelBounds.add(new int[] {bx + bw3 * 2 + 4, ry, bx + bw3 * 3 + 4, ry + 20});
-            RpButton.draw(
-                    g,
-                    bx + bw3 * 2 + 4,
-                    ry,
-                    bx + bw3 * 3 + 4,
-                    ry + 20,
-                    "删",
-                    inRect(mouseX, mouseY, bx + bw3 * 2 + 4, ry, bx + bw3 * 3 + 4, ry + 20) ? borderHover : border,
-                    false);
+            if (!anchor) {
+                sqDelBounds.add(new int[] {bx + bw3 * 2 + 4, ry, bx + bw3 * 3 + 4, ry + 20, idx});
+                RpButton.draw(
+                        g,
+                        bx + bw3 * 2 + 4,
+                        ry,
+                        bx + bw3 * 3 + 4,
+                        ry + 20,
+                        "删",
+                        inRect(mouseX, mouseY, bx + bw3 * 2 + 4, ry, bx + bw3 * 3 + 4, ry + 20) ? borderHover : border,
+                        false);
+            }
             ry += 22;
         }
         if (seqSteps.isEmpty()) {
@@ -1429,15 +1499,34 @@ public class RpAdminScreen extends Screen {
         }
         RpScrollbar.draw(g, cw - 8, sqListY1, sqListY2, seqSteps.size(), maxVis, off);
 
-        // 选中步骤参数字段（输入框 + 手动标签；输入框由 rebuildSeqBoxes 生成）
-        if (stepSel >= 0 && stepSel < seqSteps.size()) {
+        // 选中项参数区：锚点只读展示；可编辑步骤按类型生成输入框
+        if (isTriggerStep(stepSel)) {
+            JsonObject anchor = seqSteps.get(stepSel);
+            g.drawString(font, "触发事件锚点（只读）：", sqFieldX1, sqFieldY1 - 12, RpTheme.TEXT_DIM);
+            g.drawString(
+                    font,
+                    str(anchor, "label") + "（source=" + str(anchor, "source") + "）",
+                    sqFieldX1,
+                    sqFieldY1 + 4,
+                    RpTheme.TEXT_SECONDARY);
+            g.drawString(
+                    font,
+                    "代表触发本序列的真实事件/环境，不可删除、不可修改、不可编辑参数；可用 ↑↓ 调整位置，实际执行由其余步骤承担。",
+                    sqFieldX1,
+                    sqFieldY1 + 22,
+                    RpTheme.TEXT_DIM);
+        } else if (stepSel >= 0 && stepSel < seqSteps.size()) {
             String type = str(seqSteps.get(stepSel), "type", "WAIT").toUpperCase(java.util.Locale.ROOT);
             g.drawString(font, "步骤参数（" + type + "）：", sqFieldX1, sqFieldY1 - 12, RpTheme.TEXT_DIM);
             switch (type) {
                 case "WAIT" -> g.drawString(font, "等待秒数", sqFieldX1, sqFieldY1 + 4, RpTheme.TEXT_DIM);
                 case "WAVE" -> g.drawString(font, "刷新波 ID", sqFieldX1, sqFieldY1 + 4, RpTheme.TEXT_DIM);
                 case "COMMAND" -> g.drawString(
-                        font, "命令文本（可用 {{event}} {{phase}} {{seq}} 变量）", sqFieldX1, sqFieldY1 + 4, RpTheme.TEXT_DIM);
+                        font,
+                        "命令文本（可用 {{event}} {{phase}} {{seq}} {{trigger}} 变量）",
+                        sqFieldX1,
+                        sqFieldY1 + 4,
+                        RpTheme.TEXT_DIM);
                 case "FORCE_PICK" -> {
                     g.drawString(font, "数量", sqFieldX1, sqFieldY1 + 4, RpTheme.TEXT_DIM);
                     int bw2 = (sqFieldX2 - sqFieldX1 - 4) / 2;
@@ -1474,8 +1563,8 @@ public class RpAdminScreen extends Screen {
             int[] b = sqUpBounds.get(i);
             if (inRect((int) mx, (int) my, b[0], b[1], b[2], b[3])) {
                 collectSeqFields();
-                int idx = Math.min(seqScroll, Math.max(0, seqSteps.size() - seqMaxVisible())) + i;
-                if (idx > 0 && idx < seqSteps.size()) {
+                int idx = b.length > 4 ? b[4] : -1;
+                if (idx > 0 && idx < seqSteps.size()) { // 所有步骤（含锚点）可上移，但不能越过首位
                     java.util.Collections.swap(seqSteps, idx, idx - 1);
                     stepSel = idx - 1;
                 }
@@ -1487,7 +1576,7 @@ public class RpAdminScreen extends Screen {
             int[] b = sqDownBounds.get(i);
             if (inRect((int) mx, (int) my, b[0], b[1], b[2], b[3])) {
                 collectSeqFields();
-                int idx = Math.min(seqScroll, Math.max(0, seqSteps.size() - seqMaxVisible())) + i;
+                int idx = b.length > 4 ? b[4] : -1;
                 if (idx >= 0 && idx + 1 < seqSteps.size()) {
                     java.util.Collections.swap(seqSteps, idx, idx + 1);
                     stepSel = idx + 1;
@@ -1499,8 +1588,8 @@ public class RpAdminScreen extends Screen {
         for (int i = 0; i < sqDelBounds.size(); i++) {
             int[] b = sqDelBounds.get(i);
             if (inRect((int) mx, (int) my, b[0], b[1], b[2], b[3])) {
-                int idx = Math.min(seqScroll, Math.max(0, seqSteps.size() - seqMaxVisible())) + i;
-                if (idx >= 0 && idx < seqSteps.size()) {
+                int idx = b.length > 4 ? b[4] : -1;
+                if (idx >= 0 && idx < seqSteps.size() && !isTriggerStep(idx)) { // 锚点不可删除
                     seqSteps.remove(idx);
                     if (stepSel >= seqSteps.size()) {
                         stepSel = seqSteps.size() - 1;
@@ -1514,7 +1603,7 @@ public class RpAdminScreen extends Screen {
             int[] b = sqStepBounds.get(i);
             if (inRect((int) mx, (int) my, b[0], b[1], b[2], b[3])) {
                 collectSeqFields();
-                int idx = Math.min(seqScroll, Math.max(0, seqSteps.size() - seqMaxVisible())) + i;
+                int idx = b.length > 4 ? b[4] : -1;
                 if (idx >= 0 && idx < seqSteps.size()) {
                     stepSel = idx;
                 }

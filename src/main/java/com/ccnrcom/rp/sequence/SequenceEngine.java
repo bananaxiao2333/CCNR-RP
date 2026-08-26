@@ -183,8 +183,17 @@ public final class SequenceEngine {
         long now = System.currentTimeMillis();
         long acc = 0;
         List<Step> steps = new ArrayList<>();
+        String trigger = "";
         for (JsonObject s : stepsIn) {
             String type = str(s, "type", "WAIT").toUpperCase(java.util.Locale.ROOT);
+            // TRIGGER 锚点：序列首项的「触发事件」语义（代表触发本序列的真实事件/环境），
+            // 只读展示与变量注入，不执行、不占时间线
+            if ("TRIGGER".equals(type)) {
+                if (trigger.isBlank()) {
+                    trigger = str(s, "source", "");
+                }
+                continue;
+            }
             long delay = num(s, "seconds", 0);
             steps.add(new Step(type, s, now + acc));
             // WAIT 消耗时间，其余步骤在同一时间点顺序执行
@@ -192,8 +201,16 @@ public final class SequenceEngine {
                 acc += Math.max(0, delay) * 1000L;
             }
         }
+        if (steps.isEmpty()) {
+            LOGGER.info("[CCNR-RP] 序列仅含触发锚点（无执行步骤），跳过: {}", label);
+            return List.of();
+        }
         Map<String, String> merged = new HashMap<>(vars);
         merged.put("seq", label);
+        // 触发环境注入：COMMAND 步骤可用 {{trigger}} 引用触发来源（如 event:qdf_support）
+        if (!trigger.isBlank()) {
+            merged.put("trigger", trigger);
+        }
         synchronized (runs) {
             runs.add(new Run(label, merged, steps, now));
         }
@@ -243,6 +260,7 @@ public final class SequenceEngine {
         try {
             switch (type) {
                 case "WAIT" -> {}
+                case "TRIGGER" -> {} // 安全兜底：锚点不执行（正常已在 runSteps 过滤）
                 case "COMMAND" -> {
                     String cmd = inject(str(p, "command", ""), vars);
                     if (!cmd.isBlank()) {
