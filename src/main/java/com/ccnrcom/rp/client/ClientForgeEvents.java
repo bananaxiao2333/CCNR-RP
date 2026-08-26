@@ -124,6 +124,19 @@ public final class ClientForgeEvents {
         ClientCharacterState.resetForJoin();
     }
 
+    /** 世界空间渲染：其他玩家头顶悬浮标签（客户端本地 billboard，只有自己可见）。 */
+    @SubscribeEvent
+    public static void onRenderLevel(net.minecraftforge.client.event.RenderLevelStageEvent event) {
+        if (event.getStage() != net.minecraftforge.client.event.RenderLevelStageEvent.Stage.AFTER_ENTITIES) {
+            return;
+        }
+        PlayerNametagRenderer.renderWorld(
+                event.getPoseStack(),
+                event.getCamera(),
+                event.getPartialTick(),
+                Minecraft.getInstance().renderBuffers().bufferSource());
+    }
+
     /** 事件横幅滚轮：鼠标悬停横幅区域时横向滚动（并拦截向下传递）。 */
     @SubscribeEvent
     public static void onMouseScroll(net.minecraftforge.client.event.InputEvent.MouseScrollingEvent event) {

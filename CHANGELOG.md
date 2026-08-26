@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.17.10（头顶标签：改为世界空间 billboard 悬浮标签，客户端本地渲染、只有自己可见、始终面向相机）
+- 放弃 HUD 屏幕投影方案（屏幕坐标换算受 FOV/距离影响，易出位置漂移问题）。
+- 改为仿原版名字牌的世界空间渲染：RenderLevelStageEvent.AFTER_ENTITIES 阶段在玩家头顶上方
+  mulPose(cameraOrientation) 使标签始终面向相机 + scale(-0.025,-0.025,0.025) + font.drawInBatch 绘制
+  职业名（阵营色）/ 玩家名 / 等级 三行（带半透明底衬）。
+- 只有本地客户端渲染，其他玩家看不到；自带透视（远小近大）；渲染距离跟随游戏设置；
+  服务端仍只下发非观察者（已部署）玩家数据（v2.17.9）。
+- 构建：spotlessApply / build / test -PrunTests 全绿；jar 已部署 .minecraft/mods/ccnr_rp-2.17.10.jar。
+
 ## 2.17.9（头顶标签：改为服务端过滤数据，仅下发非观察者（已部署）玩家；客户端直接渲染）
 - 修复 2.17.8 在客户端用 isDeployed() 门控导致旁观者视角完全看不到其他玩家标签。
 - 改为服务端过滤：CharacterService.playerTagsJson() 只下发 ALIVE（非观察者/已部署）玩家的
