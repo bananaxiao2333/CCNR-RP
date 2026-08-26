@@ -172,6 +172,11 @@ public final class RpChannels {
                 .decoder(RpPackets.AdminFactionSpawnC2S::new)
                 .consumerNetworkThread(RpPackets.AdminFactionSpawnC2S::handle)
                 .add();
+        CHANNEL.messageBuilder(RpPackets.AdminProfessionSpawnC2S.class, id++, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(RpPackets.AdminProfessionSpawnC2S::encode)
+                .decoder(RpPackets.AdminProfessionSpawnC2S::new)
+                .consumerNetworkThread(RpPackets.AdminProfessionSpawnC2S::handle)
+                .add();
         CHANNEL.messageBuilder(RpPackets.AdminEventTriggerC2S.class, id++, NetworkDirection.PLAY_TO_SERVER)
                 .encoder(RpPackets.AdminEventTriggerC2S::encode)
                 .decoder(RpPackets.AdminEventTriggerC2S::new)
@@ -216,6 +221,11 @@ public final class RpChannels {
                 .encoder(RpPackets.PlayerTagsS2C::encode)
                 .decoder(RpPackets.PlayerTagsS2C::new)
                 .consumerNetworkThread(RpPackets.PlayerTagsS2C::handle)
+                .add();
+        CHANNEL.messageBuilder(RpPackets.DeployNoticeS2C.class, id++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(RpPackets.DeployNoticeS2C::encode)
+                .decoder(RpPackets.DeployNoticeS2C::new)
+                .consumerNetworkThread(RpPackets.DeployNoticeS2C::handle)
                 .add();
     }
 

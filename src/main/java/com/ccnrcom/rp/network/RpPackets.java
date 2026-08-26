@@ -57,7 +57,7 @@ public final class RpPackets {
         }
     }
 
-    /** 处决转职部署（C2S）：玩家在场（ALIVE）确认后，服务端处死旧角色再部署为选定职位。 */
+    /** 重新部署（C2S）：玩家在场（ALIVE）请求直接重新部署为选定职位（不处死/不留遗体，服务端换装+传送）。 */
     public static final class KillDeployC2S {
         public final String professionId;
 
@@ -426,6 +426,36 @@ public final class RpPackets {
             ctx.get()
                     .enqueueWork(() -> com.ccnrcom.rp.character.CharacterService.onAdminFactionSpawn(
                             ctx.get().getSender(), msg.factionId, msg.rule, msg.pointsJson));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    /** 管理端操作：设置职业部署点（列表 + 规则 SPREAD/SINGLE）（C2S，管理员）。 */
+    public static final class AdminProfessionSpawnC2S {
+        public final String professionId;
+        public final String rule;
+        public final String pointsJson;
+
+        public AdminProfessionSpawnC2S(String professionId, String rule, String pointsJson) {
+            this.professionId = professionId;
+            this.rule = rule;
+            this.pointsJson = pointsJson;
+        }
+
+        public AdminProfessionSpawnC2S(FriendlyByteBuf buf) {
+            this(buf.readUtf(64), buf.readUtf(16), buf.readUtf(65536));
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(professionId, 64);
+            buf.writeUtf(rule, 16);
+            buf.writeUtf(pointsJson, 65536);
+        }
+
+        public static void handle(AdminProfessionSpawnC2S msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> com.ccnrcom.rp.character.CharacterService.onAdminProfessionSpawn(
+                            ctx.get().getSender(), msg.professionId, msg.rule, msg.pointsJson));
             ctx.get().setPacketHandled(true);
         }
     }
@@ -866,6 +896,35 @@ public final class RpPackets {
                     .enqueueWork(() -> net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(
                             net.minecraftforge.api.distmarker.Dist.CLIENT,
                             () -> () -> com.ccnrcom.rp.client.ClientPacketHandlers.onError(msg.messageKey, msg.args)));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    /** 部署完成通知（S2C，部署者定向）：部署成功后发送，客户端显示常驻「已部署」横幅（30s）。 */
+    public static final class DeployNoticeS2C {
+        public final String professionName;
+        public final String factionId;
+
+        public DeployNoticeS2C(String professionName, String factionId) {
+            this.professionName = professionName == null ? "" : professionName;
+            this.factionId = factionId == null ? "" : factionId;
+        }
+
+        public DeployNoticeS2C(FriendlyByteBuf buf) {
+            this(buf.readUtf(128), buf.readUtf(64));
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(professionName, 128);
+            buf.writeUtf(factionId, 64);
+        }
+
+        public static void handle(DeployNoticeS2C msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(
+                            net.minecraftforge.api.distmarker.Dist.CLIENT,
+                            () -> () -> com.ccnrcom.rp.client.ClientPacketHandlers.onDeployNotice(
+                                    msg.professionName, msg.factionId)));
             ctx.get().setPacketHandled(true);
         }
     }

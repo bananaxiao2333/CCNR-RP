@@ -61,6 +61,11 @@ public final class SequenceEngine {
         return CONSCRIPTS.values().stream().anyMatch(c -> c.playerUuid().equals(playerUuid) && !c.pending());
     }
 
+    /** 该玩家是否已有征召登记（含邀请挂起中）——用于候选池过滤，防止同一玩家被多个波重复邀请（防双身份/重复部署）。 */
+    public static boolean hasConscript(String playerUuid) {
+        return CONSCRIPTS.values().stream().anyMatch(c -> c.playerUuid().equals(playerUuid));
+    }
+
     /** 接受部署：把征召从"待定"转为"在场"，并记录部署时刻（值班结算用）。 */
     public static void markDeployed(String id) {
         Conscript c = CONSCRIPTS.get(id);
@@ -296,17 +301,17 @@ public final class SequenceEngine {
             factionId =
                     CCNRRPMod.factions.graph().factions().keySet().iterator().next();
         }
-        // 候选池：在线玩家（非在场）；支援复活开=无条件候选；关=需有观察角色
+        // 候选池：在线玩家（未以征召在场）；存活/观察/支援复活均可收到（存活接受后走正式转职部署，不处死）
         List<ServerPlayer> pool = new ArrayList<>();
         for (ServerPlayer online : server.getPlayerList().getPlayers()) {
             String uuid = online.getUUID().toString();
-            boolean deployed = CCNRRPMod.users.status(uuid) == com.ccnrcom.rp.status.CharacterStatus.ALIVE;
-            if (deployed || isConscripted(uuid)) {
-                continue;
+            if (hasConscript(uuid)) {
+                continue; // 已有征召登记（含挂起中）不再重复邀请
             }
+            boolean alive = CCNRRPMod.users.status(uuid) == com.ccnrcom.rp.status.CharacterStatus.ALIVE;
             boolean anySupport = CCNRRPMod.users.anySupportRevive(uuid);
             boolean hasObserving = CCNRRPMod.users.status(uuid) == com.ccnrcom.rp.status.CharacterStatus.OBSERVING;
-            if (!anySupport && !hasObserving) {
+            if (!anySupport && !hasObserving && !alive) {
                 continue;
             }
             pool.add(online);
@@ -357,8 +362,9 @@ public final class SequenceEngine {
             String uidName = prefix + "-" + hex(4) + "-" + hex(2);
             String csId = "conscript-" + java.util.UUID.randomUUID();
             registerConscript(new Conscript(csId, uuid, uidName, profId, factionId, true, 0L)); // pending：邀请挂起中
+            boolean alive = CCNRRPMod.users.status(uuid) == com.ccnrcom.rp.status.CharacterStatus.ALIVE;
             cands.add(new com.ccnrcom.rp.spawn.SpawnModels.Candidate(
-                    csId, uuid, uidName, "observing", 0, 0, profId, factionId, false, true, false));
+                    csId, uuid, uidName, alive ? "alive" : "observing", 0, 0, profId, factionId, false, true, false));
             online.add(user);
             LOGGER.info(
                     "[CCNR-RP] 征召兵登记: {}（{} → {}，临时编制不进角色库）",

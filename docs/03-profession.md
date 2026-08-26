@@ -5,7 +5,10 @@
 部署角色（P8）时按配置发放装备。
 
 ## 2. 数据模型
-- `ProfessionDefinition {id, name, factionId, selfDeploy:boolean, loadout}`
+- `ProfessionDefinition {id, name, factionId, selfDeploy:boolean, unlockLevel:int, loadout, spawn?}`
+  - `spawn`（可选，2.16.0 起）：职业部署点/复活点，结构与阵营 spawn 一致：
+    `{"rule": "SPREAD"|"SINGLE", "points": [{"x":..,"y":..,"z":..,"dim":"minecraft:overworld"}]}`；
+    未配置 → 部署落位回退阵营部署点/世界复活点（优先级：**职业部署点 > 阵营部署点 > wave deployAt > 世界复活点**）。
 - `Loadout {inventory: SlotItem[], armor: SlotItem[], offhand: SlotItem}`
 - `SlotItem {slot:int, item:ResourceLocation, count:int, nbt:base64}`（nbt = NbtIo 字节 base64 化的 CompoundTag，
   含任意内容：附魔、组件、自定义键）。槽位为 MC 背包索引：0-35 背包、36 鞋/37 裤/38 胸甲/39 头盔、40 副手。

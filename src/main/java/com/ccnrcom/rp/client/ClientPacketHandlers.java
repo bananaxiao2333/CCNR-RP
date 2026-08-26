@@ -20,16 +20,6 @@ public final class ClientPacketHandlers {
         RpAdminScreen.refreshIfOpen();
     }
 
-    public static void onCharacterUpdate(JsonObject data) {
-        ClientCharacterState.upsert(data);
-        CharacterManagementScreen.refreshIfOpen();
-    }
-
-    public static void onCharacterRemove(String charId) {
-        ClientCharacterState.remove(charId);
-        CharacterManagementScreen.refreshIfOpen();
-    }
-
     public static void onRecruitOffer(RpPackets.RecruitOfferS2C msg) {
         RecruitOverlayHud.add(
                 msg.offerId, msg.charId, msg.charName, msg.professionId, msg.initialTicks, msg.waveId, msg.kind);
@@ -61,6 +51,16 @@ public final class ClientPacketHandlers {
     /** 征召兵身份状态：非空=在场（HUD 显示征召编制），空串=清除（阵亡/结束）。 */
     public static void onConscriptState(String payload) {
         ClientCharacterState.setConscript(payload);
+    }
+
+    /** 部署完成通知：显示常驻「已部署」横幅，并清空侧面/背包邀请面板、关闭邀请弹窗（已部署不再保留待处理邀请）。 */
+    public static void onDeployNotice(String professionName, String factionId) {
+        DeployNoticeBanner.show(professionName, factionId);
+        RecruitOverlayHud.clear();
+        net.minecraft.client.gui.screens.Screen s = Minecraft.getInstance().screen;
+        if (s instanceof RecruitPopupScreen) {
+            s.onClose();
+        }
     }
 
     public static void onEventState(String payload) {

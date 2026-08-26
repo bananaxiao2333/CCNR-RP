@@ -135,9 +135,9 @@ public final class CharacterService {
     }
 
     /**
-     * 处决转职部署（GUI 确认后）：玩家在场（ALIVE）时把旧角色处死（统一退场：状态→观察+复活冷却+遗体+死亡结算），
-     * 再延迟部署为选定职位（等遗体生成完再清背包/换职位，遗体保留旧职位名与旧背包）。
-     * 校验：素材同步 → 在场状态 → 职位存在 → 等级达标，然后交给 SpawnFramework.queueRedeploy 落地。
+     * 重新部署（GUI 确认后）：玩家在场（ALIVE）时直接重新部署为选定职位——不处死、不留遗体、不结算死亡经验；
+     * 统一 deploy() 清背包 → 发放新职位装备 → 传送到部署点 → 入场电影 → ALIVE（冷却清零）。
+     * 校验：素材同步 → 在场状态 → 职位存在 → 等级达标，然后交给 SpawnFramework.redeploy 落地。
      */
     public static void onKillDeploy(ServerPlayer player, String professionId) {
         if (player == null || professionId == null || professionId.isBlank()) {
@@ -181,16 +181,11 @@ public final class CharacterService {
             svc.sendError(player, "ccnr_rp.error.invalid_argument", "刷新框架未就绪");
             return;
         }
-        // 处死旧角色（统一退场：状态→观察+复活冷却+遗体+死亡结算；遗体 2 tick 后生成，复制当前背包与旧职位名）
-        com.ccnrcom.rp.status.StatusManager.retire(
-                uuid,
-                player,
-                "redeploy",
-                com.ccnrcom.rp.status.RetireFlag.of(com.ccnrcom.rp.status.RetireFlag.SPAWN_CORPSE));
-        // 延迟部署（等遗体生成完再清背包/换职位/传送）
-        CCNRRPMod.spawnFramework.queueRedeploy(player, professionId);
-        svc.sendError(
-                player, "ccnr_rp.spawn.redeploy.started", com.ccnrcom.rp.faction.FactionProfessions.idsSafeName(def));
+        // 直接重新部署（不处死、不留遗体、不结算死亡经验）
+        if (!CCNRRPMod.spawnFramework.redeploy(player, professionId)) {
+            svc.sendError(player, "ccnr_rp.spawn.error.self_deploy");
+            return;
+        }
         svc.sendList(player);
     }
 
@@ -756,6 +751,43 @@ public final class CharacterService {
         }
         service().sendList(player);
         service().sendError(player, "ccnr_rp.gui.admin.spawn.saved", factionId, String.valueOf(pts.size()));
+    }
+
+    /** 管理端操作「设置职业部署点」：写入该职业的部署点列表与分布规则（SPREAD/SINGLE）。 */
+    public static void onAdminProfessionSpawn(
+            ServerPlayer player, String professionId, String rule, String pointsJson) {
+        if (player == null || CCNRRPMod.factions == null) {
+            return;
+        }
+        if (!com.ccnrcom.rp.util.Permissions.canAdmin(player, com.ccnrcom.rp.util.Permissions.ADMIN_FACTION)) {
+            service().sendError(player, "ccnr_rp.command.no_permission");
+            return;
+        }
+        List<com.ccnrcom.rp.faction.FactionManager.SpawnPoint> pts = new java.util.ArrayList<>();
+        try {
+            com.google.gson.JsonArray arr =
+                    com.google.gson.JsonParser.parseString(pointsJson).getAsJsonArray();
+            for (com.google.gson.JsonElement e : arr) {
+                com.google.gson.JsonObject o = e.getAsJsonObject();
+                pts.add(new com.ccnrcom.rp.faction.FactionManager.SpawnPoint(
+                        o.has("x") ? o.get("x").getAsDouble() : 0,
+                        o.has("y") ? o.get("y").getAsDouble() : 64,
+                        o.has("z") ? o.get("z").getAsDouble() : 0,
+                        o.has("dim") && !o.get("dim").isJsonNull()
+                                ? o.get("dim").getAsString()
+                                : "minecraft:overworld"));
+            }
+        } catch (Exception ex) {
+            service().sendError(player, "ccnr_rp.profession.error.config", "部署点数据无效");
+            return;
+        }
+        var errors = CCNRRPMod.factions.setProfessionSpawn(professionId, rule, pts);
+        if (!errors.isEmpty()) {
+            service().sendError(player, "ccnr_rp.profession.error.config", String.join("; ", errors));
+            return;
+        }
+        service().sendList(player);
+        service().sendError(player, "ccnr_rp.gui.admin.spawn.saved", professionId, String.valueOf(pts.size()));
     }
 
     // ---------- 音乐管理（管理员上传） ----------

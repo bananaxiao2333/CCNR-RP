@@ -505,6 +505,47 @@ public final class FactionManager {
         return List.of("未找到阵营: " + factionId);
     }
 
+    /** 读取职业部署点配置；未配置返回 null（调用方回退阵营部署点/世界复活点）。 */
+    public FactionSpawn professionSpawn(String professionId) {
+        if (root == null || professionId == null || professionId.isBlank()) {
+            return null;
+        }
+        return FactionProfessions.find(root, professionId)
+                .map(FactionProfessions::spawn)
+                .orElse(null);
+    }
+
+    /** 写入职业部署点配置；校验职业存在，失败回滚不写盘。 */
+    public List<String> setProfessionSpawn(String professionId, String rule, List<SpawnPoint> points) {
+        if (FactionProfessions.find(root, professionId).isEmpty()) {
+            return List.of("未找到职业: " + professionId);
+        }
+        String normRule = SPAWN_RULE_SINGLE.equalsIgnoreCase(rule) ? SPAWN_RULE_SINGLE : SPAWN_RULE_SPREAD;
+        JsonObject candidate = root.deepCopy();
+        JsonArray pa = candidate.has("professions") ? candidate.getAsJsonArray("professions") : new JsonArray();
+        for (int i = 0; i < pa.size(); i++) {
+            JsonObject o = pa.get(i).getAsJsonObject();
+            if (!str(o, "id", "").equals(professionId)) {
+                continue;
+            }
+            JsonObject spawn = new JsonObject();
+            spawn.addProperty("rule", normRule);
+            JsonArray pts = new JsonArray();
+            for (SpawnPoint sp : points) {
+                JsonObject p = new JsonObject();
+                p.addProperty("x", sp.x());
+                p.addProperty("y", sp.y());
+                p.addProperty("z", sp.z());
+                p.addProperty("dim", sp.dim());
+                pts.add(p);
+            }
+            spawn.add("points", pts);
+            o.add("spawn", spawn);
+            return commit(candidate);
+        }
+        return List.of("未找到职业: " + professionId);
+    }
+
     private static double dbl(JsonObject o, String key, double def) {
         try {
             return o.has(key) ? o.get(key).getAsDouble() : def;

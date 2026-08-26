@@ -112,7 +112,8 @@ public final class RecruitOverlayHud {
                         default -> RpTheme.ACCENT;
                     };
             RpRoundRect.fill(gfx, x, y, x + 3, y + h, 8f, kc);
-            // 人物立绘（战术装备预览同款：水平跟随鼠标、俯仰锁定，带职位装备）
+            // 人物立绘（战术装备预览同款：水平跟随鼠标、俯仰锁定，带职位装备）。
+            // 临时征召的 charId 不在角色列表，直接按邀请的 professionId 取职业装备渲染
             CharacterPreview.renderPortrait(
                     gfx,
                     x + 23,
@@ -121,7 +122,9 @@ public final class RecruitOverlayHud {
                     (float) net.minecraft.client.Minecraft.getInstance()
                             .mouseHandler
                             .xpos(),
-                    o.charId());
+                    o.charId(),
+                    o.charName(),
+                    ClientCharacterState.professionLoadout(o.professionId()));
             String profName = ClientCharacterState.professionName(o.professionId());
             String facName = ClientCharacterState.factionNameOf(o.professionId());
             gfx.drawString(
@@ -175,7 +178,15 @@ public final class RecruitOverlayHud {
         for (OfferEntry o : accepted) {
             int h = 24;
             RpRoundRect.outlined(gfx, x, y, x + 140, y + h, 5f, RpTheme.PANEL_BORDER, 0xEE1F4D33);
-            CharacterPreview.renderPortrait(gfx, x + 13, y + h / 2, 9, 0f, o.charId());
+            CharacterPreview.renderPortrait(
+                    gfx,
+                    x + 13,
+                    y + h / 2,
+                    9,
+                    0f,
+                    o.charId(),
+                    o.charName(),
+                    ClientCharacterState.professionLoadout(o.professionId()));
             gfx.drawString(
                     font,
                     ClientCharacterState.professionName(o.professionId()),

@@ -87,7 +87,7 @@ public final class RecruitManager {
         sendOffers(groupId, kind, id, target, candidates, players, timeoutSec);
     }
 
-    /** 通用复活波邀请（kind=pick）：接受时由玩家从自己可复活的观察角色中选岗（RecruitPickCharacterC2S）。 */
+    /** 通用波邀请（kind=pick）：v2（唯一身份）起观察者接受即按自己当前职业部署（RecruitAnswerC2S 即可，无选岗）。 */
     public void offerPick(
             String id, int target, List<Candidate> candidates, List<ServerPlayer> players, long timeoutSec) {
         sendOffers(UUID.randomUUID().toString(), "pick", id, target, candidates, players, timeoutSec);
@@ -229,12 +229,11 @@ public final class RecruitManager {
         }
     }
 
-    /** 接受邀请：登记已加入并广播；人满 → 提前部署。 */
+    /** 接受邀请：登记已加入并广播；人满 → 提前部署。pick 邀请接受即按玩家自己职业部署（v2 唯一身份，无选岗）。 */
     public void accept(String offerId, ServerPlayer player) {
         Offer o = offers.get(offerId);
         if (o == null
                 || o.done()
-                || "pick".equals(o.kind()) // 通用波必须走选岗（RecruitPickCharacterC2S）
                 || System.currentTimeMillis() > o.deadlineMs() // 超时后不可再接受
                 || !o.playerUuid().equals(player.getUUID().toString())) {
             return;
