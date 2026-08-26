@@ -27,11 +27,45 @@ import org.joml.Quaternionf;
  * 数据来自 PlayerTagsS2C 下发的 ClientCharacterState.playerTag(uuid)；服务端已过滤，仅非观察者（已部署）玩家有数据。
  * 渲染方式仿原版名字牌：在实体头顶上方 mulPose(cameraOrientation) 使其始终面向相机 + scale(-0.025,-0.025,0.025)。
  * 徽章矢量图形用扫描线填充（同 RpIcons 视觉），img: 图片徽章用纹理 quad 绘制。只有本地客户端渲染，其他玩家看不到。
+ * 可配置项（服务端权威，随 CharacterListS2C 同步）：enabled 总开关 / badgeSize 徽章大小 / offset 标签高度。
  */
 public final class PlayerNametagRenderer {
 
-    /** 标签顶端离头顶的世界偏移（格）：0.9 格起，避免遮挡头部。 */
-    private static final double TAG_OFFSET = 0.9;
+    // ---- 布局（世界单位；scale 0.025 下 1 单位 ≈ 0.025 格）----
+    /** 徽章中心相对标签顶部的 Y 偏移（负=向上）。 */
+    private static final int BADGE_Y = -22;
+    /** 职业名行 Y（标签顶部下方）。 */
+    private static final int LINE_PROFESSION_Y = -8;
+    /** 玩家名行 Y。 */
+    private static final int LINE_NAME_Y = 4;
+    /** 等级行 Y。 */
+    private static final int LINE_LEVEL_Y = 16;
+
+    // ---- 缩放（仿原版名字牌）----
+    /** 世界缩放（原版名字牌同款：文字/几何整体缩放，远小近大）。 */
+    private static final float TAG_SCALE = -0.025F;
+
+    // ---- 颜色（复用 RpTheme；避免散落魔法数字）----
+    /** 等级文字（青）。 */
+    private static final int COLOR_LEVEL = RpTheme.CYAN;
+    /** 玩家名（白）。 */
+    private static final int COLOR_NAME = 0xFFFFFFFF;
+    /** 徽章盘底色（深灰）。 */
+    private static final int COLOR_BADGE_DISC = 0xFF2E2E2E;
+    /** 徽章图形挖空色（深蓝黑）。 */
+    private static final int COLOR_BADGE_PUNCH = 0xFF10181E;
+    /** 文字行半透明底衬。 */
+    private static final int COLOR_LINE_BG = 0x66000000;
+    /** 默认阵营色（青，与 RpTheme.CYAN 一致）。 */
+    private static final int COLOR_FACTION_DEFAULT = RpTheme.CYAN & 0xFFFFFF;
+
+    // ---- 徽章默认值（与 RpIcons 一致）----
+    /** 徽章默认等级（tier）。 */
+    private static final int BADGE_DEFAULT_TIER = 2;
+    /** 徽章默认图形（hex）。 */
+    private static final String BADGE_DEFAULT_ICON = "hex";
+    /** 图片徽章默认纹理边长（像素，未加载服务器素材时）。 */
+    private static final int IMAGE_DEFAULT_SIZE = 512;
 
     private PlayerNametagRenderer() {}
 
@@ -41,9 +75,13 @@ public final class PlayerNametagRenderer {
         if (mc.player == null || mc.level == null || mc.font == null || cam == null) {
             return;
         }
+        if (!ClientCharacterState.nametagEnabled()) {
+            return; // 服务端配置：头顶悬浮标签总开关关闭
+        }
         Font font = mc.font;
         Vec3 camPos = cam.getPosition();
         Quaternionf camRot = mc.getEntityRenderDispatcher().cameraOrientation();
+        double tagOffset = ClientCharacterState.nametagOffset();
         for (Entity e : mc.level.entitiesForRendering()) {
             if (!(e instanceof AbstractClientPlayer other) || other == mc.player) {
                 continue;
@@ -57,12 +95,12 @@ public final class PlayerNametagRenderer {
                 continue;
             }
             double tx = Mth.lerp(partialTick, other.xo, other.getX());
-            double ty = Mth.lerp(partialTick, other.yo, other.getY()) + other.getBbHeight() + TAG_OFFSET;
+            double ty = Mth.lerp(partialTick, other.yo, other.getY()) + other.getBbHeight() + tagOffset;
             double tz = Mth.lerp(partialTick, other.zo, other.getZ());
             poseStack.pushPose();
             poseStack.translate(tx - camPos.x, ty - camPos.y, tz - camPos.z);
             poseStack.mulPose(camRot);
-            poseStack.scale(-0.025F, -0.025F, 0.025F);
+            poseStack.scale(TAG_SCALE, TAG_SCALE, -TAG_SCALE);
             Matrix4f matrix = poseStack.last().pose();
             drawTag(font, matrix, buffer, tag);
             poseStack.popPose();
@@ -71,45 +109,46 @@ public final class PlayerNametagRenderer {
 
     private static void drawTag(
             Font font, Matrix4f matrix, MultiBufferSource buffer, ClientCharacterState.PlayerTag tag) {
-        // 布局（世界单位，scale 0.025 下 1 单位 ≈ 0.025 格）：徽章最顶一行，往下职业/玩家/等级
-        int badgeY = -22;
-        int badgeR = 9;
-        drawBadge(matrix, buffer, 0, badgeY, badgeR, tag.factionId());
+        int badgeR = ClientCharacterState.nametagBadgeSize();
+        // 徽章最顶一行（badgeSize=0 不画），往下职业/玩家/等级
+        if (badgeR > 0) {
+            drawBadge(matrix, buffer, 0, BADGE_Y, badgeR, tag.factionId());
+        }
         int factionColor = factionColor(tag.factionId());
         String profession = professionDisplay(tag.professionId());
         Component line1 = Component.literal(profession).withStyle(s -> s.withColor(factionColor));
         Component line2 = Component.literal(tag.name());
-        Component line3 = Component.literal("Lv." + tag.level()).withStyle(s -> s.withColor(0x3DD2FF));
-        drawCentered(font, matrix, buffer, line1, -8);
-        drawCentered(font, matrix, buffer, line2, 4);
-        drawCentered(font, matrix, buffer, line3, 16);
+        Component line3 = Component.literal("Lv." + tag.level()).withStyle(s -> s.withColor(COLOR_LEVEL));
+        drawCentered(font, matrix, buffer, line1, LINE_PROFESSION_Y);
+        drawCentered(font, matrix, buffer, line2, LINE_NAME_Y);
+        drawCentered(font, matrix, buffer, line3, LINE_LEVEL_Y);
     }
 
     /** 徽章（世界空间）：环(等级色) + 盘(深色) + 图形(img 图片或矢量扫描线) + 右下角等级刻度。 */
     private static void drawBadge(Matrix4f matrix, MultiBufferSource buffer, int cx, int cy, int r, String factionId) {
         com.google.gson.JsonObject faction = factionJson(factionId);
-        int tier = 2;
-        String icon = "";
+        int tier = BADGE_DEFAULT_TIER;
+        String icon = BADGE_DEFAULT_ICON;
         if (faction != null) {
             if (faction.has("tier") && faction.get("tier").isJsonPrimitive()) {
                 tier = faction.get("tier").getAsInt();
             }
             icon = faction.has("icon") && !faction.get("icon").isJsonNull()
                     ? faction.get("icon").getAsString()
-                    : "";
+                    : BADGE_DEFAULT_ICON;
         }
         if (icon == null || icon.isBlank()) {
-            icon = "hex";
+            icon = BADGE_DEFAULT_ICON;
         }
-        int ring = com.ccnrcom.rp.client.RpTheme.tierColor(tier);
+        int ring = RpTheme.tierColor(tier);
         // 环 + 盘（先画 r 环色，再画 r-1 盘色挖空，同 RpIcons.ring）
         circleFill(matrix, buffer, cx, cy, r, ring);
-        circleFill(matrix, buffer, cx, cy, r - 1, 0xFF2E2E2E);
+        circleFill(matrix, buffer, cx, cy, r - 1, COLOR_BADGE_DISC);
         // 中央图形
         if (icon.startsWith("img:")) {
             drawImageBadge(matrix, buffer, cx, cy, r - 1, icon.substring(4), ring);
         } else {
-            fillIconPolygon(matrix, buffer, cx, cy, r - 1, icon, ring, 0xFF10181E);
+            fillIconPolygon(matrix, buffer, cx, cy, r - 1, icon, ring, COLOR_BADGE_PUNCH);
         }
         // 右下角等级刻度
         int n = Math.max(2, r / 4);
@@ -124,7 +163,7 @@ public final class PlayerNametagRenderer {
                 return;
             }
             ResourceLocation loc = ClientAssetCache.serverIcon(fileName);
-            int tw = 512;
+            int tw = IMAGE_DEFAULT_SIZE;
             if (loc == null) {
                 loc = new ResourceLocation("ccnr_rp", "textures/faction/" + fileName + ".png");
             } else {
@@ -139,9 +178,7 @@ public final class PlayerNametagRenderer {
             float x0 = cx - s / 2.0F;
             float y0 = cy - s / 2.0F;
             VertexConsumer vc = buffer.getBuffer(RenderType.entityTranslucent(loc));
-            float minU = 0.0F;
-            float maxU = 1.0F;
-            quad(vc, matrix, x0, y0, x0 + s, y0 + s, minU, maxU, 0xFFFFFFFF, LightTexture.FULL_BRIGHT);
+            quad(vc, matrix, x0, y0, x0 + s, y0 + s, 0.0F, 1.0F, COLOR_NAME, LightTexture.FULL_BRIGHT);
         } catch (Exception ignored) {
             // 图片徽章缺失回退（仅画底盘）
         }
@@ -162,7 +199,7 @@ public final class PlayerNametagRenderer {
     /** 图标多边形填充（16 单位盒 → 徽章内，扫描线 even-odd，同 RpIcons.poly 视觉）。 */
     private static void fillIconPolygon(
             Matrix4f matrix, MultiBufferSource buffer, int cx, int cy, int r, String icon, int color, int punch) {
-        int[][] pts = com.ccnrcom.rp.client.RpIcons.iconPolygon(icon);
+        int[][] pts = RpIcons.iconPolygon(icon);
         int s = r * 2 - 2;
         if (s < 4) {
             return;
@@ -286,12 +323,12 @@ public final class PlayerNametagRenderer {
                 text,
                 -w / 2.0F,
                 y,
-                0xFFFFFFFF,
+                COLOR_NAME,
                 false,
                 matrix,
                 buffer,
                 net.minecraft.client.gui.Font.DisplayMode.NORMAL,
-                0x66000000,
+                COLOR_LINE_BG,
                 LightTexture.FULL_BRIGHT);
     }
 
@@ -317,14 +354,14 @@ public final class PlayerNametagRenderer {
     private static int factionColor(String factionId) {
         com.google.gson.JsonObject f = factionJson(factionId);
         if (f == null) {
-            return 0x3DD2FF;
+            return COLOR_FACTION_DEFAULT;
         }
         String c =
                 f.has("color") && !f.get("color").isJsonNull() ? f.get("color").getAsString() : "";
         try {
             return 0xFFFFFF & Integer.parseInt(c.replace("#", ""), 16);
         } catch (Exception ignored) {
-            return 0x3DD2FF;
+            return COLOR_FACTION_DEFAULT;
         }
     }
 

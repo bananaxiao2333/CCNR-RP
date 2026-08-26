@@ -23,6 +23,13 @@ public final class ClientCharacterState {
     private static double levelBase = 100.0;
 
     private static double levelPow = 2.0;
+    /** 玩家头顶悬浮标签开关（服务端同步，默认开）。 */
+    private static boolean nametagEnabled = true;
+    /** 玩家头顶悬浮标签阵营徽章大小（服务端同步，默认 9；0=不显示徽章）。 */
+    private static int nametagBadgeSize = 9;
+    /** 玩家头顶悬浮标签离头顶高度（格，服务端同步，默认 0.9）。 */
+    private static double nametagOffset = 0.9;
+
     private static boolean isAdmin = false;
     private static boolean autoOpenPending = false;
     private static boolean panelLocked = false;
@@ -159,6 +166,16 @@ public final class ClientCharacterState {
         if (root.has("levelPow")) {
             levelPow = root.get("levelPow").getAsDouble();
         }
+        // 玩家头顶悬浮标签配置跟随服务端（服务端权威）
+        if (root.has("nametagEnabled")) {
+            nametagEnabled = root.get("nametagEnabled").getAsBoolean();
+        }
+        if (root.has("nametagBadgeSize")) {
+            nametagBadgeSize = root.get("nametagBadgeSize").getAsInt();
+        }
+        if (root.has("nametagOffset")) {
+            nametagOffset = root.get("nametagOffset").getAsDouble();
+        }
         // 入服自动开面板不在列表同步时武装——等素材同步完成后由 armAutoOpenPanel() 武装
         // （同步完成前部署被禁用，面板提前打开无意义）。
     }
@@ -226,6 +243,21 @@ public final class ClientCharacterState {
     /** 服务端同步的等级曲线指数（仅展示换算用）。 */
     public static synchronized double levelPow() {
         return levelPow;
+    }
+
+    /** 玩家头顶悬浮标签开关（服务端同步）。 */
+    public static synchronized boolean nametagEnabled() {
+        return nametagEnabled;
+    }
+
+    /** 玩家头顶悬浮标签阵营徽章大小（服务端同步；0=不显示徽章）。 */
+    public static synchronized int nametagBadgeSize() {
+        return nametagBadgeSize;
+    }
+
+    /** 玩家头顶悬浮标签离头顶高度（格，服务端同步）。 */
+    public static synchronized double nametagOffset() {
+        return nametagOffset;
     }
 
     // ---------- 用户级身份（v2） ----------

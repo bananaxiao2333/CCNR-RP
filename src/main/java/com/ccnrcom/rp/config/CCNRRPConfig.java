@@ -41,6 +41,13 @@ public final class CCNRRPConfig {
 
     public static final ConfigValue<Double> LEVEL_POW;
 
+    /** 玩家头顶悬浮标签总开关（服务端权威，客户端遵从）。 */
+    public static final ConfigValue<Boolean> NAMETAG_ENABLED;
+    /** 玩家头顶悬浮标签阵营徽章大小（世界单位，默认 9；0=不显示徽章）。 */
+    public static final ConfigValue<Integer> NAMETAG_BADGE_SIZE;
+    /** 玩家头顶悬浮标签离头顶的高度（格，默认 0.9；越大标签越高）。 */
+    public static final ConfigValue<Double> NAMETAG_OFFSET;
+
     static {
         ForgeConfigSpec.Builder b = new ForgeConfigSpec.Builder();
         b.push("character");
@@ -69,6 +76,11 @@ public final class CCNRRPConfig {
         LEVEL_BASE = b.comment("等级曲线基数：xpForLevel(n) = base * n^pow").define("base", 100.0);
         LEVEL_POW = b.comment("等级曲线指数").define("pow", 2.0);
         b.pop();
+        b.push("nametag");
+        NAMETAG_ENABLED = b.comment("玩家头顶悬浮标签总开关（false=完全关闭）").define("enabled", true);
+        NAMETAG_BADGE_SIZE = b.comment("头顶标签阵营徽章大小（世界单位，0=不显示徽章，只显示文字）").define("badgeSize", 9);
+        NAMETAG_OFFSET = b.comment("头顶标签离头顶的高度（格，越大标签越高）").define("offset", 0.9);
+        b.pop();
         SPEC = b.build();
     }
 
@@ -92,7 +104,10 @@ public final class CCNRRPConfig {
                 "evacObservingXp",
                 "evacStayBehindXp",
                 "base",
-                "pow");
+                "pow",
+                "enabled",
+                "badgeSize",
+                "offset");
     }
 
     /** 当前所有 serverconfig 值（key → 数值），供管理面板展示。 */
@@ -112,6 +127,9 @@ public final class CCNRRPConfig {
         o.addProperty("evacStayBehindXp", XP_EVAC_STAY_BEHIND.get());
         o.addProperty("base", LEVEL_BASE.get());
         o.addProperty("pow", LEVEL_POW.get());
+        o.addProperty("enabled", NAMETAG_ENABLED.get());
+        o.addProperty("badgeSize", NAMETAG_BADGE_SIZE.get());
+        o.addProperty("offset", NAMETAG_OFFSET.get());
         return o;
     }
 
@@ -133,6 +151,9 @@ public final class CCNRRPConfig {
                 case "evacStayBehindXp" -> XP_EVAC_STAY_BEHIND.set(Integer.parseInt(value.trim()));
                 case "base" -> LEVEL_BASE.set(Double.parseDouble(value.trim()));
                 case "pow" -> LEVEL_POW.set(Double.parseDouble(value.trim()));
+                case "enabled" -> NAMETAG_ENABLED.set(Boolean.parseBoolean(value.trim()));
+                case "badgeSize" -> NAMETAG_BADGE_SIZE.set(Integer.parseInt(value.trim()));
+                case "offset" -> NAMETAG_OFFSET.set(Double.parseDouble(value.trim()));
                 default -> {
                     return java.util.List.of("未知配置项: " + key);
                 }

@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.17.12（头顶标签可配置化：显示开关/徽章大小/标签高度，服务端权威同步；清理硬编码）
+- 新增服务端配置（serverconfig/ccnr_rp-server.toml → nametag 段，随 CharacterListS2C 同步全员）：
+  - enabled：头顶悬浮标签总开关（false=完全关闭）。
+  - badgeSize：阵营徽章大小（世界单位，0=不显示徽章只显示文字）。
+  - offset：标签离头顶高度（格，越大越高）。
+- PlayerNametagRenderer 全部硬编码提为命名常量（布局坐标/缩放/颜色复用 RpTheme/徽章默认值），
+  颜色统一走 RpTheme，消除散落魔法数字。
+- 构建：spotlessApply / build / test -PrunTests 全绿；jar 已部署 .minecraft/mods/ccnr_rp-2.17.12.jar。
+
 ## 2.17.11（头顶标签：阵营徽章置顶单独一行，世界空间绘制矢量/图片徽章）
 - 标签顶部新增阵营徽章行：环(等级色) + 盘(深色) + 中央图形 + 右下角等级刻度。
 - 徽章世界空间绘制：矢量图形用扫描线填充（复用 RpIcons.iconPolygon，视觉与 GUI 一致）；
