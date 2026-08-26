@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.15.5（行为序列「触发事件」锚点：序列内只读锚点，不可删/不可改类型/不可编辑参数，可上移下移）
+- 数据模型：序列新增 TRIGGER 锚点步骤（{"type":"TRIGGER","source":"<kind>:<id>","label":"..."}），
+  代表触发本序列的真实事件/环境（如事件 qdf_support 即「征召」上下文）；保存时自动写入/对齐，旧数据缺失自动补插。
+- 编辑器：行为序列弹窗中锚点行为🔒只读行（青色锁定样式，无「删」按钮，点选仅展示触发来源），
+  不可改类型/不可编辑参数，但**可上移下移**调整位置；其余步骤保持点选/上移/下移/删/改类型/参数编辑。
+- 执行引擎：SequenceEngine.runSteps 跳过 TRIGGER 步骤（不执行、不占时间线），并把锚点 source 注入
+  {{trigger}} 变量（COMMAND 步骤可引用触发来源）；execute 加 TRIGGER 安全兜底。
+- 默认配置：defaults events.json / phases.json 补 TRIGGER 锚点示例；新增 SpawnModelsTest 锚点解析用例。
+- 构建：compileJava / spotlessCheck / test -PrunTests 全绿。
+
 ## 2.15.4（流程编辑器空态优化：打开空序列自动加 WAIT 起始步骤）
 - 修复「行为序列点进去都是空的」困惑：事件/阶段/刷新波配置没有内嵌 sequence 时（v1.4.4 起序列嵌入模型，
   独立 sequences.json 已废弃且从未迁移；现有配置大多无 sequence 字段），编辑器打开即空。
