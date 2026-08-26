@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.18.2（修复经验规则 UI 语言包缺失：按钮显示原始键）
+- 修复：经验规则页签/命令引用的 ccnr_rp.xp.rules.* 语言键此前从未写入 lang 文件
+  （旧编辑静默失败且 LangFileTest 仅校验 zh/en 键集对等），导致按钮/提示全部显示原始键。
+  已补全全部规则键 + 验证器文案键（zh_cn/en_us 同步，284 键对等）。
+- 移除废弃的 ccnr_rp.xp.line.* 疏散逐行键（evac 系统已删除）。
+- 校验：JSON 解析 + zh/en 键集对等 + 代码引用键全量存在。
+- 构建：spotlessApply / build -PrunTests 全绿。
+
 ## 2.18.1（修复管理面板点击崩溃 + 经验规则编辑器国际化）
 - 修复：管理面板点击时崩溃（ArithmeticException: / by zero）——「经验规则」页签的 rowHeight()==0
   触发了通用列表滚动条除零（TAB_XP 从该路径排除）。
