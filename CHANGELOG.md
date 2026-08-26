@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.17.11（头顶标签：阵营徽章置顶单独一行，世界空间绘制矢量/图片徽章）
+- 标签顶部新增阵营徽章行：环(等级色) + 盘(深色) + 中央图形 + 右下角等级刻度。
+- 徽章世界空间绘制：矢量图形用扫描线填充（复用 RpIcons.iconPolygon，视觉与 GUI 一致）；
+  img: 图片徽章用 entityTranslucent 纹理 quad（服务器下发或内嵌回退）。
+- 布局：徽章最顶一行，往下职业名(阵营色) / 玩家名 / 等级。
+- 构建：spotlessApply / build / test -PrunTests 全绿；jar 已部署 .minecraft/mods/ccnr_rp-2.17.11.jar。
+
 ## 2.17.10（头顶标签：改为世界空间 billboard 悬浮标签，客户端本地渲染、只有自己可见、始终面向相机）
 - 放弃 HUD 屏幕投影方案（屏幕坐标换算受 FOV/距离影响，易出位置漂移问题）。
 - 改为仿原版名字牌的世界空间渲染：RenderLevelStageEvent.AFTER_ENTITIES 阶段在玩家头顶上方
