@@ -37,7 +37,7 @@ import org.apache.logging.log4j.Logger;
  * 2) 规则引擎：订阅事件 → 判断表达式（可选，false 跳过）→ 数值表达式 + 标题表达式 →
  *    并入该用户的待结算经验变化列表（同规则合并、标题取后来者）；<br>
  * 3) 结算：列表求和（可为负）计入用户累计 XP 后清空列表（幂等）；触发点 = /rp settle、
- *    死亡/断联退场、事件结束（settleOnEnd）、游戏结束全员。<br>
+ *    死亡/断联退场（事件结束与游戏结束不再自动结算）。<br>
  * 规则存 config/ccnr_rp/experience_rules.json（管理员可编辑，管理面板热重载）。
  */
 public final class ExperienceService {

@@ -392,9 +392,6 @@ public final class CharacterService {
                     if (!o.has("durationSeconds")) {
                         o.addProperty("durationSeconds", 0);
                     }
-                    if (!o.has("settleOnEnd")) {
-                        o.addProperty("settleOnEnd", true);
-                    }
                     if (!o.has("triggers")) {
                         o.add("triggers", new JsonArray());
                     }
