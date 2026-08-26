@@ -34,10 +34,13 @@ public class RpAdminScreen extends Screen {
     private static final int TAB_WAVE = 5;
     private static final int TAB_LIMITS = 6;
     private static final int TAB_XP = 7;
+    private static final int TAB_RELATION = 8;
 
     private int tab = TAB_SETTINGS;
     /** 经验规则页签（经验系统 v3）：自包含编辑器；首次使用才构造（避免构造期 this 逃逸）。 */
     private RpRulesTab rulesTab;
+    /** 关系管理页签（关系系统）：规则列表 + 编辑器 + 测定图入口；与经验规则页签并列。 */
+    private RpRelationTab relationTab;
     // 页签栏横向滚动（过窄时可滚动，滚动条可拖拽）
     private int tabScroll = 0;
     private int maxTabScroll = 0;
@@ -54,6 +57,13 @@ public class RpAdminScreen extends Screen {
             rulesTab = new RpRulesTab(this);
         }
         return rulesTab;
+    }
+
+    private RpRelationTab relationTab() {
+        if (relationTab == null) {
+            relationTab = new RpRelationTab(this);
+        }
+        return relationTab;
     }
 
     private int px1, py1, px2, py2;
@@ -205,7 +215,8 @@ public class RpAdminScreen extends Screen {
         "ccnr_rp.gui.admin.tab.phase",
         "ccnr_rp.gui.admin.tab.wave",
         "ccnr_rp.gui.admin.tab.limits",
-        "ccnr_rp.gui.admin.tab.xp"
+        "ccnr_rp.gui.admin.tab.xp",
+        "ccnr_rp.gui.admin.tab.relation"
     };
 
     /** 限制类型（部署人数上限规则）：GLOBAL=通用角色上限（职业无专属时兜底）/ FACTION=阵营上限 / PROFESSION=职业上限。 */
@@ -269,6 +280,10 @@ public class RpAdminScreen extends Screen {
         }
         if (tab == TAB_XP) {
             rulesTab().rebuild(px1, py1, px2, py2);
+            return;
+        }
+        if (tab == TAB_RELATION) {
+            relationTab().rebuild(px1, py1, px2, py2);
             return;
         }
         if (tab == TAB_SETTINGS) {
@@ -1038,16 +1053,7 @@ public class RpAdminScreen extends Screen {
         // 部署点配置（P9）：弹出管理窗口（规则 + 坐标列表 + 一键添加当前坐标）
         addRenderableWidget(RpButton.secondary(
                 x, y + 28, w, 18, Component.literal("管理部署点…（规则 / 坐标 / 添加当前坐标）"), b -> openSpawnModal("faction")));
-        // 关系管理（全屏独立面板）：关系规则增删改 + 内部关系 + 测定图入口；打开时下层面板暂时隐藏，关闭返回
-        addRenderableWidget(
-                RpButton.secondary(x, y + 50, w, 18, Component.translatable("ccnr_rp.gui.admin.relation.button"), b -> {
-                    net.minecraft.client.Minecraft.getInstance().setScreen(new RelationManagerScreen());
-                }));
-        // 关系测定图（全屏）：阵营徽章 + 连线（白中立/红敌对/绿友好），可拖动缩放；关闭返回管理面板
-        addRenderableWidget(
-                RpButton.secondary(x, y + 72, w, 18, Component.translatable("ccnr_rp.gui.admin.graph.button"), b -> {
-                    net.minecraft.client.Minecraft.getInstance().setScreen(new FactionGraphScreen());
-                }));
+        // 关系管理与关系测定图已并入独立页签（TAB_RELATION），不再放在阵营表单内
     }
 
     /** 从阵营 JSON 载入出生点配置到编辑状态。 */
@@ -2143,8 +2149,8 @@ public class RpAdminScreen extends Screen {
                 return true;
             }
         }
-        // 列表滚动条：按住游标拖拽 / 点击轨道跳转（经验规则页签无列表行高，跳过）
-        if (tab != TAB_SETTINGS && tab != TAB_XP) {
+        // 列表滚动条：按住游标拖拽 / 点击轨道跳转（经验规则/关系管理页签无通用列表行高，跳过）
+        if (tab != TAB_SETTINGS && tab != TAB_XP && tab != TAB_RELATION) {
             int maxRows = Math.max(1, (listY2 - listY1) / rowHeight());
             int ns = RpScrollbar.clickV(
                     (int) mx,
@@ -2227,6 +2233,11 @@ public class RpAdminScreen extends Screen {
         }
         if (tab == TAB_XP) {
             if (rulesTab().mouseClicked((int) mx, (int) my, button)) {
+                return true;
+            }
+        }
+        if (tab == TAB_RELATION) {
+            if (relationTab().mouseClicked((int) mx, (int) my, button)) {
                 return true;
             }
         }
@@ -2441,6 +2452,10 @@ public class RpAdminScreen extends Screen {
             rulesTab().mouseScrolled((int) mouseX, (int) mouseY, delta);
             return true;
         }
+        if (tab == TAB_RELATION) {
+            relationTab().mouseScrolled((int) mouseX, (int) mouseY, delta);
+            return true;
+        }
         if (tab == TAB_PROFESSION) {
             scroll = (int) Math.max(0, scroll - delta / 8);
             rebuild();
@@ -2466,6 +2481,9 @@ public class RpAdminScreen extends Screen {
         }
         if (tab == TAB_XP && rulesTab().keyPressed(keyCode, scanCode, modifiers)) {
             return true; // 经验规则页签：事件补全候选上/下/回车/Esc
+        }
+        if (tab == TAB_RELATION && relationTab().keyPressed(keyCode, scanCode, modifiers)) {
+            return true;
         }
         if (!camSugItems.isEmpty() && camSugBox != null && camSugBox.isFocused()) {
             if (keyCode == 264) { // Down
@@ -2636,6 +2654,8 @@ public class RpAdminScreen extends Screen {
                 renderSettings(g, mouseX, mouseY);
             } else if (tab == TAB_XP) {
                 rulesTab().render(g, mouseX, mouseY);
+            } else if (tab == TAB_RELATION) {
+                relationTab().render(g, mouseX, mouseY);
             } else {
                 renderListTab(g, mouseX, mouseY);
             }
