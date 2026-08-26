@@ -263,7 +263,7 @@ public final class RpRulesTab {
                 String type = p.type() == ExperienceEventRegistry.ParamType.LONG ? "LONG" : "STRING";
                 g.drawString(font, p.name(), ex1 + 8, py + 3, hov ? 0xFFFFFFFF : RpTheme.TEXT_PRIMARY);
                 g.drawString(font, "(" + type + ")", ex1 + 8 + font.width(p.name()) + 8, py + 3, RpTheme.TEXT_DIM);
-                g.drawString(font, "⇧ 插入", rightX - 44, py + 3, RpTheme.CYAN);
+                g.drawString(font, "⇧ " + tr("ccnr_rp.xp.rules.insert"), rightX - 44, py + 3, RpTheme.CYAN);
                 paramBounds.add(new int[] {ex1, py, rightX, py + 15});
             }
         }
@@ -284,7 +284,8 @@ public final class RpRulesTab {
             valueBox == null ? "" : valueBox.getValue(),
             titleBox == null ? "" : titleBox.getValue()
         };
-        String[] labels = {"判断", "数值", "标题"};
+        String[] labels = {tr("ccnr_rp.xp.rules.v.cond"), tr("ccnr_rp.xp.rules.v.value"), tr("ccnr_rp.xp.rules.v.title")
+        };
         int y = vy;
         for (int i = 0; i < exprs.length; i++) {
             String status = check(exprs[i], i);
@@ -342,7 +343,7 @@ public final class RpRulesTab {
     private String check(String src, int index) {
         if (src == null || src.isBlank()) {
             // 判断空=恒激活、标题空=合法；数值必填
-            return index == 1 ? "空表达式" : "";
+            return index == 1 ? tr("ccnr_rp.xp.rules.v.required") : "";
         }
         try {
             Expr e = ExprParser.parse(src);
@@ -488,26 +489,26 @@ public final class RpRulesTab {
         Map<String, Object> sample = ExperienceEventRegistry.defaultSample(eventId);
         testLines.clear();
         if (cond.isBlank()) {
-            testLines.add("判断 → 空（恒激活）");
+            testLines.add(tr("ccnr_rp.xp.rules.v.condAlways"));
         } else {
             try {
                 boolean b = ExprEvaluator.evalBool(ExprParser.parse(cond), sample);
-                testLines.add("判断 → " + b + (b ? "（激活）" : "（跳过）"));
+                testLines.add(b ? tr("ccnr_rp.xp.rules.v.condTrue") : tr("ccnr_rp.xp.rules.v.condFalse"));
             } catch (ExprException e) {
-                testLines.add("判断 → ✗ " + e.getMessage());
+                testLines.add(tr("ccnr_rp.xp.rules.v.condErr", e.getMessage()));
             }
         }
         try {
             double v = ExprEvaluator.evalNum(ExprParser.parse(value), sample);
-            testLines.add("数值 → " + ExprEvaluator.stringify(v));
+            testLines.add(tr("ccnr_rp.xp.rules.v.valueResult", ExprEvaluator.stringify(v)));
         } catch (ExprException e) {
-            testLines.add("数值 → ✗ " + e.getMessage());
+            testLines.add(tr("ccnr_rp.xp.rules.v.valueErr", e.getMessage()));
         }
         try {
             String t = ExprEvaluator.evalString(ExprParser.parse(title), sample);
-            testLines.add("标题 → " + (t.isEmpty() ? "（空）" : t));
+            testLines.add(t.isEmpty() ? tr("ccnr_rp.xp.rules.v.titleEmpty") : tr("ccnr_rp.xp.rules.v.titleResult", t));
         } catch (ExprException e) {
-            testLines.add("标题 → ✗ " + e.getMessage());
+            testLines.add(tr("ccnr_rp.xp.rules.v.titleErr", e.getMessage()));
         }
         testAt = System.currentTimeMillis();
     }
@@ -547,7 +548,7 @@ public final class RpRulesTab {
             }
             sendEdit("update", r.id());
         } catch (Exception e) {
-            flashRaw(e.getMessage() == null ? "保存失败" : e.getMessage());
+            flashRaw(e.getMessage() == null ? tr("ccnr_rp.xp.rules.save_fail") : e.getMessage());
         }
     }
 
@@ -606,5 +607,15 @@ public final class RpRulesTab {
 
     private static String str(JsonObject o, String key) {
         return o.has(key) && !o.get(key).isJsonNull() ? o.get(key).getAsString() : "";
+    }
+
+    /** 本地化文本（规则编辑器 UI 文案）。 */
+    private static String tr(String key) {
+        return Component.translatable(key).getString();
+    }
+
+    /** 本地化文本（带参数）。 */
+    private static String tr(String key, String arg) {
+        return Component.translatable(key, arg).getString();
     }
 }

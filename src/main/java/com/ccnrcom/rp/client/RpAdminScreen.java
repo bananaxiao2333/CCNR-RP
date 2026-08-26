@@ -2142,8 +2142,8 @@ public class RpAdminScreen extends Screen {
                 return true;
             }
         }
-        // 列表滚动条：按住游标拖拽 / 点击轨道跳转
-        if (tab != TAB_SETTINGS) {
+        // 列表滚动条：按住游标拖拽 / 点击轨道跳转（经验规则页签无列表行高，跳过）
+        if (tab != TAB_SETTINGS && tab != TAB_XP) {
             int maxRows = Math.max(1, (listY2 - listY1) / rowHeight());
             int ns = RpScrollbar.clickV(
                     (int) mx,
