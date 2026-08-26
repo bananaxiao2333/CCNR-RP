@@ -85,7 +85,7 @@ public final class ClientAudio {
         t.start();
     }
 
-    /** OGG 用 jorbis 解码为 PCM（javax.sound 不原生支持 OGG）；其余格式（WAV/AIFF 等）走 AudioSystem。 */
+    /** OGG 用 Minecraft 自带 OggAudioStream（原生 STB Vorbis，立体声正确）解码；其余格式（WAV/AIFF 等）走 AudioSystem。 */
     private static AudioInputStream openAudio(Path p) throws Exception {
         if (p.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".ogg")) {
             return decodeOgg(p);
@@ -93,18 +93,15 @@ public final class ClientAudio {
         return AudioSystem.getAudioInputStream(p.toFile());
     }
 
-    /** jorbis 解码 OGG → 16bit 小端 PCM AudioInputStream（整段解码到内存，播放逻辑与 WAV 一致）。 */
+    /** MC 原生 OGG 解码 → PCM AudioInputStream（格式/声道/字节序取自 getFormat，整段解码到内存，播放逻辑与 WAV 一致）。 */
     private static AudioInputStream decodeOgg(Path p) throws Exception {
-        com.jcraft.jorbis.VorbisFile vf = new com.jcraft.jorbis.VorbisFile(Files.newInputStream(p), null, 0);
-        try {
-            Object[] r = com.jcraft.jorbis.OggPcm.decodeAll(vf);
-            byte[] raw = (byte[]) r[0];
-            int channels = (Integer) r[1];
-            int rate = (Integer) r[2];
-            AudioFormat fmt = new AudioFormat((float) rate, 16, channels, true, true); // signed + little-endian
+        try (com.mojang.blaze3d.audio.OggAudioStream stream =
+                new com.mojang.blaze3d.audio.OggAudioStream(Files.newInputStream(p))) {
+            AudioFormat fmt = stream.getFormat();
+            java.nio.ByteBuffer pcm = stream.readAll();
+            byte[] raw = new byte[pcm.remaining()];
+            pcm.get(raw);
             return new AudioInputStream(new ByteArrayInputStream(raw), fmt, raw.length / fmt.getFrameSize());
-        } finally {
-            vf.close();
         }
     }
 
