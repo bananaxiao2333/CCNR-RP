@@ -1,6 +1,19 @@
 # Changelog
 
+## 2.17.6（修复：2.17.5 误把 partialTick 当 FOV 传入 getProjectionMatrix，头顶标签完全不可见）
+- 根因：GameRenderer.getProjectionMatrix(double) 的参数是 FOV 度数（内部 x0.017453292 转弧度后 setPerspective），
+  2.17.5 误传 partialTick（0~1 小数），FOV 变成约 0.5 度，投影尺度异常放大，标签全部被视口剔除 → 旁观者视角完全看不到头顶标签。
+- 修复：改用 mc.options.fov().get()（静态 FOV 设置值，与 v2.17.4 一致）计算 tan(fov/2) 做像素缩放；
+  保留官方相机正交基投影（Camera.getLookVector/getUpVector/getLeftVector，解决乱飘）+ Mth.lerp partialTick 插值。
+- 构建：spotlessApply / build / test -PrunTests 全绿；jar 已部署 .minecraft/mods/ccnr_rp-2.17.6.jar。
+
 ## 2.17.5（修复：旁观者视角玩家头顶标签位置乱飘）
+- 根因：PlayerNametagRenderer 手写三角函数基向量符号错误（fwdY/fwdZ/rightX 与 1.20.1 相机朝向相反），
+  且用静态 FOV 投影（mc.options.fov），而游戏实际渲染 FOV 随疾跑动态变化，标签位置随视角/疾跑漂移。
+- 修复：改用 Minecraft 官方相机正交基（Camera.getLookVector/getUpVector/getLeftVector）做点积投影，
+  从游戏实际投影矩阵（GameRenderer.getProjectionMatrix(partialTick)）提取动态 FOV（含疾跑加成）做像素缩放；
+  头顶位置用 Mth.lerp(partialTick, ...) 插值，标签稳定钉在玩家头顶，与游戏渲染完全一致。
+  （注：getProjectionMatrix 参数为 FOV 度数，此方案有误，见 2.17.6。）
 - 根因：PlayerNametagRenderer 手写三角函数基向量符号错误（fwdY/fwdZ/rightX 与 1.20.1 相机朝向相反），
   且用静态 FOV 投影（mc.options.fov），而游戏实际渲染 FOV 随疾跑动态变化，标签位置随视角/疾跑漂移。
 - 修复：改用 Minecraft 官方相机正交基（Camera.getLookVector/getUpVector/getLeftVector）做点积投影，
