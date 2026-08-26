@@ -37,6 +37,16 @@ public class RpAdminScreen extends Screen {
     private int tab = TAB_SETTINGS;
     /** 经验规则页签（经验系统 v3）：自包含编辑器；首次使用才构造（避免构造期 this 逃逸）。 */
     private RpRulesTab rulesTab;
+    // 页签栏横向滚动（过窄时可滚动，滚动条可拖拽）
+    private int tabScroll = 0;
+    private int maxTabScroll = 0;
+    private boolean tabDrag = false;
+    private int tabDragStartX = 0;
+    private int tabDragStartScroll = 0;
+    private int tabThumbX1 = 0;
+    private int tabThumbW = 0;
+    private static final int TAB_SB_Y = 64; // 滚动条轨道 y（页签栏下方）
+    private static final int TAB_SB_H = 4;
 
     private RpRulesTab rulesTab() {
         if (rulesTab == null) {
@@ -241,11 +251,16 @@ public class RpAdminScreen extends Screen {
         clearWidgets();
         rowBounds.clear();
         fieldLabels.clear();
-        // 页签栏几何是所有页签共用的，必须先填充（render/鼠标分发都依赖 rowBounds 前 8 项）
-        int tabW = Math.min(76, (px2 - px1 - 36) / 8);
+        // 页签栏几何是所有页签共用的，必须先填充（render/鼠标分发都依赖 rowBounds 前 8 项）。
+        // 过窄时横向滚动：保持页签可读宽度，超出的部分通过 tabScroll 偏移 + 底部滚动条查看。
+        int avail = px2 - px1 - 24; // 页签可用宽（左右各 12）
+        int tabW = Math.min(84, Math.max(64, avail / TABS.length));
+        int totalTab = TABS.length * (tabW + 4) - 4;
+        maxTabScroll = Math.max(0, totalTab - avail);
+        tabScroll = Math.max(0, Math.min(tabScroll, maxTabScroll));
         int tx = px1 + 12;
         for (int i = 0; i < TABS.length; i++) {
-            int x = tx + i * (tabW + 4);
+            int x = tx + i * (tabW + 4) - tabScroll;
             rowBounds.add(new int[] {x, py1 + 42, x + tabW, py1 + 62});
         }
         if (tab == TAB_XP) {
@@ -2173,6 +2188,29 @@ public class RpAdminScreen extends Screen {
             onClose();
             return true;
         }
+        // 页签滚动条：点拇指拖动 / 点轨道跳转
+        if (maxTabScroll > 0
+                && my >= py1 + TAB_SB_Y
+                && my <= py1 + TAB_SB_Y + TAB_SB_H
+                && mx >= px1 + 12
+                && mx <= px2 - 12) {
+            int sbX1 = px1 + 12;
+            int sbX2 = px2 - 12;
+            int travel = sbX2 - sbX1 - tabThumbW;
+            if (mx >= tabThumbX1 && mx <= tabThumbX1 + tabThumbW) {
+                tabDrag = true;
+                tabDragStartX = (int) mx;
+                tabDragStartScroll = tabScroll;
+            } else {
+                int target = travel <= 0 ? 0 : (int) ((long) (mx - sbX1 - tabThumbW / 2) * maxTabScroll / travel);
+                tabScroll = Math.max(0, Math.min(target, maxTabScroll));
+                tabDrag = true;
+                tabDragStartX = (int) mx;
+                tabDragStartScroll = tabScroll;
+                rebuild();
+            }
+            return true;
+        }
         for (int i = 0; i < TABS.length; i++) {
             int[] b = rowBounds.get(i);
             if (mx >= b[0] && mx <= b[2] && my >= b[1] && my <= b[3]) {
@@ -2228,6 +2266,17 @@ public class RpAdminScreen extends Screen {
     /** 滚动条拖拽：按住游标移动即滚动。 */
     @Override
     public boolean mouseDragged(double mx, double my, int button, double dx, double dy) {
+        if (tabDrag && maxTabScroll > 0) {
+            int sbX1 = px1 + 12;
+            int sbX2 = px2 - 12;
+            int travel = sbX2 - sbX1 - tabThumbW;
+            if (travel > 0) {
+                int ns = tabDragStartScroll + (int) ((mx - tabDragStartX) * maxTabScroll / travel);
+                tabScroll = Math.max(0, Math.min(ns, maxTabScroll));
+                rebuild();
+            }
+            return true;
+        }
         if (tab == TAB_SETTINGS) {
             int ns = RpScrollbar.dragV((int) my);
             if (ns >= 0 && RpScrollbar.dragId() == 7) {
@@ -2255,6 +2304,7 @@ public class RpAdminScreen extends Screen {
 
     @Override
     public boolean mouseReleased(double mx, double my, int button) {
+        tabDrag = false;
         RpScrollbar.endDrag();
         return super.mouseReleased(mx, my, button);
     }
@@ -2370,6 +2420,12 @@ public class RpAdminScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+        // 页签栏过窄时：滚轮在页签条/滚动条区域横向滚动
+        if (maxTabScroll > 0 && mouseY >= py1 + 42 && mouseY <= py1 + TAB_SB_Y + TAB_SB_H) {
+            tabScroll = Math.max(0, Math.min(tabScroll - (int) (delta * 6), maxTabScroll));
+            rebuild();
+            return true;
+        }
         if (seqModalOpen) {
             // 流程编辑器：仅步骤列表区滚动
             if (mouseY >= sqListY1 && mouseY <= sqListY2) {
@@ -2531,6 +2587,8 @@ public class RpAdminScreen extends Screen {
                     true);
             g.fill(px1 + 8, py1 + 26, px2 - 8, py1 + 27, RpTheme.CYAN_DIM);
 
+            // 裁剪到页签区：滚动时被推出面板边界的页签不画出界
+            g.enableScissor(px1 + 8, py1 + 40, px2 - 8, py1 + 66);
             for (int i = 0; i < TABS.length; i++) {
                 int[] b = rowBounds.get(i);
                 boolean sel = tab == i;
@@ -2554,6 +2612,21 @@ public class RpAdminScreen extends Screen {
                         (b[0] + b[2]) / 2,
                         b[1] + 6,
                         sel ? 0xFFFFFFFF : RpTheme.TEXT_SECONDARY);
+            }
+            g.disableScissor();
+
+            // 页签过窄时：底部横向滚动条（可拖拽），仅溢出时显示
+            if (maxTabScroll > 0) {
+                int avail = px2 - px1 - 24;
+                int sbX1 = px1 + 12;
+                int sbX2 = px2 - 12;
+                int sbY = py1 + TAB_SB_Y;
+                g.fill(sbX1, sbY, sbX2, sbY + TAB_SB_H, 0x24FFFFFF); // 轨道
+                int total = maxTabScroll + avail;
+                tabThumbW = Math.max(24, (sbX2 - sbX1) * avail / total);
+                int travel = sbX2 - sbX1 - tabThumbW;
+                tabThumbX1 = travel <= 0 ? sbX1 : sbX1 + (int) ((long) travel * tabScroll / maxTabScroll);
+                g.fill(tabThumbX1, sbY, tabThumbX1 + tabThumbW, sbY + TAB_SB_H, RpTheme.PANEL_BORDER_BRIGHT);
             }
 
             if (tab == TAB_SETTINGS) {
