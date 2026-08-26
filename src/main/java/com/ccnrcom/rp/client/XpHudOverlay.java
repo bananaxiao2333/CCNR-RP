@@ -12,10 +12,10 @@ import net.minecraft.client.gui.GuiGraphics;
 
 /**
  * 经验 HUD（经验系统 v3）：右下角内收（不贴角）、水平居中、文字中心对齐。
- * 仅「结算时」显示：结算动画（纯视觉；服务端结算瞬时完成）最底一项缓慢移入数字并消失 →
- * 数字更新 → 列表下移补齐 → 停顿 → 循环至全部吸入 → 数字停在新总值；
- * 动画播完后总数字**停留 5 秒**再消失。存活期间不常驻显示；
- * 死亡结算动画（含死亡界面）同样可见。
+ * 仅「结算时」显示：结算动画（纯视觉；服务端结算瞬时完成）——结算后**先等 3 秒**
+ * （列表静止展示）→ 最底一项缓慢移入数字并消失 → 数字更新 → 列表下移补齐 → 停顿 →
+ * 循环至全部吸入 → 数字停在新总值；动画播完后总数字**停留 5 秒**再消失。
+ * 存活期间不常驻显示；死亡结算动画（含死亡界面）同样可见。
  */
 public final class XpHudOverlay {
 
@@ -34,6 +34,10 @@ public final class XpHudOverlay {
     private static Item flying = null;
     private static long flyStart = 0;
     private static long nextFlyAt = 0;
+    /** 动画开始时刻（ms）：结算后先等 START_DELAY_MS 再开始逐项吸入。 */
+    private static long startAt = 0;
+    /** 结算动画开始前等待时长（ms）。 */
+    private static final long START_DELAY_MS = 3000;
     /** 单项飞入时长（ms）：放慢，让结算过程看得清。 */
     private static final long FLY_MS = 700;
     /** 项目间停顿（ms）。 */
@@ -80,8 +84,11 @@ public final class XpHudOverlay {
             resultUntil = System.currentTimeMillis() + RESULT_MS;
             return;
         }
-        nextFlyAt = System.currentTimeMillis();
-        startNextFly();
+        // 结算后先等 3 秒再开始逐项吸入（期间显示待吸入列表静止 + 旧数字）
+        long now = System.currentTimeMillis();
+        startAt = now + START_DELAY_MS;
+        nextFlyAt = startAt;
+        flying = null;
     }
 
     private static boolean animating() {
@@ -124,6 +131,10 @@ public final class XpHudOverlay {
             if (animRemaining.isEmpty()) {
                 animTotal = total; // 全部吸入：数字停在终值
                 resultUntil = now + RESULT_MS; // 总数字停留 5 秒
+                return;
+            }
+            if (now < startAt) {
+                drawAnim(g, w, h, 0f); // 开始前等待：列表静止待吸入
                 return;
             }
             if (now >= nextFlyAt) {
