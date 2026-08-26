@@ -4,24 +4,28 @@
  */
 package com.ccnrcom.rp.client;
 
+import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.player.AbstractClientPlayer;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Vector3f;
 
 /**
  * 玩家头顶标签（旁观者/观察者视角可见）：阵营徽章 + 职业名(阵营色) + 玩家名 + 等级。
  * 数据来自 PlayerTagsS2C 下发的 ClientCharacterState.playerTag(uuid)；非观察者视角或数据缺失时跳过。
- * 用屏幕投影：把玩家 3D 头顶位置投影到屏幕坐标，在 HUD 层用 GuiGraphics 绘制（阵营徽章为真实图标，非文本）。
+ * 投影使用相机官方正交基（getLookVector/getUpVector/getLeftVector）与游戏实际投影矩阵（含疾跑
+ * 动态 FOV），标签位置与世界渲染完全一致，稳定钉在玩家头顶，不随视角/疾跑 FOV 漂移。
  */
 public final class PlayerNametagRenderer {
 
     private PlayerNametagRenderer() {}
 
     /** HUD 层渲染：旁观者视角下为每个其他玩家绘制头顶标签。 */
-    public static void render(GuiGraphics gfx, int w, int h) {
+    public static void render(GuiGraphics gfx, int w, int h, float partialTick) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null || mc.getEntityRenderDispatcher().camera == null) {
             return;
@@ -30,6 +34,14 @@ public final class PlayerNametagRenderer {
             return;
         }
         Font font = mc.font;
+        Camera cam = mc.gameRenderer.getMainCamera();
+        Vec3 camPos = cam.getPosition();
+        // 动态投影矩阵（含疾跑 FOV 加成）：m11 = 1/tan(fov/2)，用于垂直方向像素缩放
+        float tanHalf = 1.0f / mc.gameRenderer.getProjectionMatrix(partialTick).m11();
+        // 相机正交基（1.20.1 官方 API，方向保证正确；right = -left）
+        Vector3f look = cam.getLookVector();
+        Vector3f up = cam.getUpVector();
+        Vector3f left = cam.getLeftVector();
         for (Entity e : mc.level.entitiesForRendering()) {
             if (!(e instanceof AbstractClientPlayer other) || other == mc.player) {
                 continue;
@@ -39,43 +51,31 @@ public final class PlayerNametagRenderer {
             if (tag == null || tag.name() == null || tag.name().isBlank()) {
                 continue;
             }
-            // 头顶位置（脚底上方一个身高 + 0.4）
-            Vec3 cam = mc.gameRenderer.getMainCamera().getPosition();
-            double dx = other.getX() - cam.x;
-            double dy = other.getY() + other.getBbHeight() + 0.45 - cam.y;
-            double dz = other.getZ() - cam.z;
-            if (mc.getEntityRenderDispatcher().camera.isDetached() || !isInView(mc, other)) {
+            if (cam.isDetached() || !isInView(mc, other)) {
                 continue;
             }
-            // 投影到屏幕
-            float yaw =
-                    (float) Math.toRadians(mc.getEntityRenderDispatcher().camera.getYRot());
-            float pitch =
-                    (float) Math.toRadians(mc.getEntityRenderDispatcher().camera.getXRot());
-            // 相机朝向基（Y 轴向上）
-            double cosY = Math.cos(yaw), sinY = Math.sin(yaw);
-            double cosP = Math.cos(pitch), sinP = Math.sin(pitch);
-            // 转到相机空间（前=Z 负，右=X 正，上=Y 正）
-            double fwdX = -sinY * cosP, fwdY = sinP, fwdZ = -cosY * cosP;
-            double rightX = cosY, rightY = 0, rightZ = -sinY;
-            double upX = sinY * sinP, upY = cosP, upZ = cosY * sinP;
-            double depth = dx * fwdX + dy * fwdY + dz * fwdZ;
-            if (depth >= -0.1) {
+            // 头顶位置（脚底上方一个身高 + 0.45），partialTick 插值避免移动滞后
+            double tx = Mth.lerp(partialTick, other.xo, other.getX());
+            double ty = Mth.lerp(partialTick, other.yo, other.getY()) + other.getBbHeight() + 0.45;
+            double tz = Mth.lerp(partialTick, other.zo, other.getZ());
+            double dx = tx - camPos.x;
+            double dy = ty - camPos.y;
+            double dz = tz - camPos.z;
+            double depth = dx * look.x + dy * look.y + dz * look.z;
+            if (depth <= 0.1) {
                 continue; // 在相机后方
             }
-            double rx = dx * rightX + dy * rightY + dz * rightZ;
-            double uy = dx * upX + dy * upY + dz * upZ;
-            float fov = (float) Math.toRadians(mc.options.fov().get());
-            float tanHalf = (float) Math.tan(fov / 2.0);
-            double scale = (h / 2.0) / (Math.abs(depth) * tanHalf);
+            double rx = dx * (-left.x) + dy * (-left.y) + dz * (-left.z);
+            double uy = dx * up.x + dy * up.y + dz * up.z;
+            double scale = (h / 2.0) / (depth * tanHalf);
             int sx = (int) Math.round(w / 2.0 + rx * scale);
             int sy = (int) Math.round(h / 2.0 - uy * scale);
-            // 距离缩放：太远缩小
-            float distScale = (float) Math.max(0.6, Math.min(1.4, 12.0 / Math.max(1.0, Math.abs(depth))));
             // 视口外剔除
             if (sx < -120 || sx > w + 120 || sy < -60 || sy > h + 60) {
                 continue;
             }
+            // 距离缩放：太远缩小
+            float distScale = (float) Math.max(0.6, Math.min(1.4, 12.0 / Math.max(1.0, depth)));
             drawTag(gfx, font, sx, sy, tag, distScale);
         }
     }
