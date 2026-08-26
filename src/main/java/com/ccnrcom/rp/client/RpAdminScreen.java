@@ -117,6 +117,28 @@ public class RpAdminScreen extends Screen {
     private String lastCamQuery = null;
     private final List<int[]> camSugBounds = new ArrayList<>();
     private EditBox camSugBox;
+    /** 限制目标补全（限制页「目标」输入框）：按当前类型补全阵营/职业 id；当前过滤列表 / 选中索引 / 命中矩形。 */
+    private List<String> limitTargetSugItems = new ArrayList<>();
+
+    private int limitTargetSugIdx = -1;
+    private String lastLimitTargetQuery = null;
+    private final List<int[]> limitTargetSugBounds = new ArrayList<>();
+    /** 通用 id 补全（刷新波职业/阵营/维度、设置页职业、序列弹窗波/职业/阵营）：数据源枚举 + 激活输入框 + 状态。 */
+    private enum SugSource {
+        NONE,
+        PROFESSION,
+        FACTION,
+        WAVE,
+        DIMENSION
+    }
+
+    private SugSource idSugSource = SugSource.NONE;
+    private EditBox idSugBox = null;
+    private List<String> idSugItems = new ArrayList<>();
+
+    private int idSugIdx = -1;
+    private String lastIdSugQuery = null;
+    private final List<int[]> idSugBounds = new ArrayList<>();
     private EditBox profileBox;
     private EditBox fld2Box;
     private EditBox fld3Box;
@@ -454,6 +476,32 @@ public class RpAdminScreen extends Screen {
             }
         }
         return null;
+    }
+
+    /** 从补全显示名「名字(id)」或「id」提取原始 id（填入目标框用）。 */
+    private static String sugTargetId(String label) {
+        int open = label.lastIndexOf('(');
+        int close = label.lastIndexOf(')');
+        if (open >= 0 && close > open) {
+            return label.substring(open + 1, close);
+        }
+        return label;
+    }
+
+    /**
+     * 应用补全选中项到输入框：逗号分隔的多值框（刷新波职业/阵营 ID）追加或替换末尾词，
+     * 单值框（维度/波 ID/设置职业）整体替换。空值直接填入。
+     */
+    private static String applyIdSug(String current, String id) {
+        if (current == null || current.isBlank()) {
+            return id;
+        }
+        if (!current.contains(",")) {
+            return id; // 单值输入：整体替换
+        }
+        int lastComma = current.lastIndexOf(',');
+        String prefix = current.substring(0, lastComma + 1).trim(); // 保留逗号分隔结构
+        return prefix + id;
     }
 
     private void buildWaveForm() {
@@ -2007,6 +2055,32 @@ public class RpAdminScreen extends Screen {
                 }
             }
         }
+        // 限制目标补全提示点击优先（选中项填入限制目标框；填入原始 id 而非显示名）
+        if (!limitTargetSugBounds.isEmpty()) {
+            for (int i = 0; i < limitTargetSugBounds.size(); i++) {
+                int[] b = limitTargetSugBounds.get(i);
+                if (mx >= b[0] && mx <= b[2] && my >= b[1] && my <= b[3]) {
+                    if (nameBox != null && i < limitTargetSugItems.size()) {
+                        nameBox.setValue(sugTargetId(limitTargetSugItems.get(i)));
+                    }
+                    limitTargetSugIdx = -1;
+                    return true;
+                }
+            }
+        }
+        // 通用 id 补全点击（刷新波/设置页/序列弹窗的 id 类输入框；多值框追加，单值框替换）
+        if (!idSugBounds.isEmpty()) {
+            for (int i = 0; i < idSugBounds.size(); i++) {
+                int[] b = idSugBounds.get(i);
+                if (mx >= b[0] && mx <= b[2] && my >= b[1] && my <= b[3]) {
+                    if (idSugBox != null && i < idSugItems.size()) {
+                        idSugBox.setValue(applyIdSug(idSugBox.getValue(), sugTargetId(idSugItems.get(i))));
+                    }
+                    idSugIdx = -1;
+                    return true;
+                }
+            }
+        }
         // 非管理员直接拦截所有管理操作（服务端仍有二次校验兜底）
         if (!ClientCharacterState.isAdmin()) {
             return super.mouseClicked(mx, my, button);
@@ -2345,6 +2419,48 @@ public class RpAdminScreen extends Screen {
                 return true;
             }
         }
+        if (!limitTargetSugItems.isEmpty() && nameBox != null && nameBox.isFocused()) {
+            if (keyCode == 264) { // Down
+                limitTargetSugIdx = (limitTargetSugIdx + 1) % limitTargetSugItems.size();
+                return true;
+            }
+            if (keyCode == 265) { // Up
+                limitTargetSugIdx = (limitTargetSugIdx - 1 + limitTargetSugItems.size()) % limitTargetSugItems.size();
+                return true;
+            }
+            if (keyCode == 257 || keyCode == 335) { // Enter / Numpad Enter
+                if (limitTargetSugIdx >= 0 && limitTargetSugIdx < limitTargetSugItems.size()) {
+                    nameBox.setValue(sugTargetId(limitTargetSugItems.get(limitTargetSugIdx)));
+                }
+                limitTargetSugIdx = -1;
+                return true;
+            }
+            if (keyCode == 256) { // Esc
+                limitTargetSugIdx = -1;
+                return true;
+            }
+        }
+        if (!idSugItems.isEmpty() && idSugBox != null && idSugBox.isFocused()) {
+            if (keyCode == 264) { // Down
+                idSugIdx = (idSugIdx + 1) % idSugItems.size();
+                return true;
+            }
+            if (keyCode == 265) { // Up
+                idSugIdx = (idSugIdx - 1 + idSugItems.size()) % idSugItems.size();
+                return true;
+            }
+            if (keyCode == 257 || keyCode == 335) { // Enter / Numpad Enter
+                if (idSugIdx >= 0 && idSugIdx < idSugItems.size()) {
+                    idSugBox.setValue(applyIdSug(idSugBox.getValue(), sugTargetId(idSugItems.get(idSugIdx))));
+                }
+                idSugIdx = -1;
+                return true;
+            }
+            if (keyCode == 256) { // Esc
+                idSugIdx = -1;
+                return true;
+            }
+        }
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
@@ -2423,6 +2539,9 @@ public class RpAdminScreen extends Screen {
             // 若补全框先画会被盖住；这里在 widget 之后绘制，保证下拉框始终在最上层可点可看。
             renderMusicSuggestions(g);
             renderCamSceneSuggestions(g);
+            renderLimitTargetSuggestions(g);
+            resolveIdSugSource();
+            renderIdSuggestions(g);
         }
         if (impactOpen) {
             renderImpactModal(g, mouseX, mouseY);
@@ -2432,6 +2551,9 @@ public class RpAdminScreen extends Screen {
         }
         if (seqModalOpen) {
             renderSequenceModal(g, mouseX, mouseY, partialTick);
+            // 序列弹窗内 id 输入框（波 ID/职业/阵营）补全：在弹窗内容之后绘制，置顶于弹窗控件之上
+            resolveIdSugSource();
+            renderIdSuggestions(g);
         }
     }
 
@@ -2514,6 +2636,173 @@ public class RpAdminScreen extends Screen {
             int yy = sy + i * 12;
             g.drawString(font, camSugItems.get(i), sx + 4, yy + 2, RpTheme.CYAN, false);
             camSugBounds.add(new int[] {sx, yy, sx + sw, yy + 12});
+        }
+    }
+
+    /** 限制目标补全：限制页「目标」输入框（nameBox）聚焦时按当前类型（FACTION/PROFESSION）补全对应 id；GLOBAL 无目标不触发。 */
+    private void renderLimitTargetSuggestions(GuiGraphics g) {
+        limitTargetSugBounds.clear();
+        boolean form = tab == TAB_LIMITS && nameBox != null && nameBox.isFocused();
+        String type = LIMIT_TYPES[limitTypeIdx];
+        if (!form || "GLOBAL".equals(type)) {
+            limitTargetSugItems = new ArrayList<>();
+            limitTargetSugIdx = -1;
+            lastLimitTargetQuery = null;
+            return;
+        }
+        String q = nameBox.getValue() == null ? "" : nameBox.getValue().toLowerCase(java.util.Locale.ROOT);
+        if (!q.equals(lastLimitTargetQuery)) {
+            lastLimitTargetQuery = q;
+            limitTargetSugIdx = -1;
+        }
+        limitTargetSugItems = new ArrayList<>();
+        if ("FACTION".equals(type)) {
+            for (JsonObject f : ClientCharacterState.factions()) {
+                String id = str(f, "id");
+                String label = str(f, "name").isBlank() ? id : str(f, "name") + "(" + id + ")";
+                if (q.isBlank()
+                        || id.toLowerCase(java.util.Locale.ROOT).contains(q)
+                        || str(f, "name").toLowerCase(java.util.Locale.ROOT).contains(q)) {
+                    limitTargetSugItems.add(label);
+                }
+            }
+        } else {
+            for (JsonObject p : ClientCharacterState.professions()) {
+                String id = str(p, "id");
+                String label = str(p, "name").isBlank() ? id : str(p, "name") + "(" + id + ")";
+                if (q.isBlank()
+                        || id.toLowerCase(java.util.Locale.ROOT).contains(q)
+                        || str(p, "name").toLowerCase(java.util.Locale.ROOT).contains(q)) {
+                    limitTargetSugItems.add(label);
+                }
+            }
+        }
+        if (limitTargetSugIdx >= limitTargetSugItems.size()) {
+            limitTargetSugIdx = limitTargetSugItems.size() - 1;
+        }
+        if (limitTargetSugItems.isEmpty()) {
+            return;
+        }
+        int sx = nameBox.getX();
+        int sy = nameBox.getY() + 20;
+        int sw = nameBox.getWidth();
+        int n = Math.min(6, limitTargetSugItems.size());
+        g.fill(sx - 1, sy - 1, sx + sw + 1, sy + n * 12 + 1, 0xE0323232);
+        g.fill(sx - 1, sy - 1, sx + sw + 1, sy, 0xFF5F5F5F);
+        for (int i = 0; i < n; i++) {
+            int yy = sy + i * 12;
+            g.drawString(font, limitTargetSugItems.get(i), sx + 4, yy + 2, RpTheme.CYAN, false);
+            limitTargetSugBounds.add(new int[] {sx, yy, sx + sw, yy + 12});
+        }
+    }
+
+    /** 通用 id 补全数据源：按枚举返回候选（显示名(id) 形式，含名称与 id 双匹配）。 */
+    private List<String> idSugCandidates(SugSource src) {
+        List<String> out = new ArrayList<>();
+        if (src == SugSource.PROFESSION) {
+            for (JsonObject p : ClientCharacterState.professions()) {
+                String id = str(p, "id");
+                out.add(str(p, "name").isBlank() ? id : str(p, "name") + "(" + id + ")");
+            }
+        } else if (src == SugSource.FACTION) {
+            for (JsonObject f : ClientCharacterState.factions()) {
+                String id = str(f, "id");
+                out.add(str(f, "name").isBlank() ? id : str(f, "name") + "(" + id + ")");
+            }
+        } else if (src == SugSource.WAVE) {
+            for (JsonObject w : ClientCharacterState.managerWaves()) {
+                out.add(str(w, "id"));
+            }
+        } else if (src == SugSource.DIMENSION) {
+            out.add("minecraft:overworld");
+            out.add("minecraft:the_nether");
+            out.add("minecraft:the_end");
+        }
+        return out;
+    }
+
+    /**
+     * 推断通用 id 补全源（每帧渲染前调用）：
+     * 主表单按 tab + 聚焦框识别（刷新波：维度/职业ID/阵营ID；设置页：首次入服职业）；
+     * 序列弹窗打开时按 seqBoxes 键识别（WAVE=波ID / FORCE_PICK professions=职业 / faction=阵营）。
+     */
+    private void resolveIdSugSource() {
+        idSugSource = SugSource.NONE;
+        idSugBox = null;
+        if (seqModalOpen) {
+            for (java.util.Map.Entry<String, net.minecraft.client.gui.components.EditBox> e : seqBoxes.entrySet()) {
+                if (e.getValue().isFocused()) {
+                    String k = e.getKey();
+                    if ("wave".equals(k)) {
+                        idSugSource = SugSource.WAVE;
+                    } else if ("professions".equals(k)) {
+                        idSugSource = SugSource.PROFESSION;
+                    } else if ("faction".equals(k)) {
+                        idSugSource = SugSource.FACTION;
+                    }
+                    idSugBox = e.getValue();
+                    return;
+                }
+            }
+            return;
+        }
+        if (tab == TAB_WAVE) {
+            if (nameBox != null && nameBox.isFocused()) {
+                idSugSource = SugSource.DIMENSION;
+                idSugBox = nameBox;
+            } else if (descBox != null && descBox.isFocused()) {
+                idSugSource = SugSource.PROFESSION;
+                idSugBox = descBox;
+            } else if (musicBox != null && musicBox.isFocused()) {
+                idSugSource = SugSource.FACTION;
+                idSugBox = musicBox;
+            }
+        } else if (tab == TAB_SETTINGS) {
+            // 首次入服自动部署职业（字符串设置项）：补全职业 id
+            net.minecraft.client.gui.components.EditBox fj = cfgBoxes.get("firstJoinProfession");
+            if (fj != null && fj.isFocused()) {
+                idSugSource = SugSource.PROFESSION;
+                idSugBox = fj;
+            }
+        }
+    }
+
+    /** 通用 id 补全渲染：idSugBox（主表单或序列弹窗的 id 类输入框）聚焦时按数据源过滤绘制下拉。 */
+    private void renderIdSuggestions(GuiGraphics g) {
+        idSugBounds.clear();
+        if (idSugSource == SugSource.NONE || idSugBox == null || !idSugBox.isFocused()) {
+            idSugItems = new ArrayList<>();
+            idSugIdx = -1;
+            lastIdSugQuery = null;
+            return;
+        }
+        String q = idSugBox.getValue() == null ? "" : idSugBox.getValue().toLowerCase(java.util.Locale.ROOT);
+        if (!q.equals(lastIdSugQuery)) {
+            lastIdSugQuery = q;
+            idSugIdx = -1;
+        }
+        idSugItems = new ArrayList<>();
+        for (String cand : idSugCandidates(idSugSource)) {
+            if (q.isBlank() || cand.toLowerCase(java.util.Locale.ROOT).contains(q)) {
+                idSugItems.add(cand);
+            }
+        }
+        if (idSugIdx >= idSugItems.size()) {
+            idSugIdx = idSugItems.size() - 1;
+        }
+        if (idSugItems.isEmpty()) {
+            return;
+        }
+        int sx = idSugBox.getX();
+        int sy = idSugBox.getY() + 20;
+        int sw = idSugBox.getWidth();
+        int n = Math.min(6, idSugItems.size());
+        g.fill(sx - 1, sy - 1, sx + sw + 1, sy + n * 12 + 1, 0xE0323232);
+        g.fill(sx - 1, sy - 1, sx + sw + 1, sy, 0xFF5F5F5F);
+        for (int i = 0; i < n; i++) {
+            int yy = sy + i * 12;
+            g.drawString(font, idSugItems.get(i), sx + 4, yy + 2, RpTheme.CYAN, false);
+            idSugBounds.add(new int[] {sx, yy, sx + sw, yy + 12});
         }
     }
 
