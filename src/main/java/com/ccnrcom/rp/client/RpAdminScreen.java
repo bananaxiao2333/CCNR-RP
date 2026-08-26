@@ -2415,12 +2415,14 @@ public class RpAdminScreen extends Screen {
                 renderListTab(g, mouseX, mouseY);
             }
             renderFieldLabels(g);
-            renderMusicSuggestions(g);
-            renderCamSceneSuggestions(g);
             if (!notice.isBlank()) {
                 g.drawCenteredString(font, "[ 系统 ] " + notice, (px1 + px2) / 2, py2 - 46, RpTheme.RED_LINE);
             }
             super.render(g, mouseX, mouseY, partialTick);
+            // 输入补全框置顶渲染：super.render 会绘制所有 widget（输入框/按钮），
+            // 若补全框先画会被盖住；这里在 widget 之后绘制，保证下拉框始终在最上层可点可看。
+            renderMusicSuggestions(g);
+            renderCamSceneSuggestions(g);
         }
         if (impactOpen) {
             renderImpactModal(g, mouseX, mouseY);

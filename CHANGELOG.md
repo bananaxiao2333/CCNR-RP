@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.17.2（修复：管理面板输入补全框被其他控件遮挡，改为置顶渲染）
+- 根因：音乐补全 / CMDCam 场景补全的下拉框在 render() 中先于 super.render（widget 渲染：输入框/按钮）
+  绘制，导致下拉框被输入框等 widget 盖住（补全内容显示不全/不可见）。
+- 修复：renderMusicSuggestions / renderCamSceneSuggestions 移到 super.render 之后绘制，
+  补全下拉始终在最上层（弹窗遮罩仍在最外层，弹窗打开时输入框失焦不触发补全，无冲突）。
+- 构建：compileJava / spotlessCheck / test -PrunTests 全绿。
+
 ## 2.17.1（修复：管理面板所有列表点击偏移 1 位）
 - 根因：新增「限制」页后 tab 数从 6 增至 7，列表点击命中循环已改为从 TABS.length 起，
   但 visibleItem(i - 6) 仍用硬编码 6（未随 TABS.length 同步），导致所有列表（职业/阵营/事件/阶段/刷新波/限制）
