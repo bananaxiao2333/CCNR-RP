@@ -224,6 +224,11 @@ public final class UserService {
                         0, 0, false, CharacterStatus.OBSERVING, "", "", 0, 0, new LinkedHashMap<>(), "none"));
     }
 
+    /** 是否已有用户档案（首次入服判定用；不惰性创建档案）。 */
+    public boolean hasProfile(String playerUuid) {
+        return playerUuid != null && profiles.containsKey(playerUuid);
+    }
+
     // ---------- 经验（随用户走） ----------
 
     public long userXp(String playerUuid) {

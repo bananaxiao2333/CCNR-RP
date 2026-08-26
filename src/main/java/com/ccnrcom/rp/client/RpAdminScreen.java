@@ -189,8 +189,11 @@ public class RpAdminScreen extends Screen {
                     break;
                 }
                 if (i < swCount) {
-                    // 5 元素：x1,y1,x2,y2,absIdx（开关行在设置列表中的绝对下标，供点击映射）
-                    rowBounds.add(new int[] {px1 + 12, y, settingsRight(), y + 22, i});
+                    // 5 元素：x1,y1,x2,y2,absIdx（仅开关行加入点击区；字符串/数值行由输入框承载）
+                    String sk = ClientCharacterState.settingKeys().get(i);
+                    if ("bool".equals(com.ccnrcom.rp.config.ManagerSettings.type(sk))) {
+                        rowBounds.add(new int[] {px1 + 12, y, settingsRight(), y + 22, i});
+                    }
                 }
                 y += 30;
             }
@@ -240,15 +243,15 @@ public class RpAdminScreen extends Screen {
         }
     }
 
-    /** serverconfig 程序化设定：为每个配置项生成一个数字输入框 + 保存按钮（开关行之后）。 */
+    /** 「设定」标签程序化表单：开关（bool）/ 字符串设置项 + serverconfig 数值输入框，统一滚动 + 一个保存按钮。 */
     private void buildSettingsForm() {
         cfgBoxes.clear();
-        // 「设定」标签：开关 + serverconfig 数值统一滚动；输入框只对可见数值行生成（与 renderSettings 同一 i/偏移）。
         int x = px1 + 12;
         int w = settingsRight() - x;
         int yMax = py2 - 70;
         JsonObject cfg = ClientCharacterState.serverConfig();
-        int swCount = ClientCharacterState.settingKeys().size();
+        java.util.List<String> setKeys = ClientCharacterState.settingKeys();
+        int swCount = setKeys.size();
         java.util.List<String> keys = com.ccnrcom.rp.config.CCNRRPConfig.keys();
         int total = settingsRows();
         int maxVisible = Math.max(1, (yMax - settingsYTop()) / 30);
@@ -258,24 +261,38 @@ public class RpAdminScreen extends Screen {
             if (y + 22 > yMax) {
                 break;
             }
-            if (i >= swCount) {
+            if (i < swCount) {
+                String key = setKeys.get(i);
+                if ("string".equals(com.ccnrcom.rp.config.ManagerSettings.type(key))) {
+                    // 字符串设置项：文本输入框（标签区右侧至面板边，留滚动条间距）
+                    String cur = ClientCharacterState.settingString(key, settingStringDefault(key));
+                    int bw = Math.max(80, w - 126);
+                    cfgBoxes.put(key, mkBox(x + 120, y + 2, bw, "", cur, false));
+                }
+            } else {
                 String key = keys.get(i - swCount);
                 String cur = cfg.has(key) ? cfg.get(key).getAsString() : "";
-                int bw = Math.max(80, w - 126); // 标签区右侧至面板边（留滚动条间距）
+                int bw = Math.max(80, w - 126);
                 cfgBoxes.put(key, mkBox(x + 120, y + 2, bw, "", cur, false));
             }
             y += 30;
         }
         addRenderableWidget(RpButton.primary(
-                x, py2 - 40, w, 20, Component.translatable("ccnr_rp.gui.admin.crud.save"), b -> saveServerConfig()));
+                x, py2 - 40, w, 20, Component.translatable("ccnr_rp.gui.admin.crud.save"), b -> saveSettingsForm()));
     }
 
-    private void saveServerConfig() {
+    /** 保存「设定」标签全部输入框：settings.json 字符串项 → ManagerSetC2S；serverconfig 数值 → ServerConfigSetC2S。 */
+    private void saveSettingsForm() {
         for (java.util.Map.Entry<String, net.minecraft.client.gui.components.EditBox> e : cfgBoxes.entrySet()) {
-            RpChannels.sendToServer(
-                    new RpPackets.ServerConfigSetC2S(e.getKey(), e.getValue().getValue()));
+            String key = e.getKey();
+            String value = e.getValue().getValue();
+            if (com.ccnrcom.rp.config.ManagerSettings.keys().contains(key)) {
+                RpChannels.sendToServer(new RpPackets.ManagerSetC2S(key, value));
+            } else {
+                RpChannels.sendToServer(new RpPackets.ServerConfigSetC2S(key, value));
+            }
         }
-        notice = "serverconfig 已保存";
+        notice = "设置已保存";
         rebuild();
     }
 
@@ -1257,9 +1274,18 @@ public class RpAdminScreen extends Screen {
                     "forceRetain",
                     "recruitInviteAlive",
                     "hudEnabled",
-                    "hudProfessionText" -> true;
+                    "hudProfessionText",
+                    "firstJoinAutoDeploy" -> true;
             case "hudFactionText", "hudHealthText" -> false;
             default -> true;
+        };
+    }
+
+    /** settings.json 字符串项默认值（与服务端 ManagerSettings.defaults() 保持一致）。 */
+    private static String settingStringDefault(String key) {
+        return switch (key) {
+            case "firstJoinProfession" -> "m5_intern";
+            default -> "";
         };
     }
 
@@ -1385,7 +1411,9 @@ public class RpAdminScreen extends Screen {
                     // 开关行（settings.json 全部键，程序化）：绝对下标存在 b[4]（含滚动偏移）
                     java.util.List<String> switches = ClientCharacterState.settingKeys();
                     int swIdx = b.length > 4 ? b[4] : -1;
-                    if (swIdx >= 0 && swIdx < switches.size()) {
+                    if (swIdx >= 0
+                            && swIdx < switches.size()
+                            && "bool".equals(com.ccnrcom.rp.config.ManagerSettings.type(switches.get(swIdx)))) {
                         String key = switches.get(swIdx);
                         RpChannels.sendToServer(new RpPackets.ManagerSetC2S(key, String.valueOf(!value(key))));
                     }
@@ -1934,12 +1962,14 @@ public class RpAdminScreen extends Screen {
                 break;
             }
             if (i < switches.size()) {
-                // 开关行：开关右对齐面板内边界（settingsRight），标签在左避让
+                // settings.json 行：bool=开关（右对齐），string=标签 + 输入框（输入框由 buildSettingsForm 生成）
                 String key = switches.get(i);
-                boolean on = value(key);
                 RpRoundRect.outlined(g, x, y, x + w, y + 22, 4f, RpTheme.PANEL_BORDER, RpTheme.PANEL_BG);
-                int swX = settingsRight() - 50; // 46 宽开关 + 4px 右距，右对齐
-                drawSwitch(g, swX, y + 4, on);
+                if ("bool".equals(com.ccnrcom.rp.config.ManagerSettings.type(key))) {
+                    boolean on = value(key);
+                    int swX = settingsRight() - 50; // 46 宽开关 + 4px 右距，右对齐
+                    drawSwitch(g, swX, y + 4, on);
+                }
                 g.drawString(font, settingLabel(key), x + 8, y + 6, RpTheme.TEXT_PRIMARY, true);
             } else {
                 // serverconfig 数值行（标签 + 输入框；输入框由 buildSettingsForm 生成并定位）
@@ -1971,6 +2001,10 @@ public class RpAdminScreen extends Screen {
             case "hudFactionText" -> Component.translatable("ccnr_rp.gui.admin.setting.hud_faction")
                     .getString();
             case "hudHealthText" -> Component.translatable("ccnr_rp.gui.admin.setting.hud_health")
+                    .getString();
+            case "firstJoinAutoDeploy" -> Component.translatable("ccnr_rp.gui.admin.setting.first_join_deploy")
+                    .getString();
+            case "firstJoinProfession" -> Component.translatable("ccnr_rp.gui.admin.setting.first_join_profession")
                     .getString();
             default -> key;
         };

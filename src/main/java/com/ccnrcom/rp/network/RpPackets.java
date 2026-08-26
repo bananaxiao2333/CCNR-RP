@@ -228,12 +228,12 @@ public final class RpPackets {
         }
 
         public ManagerSetC2S(FriendlyByteBuf buf) {
-            this(buf.readUtf(64), buf.readUtf(16));
+            this(buf.readUtf(64), buf.readUtf(128));
         }
 
         public void encode(FriendlyByteBuf buf) {
             buf.writeUtf(key, 64);
-            buf.writeUtf(value, 16);
+            buf.writeUtf(value, 128);
         }
 
         public static void handle(ManagerSetC2S msg, Supplier<NetworkEvent.Context> ctx) {

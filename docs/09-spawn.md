@@ -36,13 +36,28 @@
 
 ## 4. 部署链路（两通道共用）
 校验（角色状态/冷却/波开关）→ LoadoutManager.apply（P2 装备，含 NBT）→ 状态 OBSERVING/DEAD → ALIVE。
-时序（2.14.0 起「先播后落位」）：
-- 已设定 CMDCam 场景：部署触发 → 强制旁观者 + 电影 HUD（黑屏/图标/文字）与 CMDCam 场景【同一时刻开始播放】
+时序（2.14.0 起「先播后落位」；2.14.5 起电影 HUD/音乐与 CMDCam 解耦）：
+- 入场电影 HUD（黑屏/图标/文字）+ 出场音乐【始终播放】（未 SKIP_CINEMATIC / NO_MUSIC）；CMDCam 场景为可选叠加层。
+- 已设定 CMDCam 场景（场景名非空且 CMDCam 已装）：部署触发 → 强制旁观者 + 电影 HUD 与 CMDCam 场景【同一时刻开始播放】
   → 全部动画播完（客户端检测 HUD 结束 + CMDCamClient.isPlaying 场景结束）→ 发 DeployLandC2S
   → 移动玩家到部署点（优先级：阵营出生点 → wave deployAt → 世界出生点）→ 设置生存；
+- 未设定 CMDCam（无场景名 / 未装 CMDCam）：强制旁观者 + 电影 HUD/音乐播放 → HUD 播完客户端即发 DeployLandC2S
+  落位（不等待场景）；
   落位兜底：HUD 播完后再等 20s（场景异常）自动落位；服务端 120s 超时；动画期间掉线清理待落位状态。
-- 未设定 CMDCam（无场景名 / 未装 CMDCam）或 SKIP_CINEMATIC：开局直接落位切生存（不播动画、不等待）。
+- SKIP_CINEMATIC：开局直接落位切生存（不播动画、不等待）。
 → 触发 player_spawn 动画（P7）→ 状态广播。
+
+### 4.1 首次入服自动部署（2.15.0 起）
+- 玩家**首次进入设施**（本世界无用户档案）时自动部署为配置职业（默认 m5_intern 访客/实习生），
+  走统一 deploy()：装备 → 传送落点 → 入场电影 HUD + 出场音乐 → 状态 ALIVE → 广播。
+- 配置（config/ccnr_rp/settings.json，管理面板「设置」页全部可编辑）：
+  - firstJoinAutoDeploy（bool，默认 true）：总开关（开关行）；
+  - firstJoinProfession（string，默认 m5_intern）：自动部署职业 id，空串=关闭（文本输入行）。
+- 设置页泛化（2.15.0 起）：settings.json 项按类型渲染——bool=开关行、string=文本输入行，
+  serverconfig 数值=数字输入行，统一滚动 + 一个保存按钮；字符串项经 ManagerSetC2S 落盘 settings.json。
+- 时序：登录时入队（须在用户档案惰性创建前判定首次）→ 等素材同步完成（60s 超时兜底）且入服稳定
+  （≥2s）后部署；已被其他入口部署（管理刷人/复活波/手动）时自动跳过；掉线清理队列。
+- 落点：首个启用且允许自部署并匹配该职业的刷新波，否则默认自部署波（世界出生点）。
 
 ## 5. 命令（OP≥2 或 ccnnrp.admin.spawn）
 /rp spawn list、/rp spawn trigger <id>（强制触发一次，复活波通道，幂等忽略 RUNNING）、
