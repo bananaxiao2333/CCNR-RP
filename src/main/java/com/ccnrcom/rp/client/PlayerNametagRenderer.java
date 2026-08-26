@@ -8,43 +8,38 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.player.AbstractClientPlayer;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
-import org.joml.Vector3f;
+import org.joml.Matrix4f;
+import org.joml.Quaternionf;
 
 /**
- * 玩家头顶标签（部署/存活视角可见）：阵营徽章 + 职业名(阵营色) + 玩家名 + 等级。
- * 数据来自 PlayerTagsS2C 下发的 ClientCharacterState.playerTag(uuid)；旁观者模式或数据缺失时跳过。
- * 投影使用相机官方正交基（getLookVector/getUpVector/getLeftVector），像素缩放用 FOV 静态设置值；
- * 标签尺寸按透视距离缩放（远小近大，同原版名字牌），渲染距离跟随游戏设置，稳定钉在玩家头顶不乱飘。
+ * 玩家头顶悬浮标签（世界空间 billboard，客户端本地渲染）：阵营徽章 + 职业名(阵营色) + 玩家名 + 等级。
+ * 数据来自 PlayerTagsS2C 下发的 ClientCharacterState.playerTag(uuid)；服务端已过滤，仅非观察者（已部署）玩家有数据。
+ * 渲染方式仿原版名字牌：在实体头顶上方 mulPose(cameraOrientation) 使其始终面向相机 + scale(-0.025,-0.025,0.025) +
+ * font.drawInBatch 绘制文字。只有本地客户端渲染，其他玩家看不到；自带透视（远小近大）。
  */
 public final class PlayerNametagRenderer {
 
-    /** 标签设计距离：该距离下缩放系数 = 1.0（6 格内放大、6 格外缩小，同原版透视）。 */
-    private static final double TAG_BASE_DIST = 6.0;
+    /** 标签顶端离头顶的世界偏移（格）：0.9 格起，避免遮挡头部。 */
+    private static final double TAG_OFFSET = 0.9;
 
     private PlayerNametagRenderer() {}
 
-    /** HUD 层渲染：为每个其他玩家绘制头顶标签（数据由服务端过滤，仅非观察者/已部署玩家）。 */
-    public static void render(GuiGraphics gfx, int w, int h, float partialTick) {
+    /** 世界空间渲染：RenderLevelStageEvent.AFTER_ENTITIES 阶段为每个其他玩家绘制头顶悬浮标签。 */
+    public static void renderWorld(PoseStack poseStack, Camera cam, float partialTick, MultiBufferSource buffer) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || mc.level == null || mc.getEntityRenderDispatcher().camera == null) {
+        if (mc.player == null || mc.level == null || mc.font == null || cam == null) {
             return;
         }
         Font font = mc.font;
-        Camera cam = mc.gameRenderer.getMainCamera();
         Vec3 camPos = cam.getPosition();
-        // FOV 半角正切（mc.options.fov 为静态设置值；GameRenderer.getProjectionMatrix 的参数是
-        // FOV 度数而非 partialTick，不可直接传入）
-        double fov = mc.options.fov().get();
-        float tanHalf = (float) Math.tan(Math.toRadians(fov) / 2.0);
-        // 相机正交基（1.20.1 官方 API，方向保证正确；right = -left）
-        Vector3f look = cam.getLookVector();
-        Vector3f up = cam.getUpVector();
-        Vector3f left = cam.getLeftVector();
+        // 相机朝向（billboard：标签始终面向相机）
+        Quaternionf camRot = mc.getEntityRenderDispatcher().cameraOrientation();
         for (Entity e : mc.level.entitiesForRendering()) {
             if (!(e instanceof AbstractClientPlayer other) || other == mc.player) {
                 continue;
@@ -54,67 +49,58 @@ public final class PlayerNametagRenderer {
             if (tag == null || tag.name() == null || tag.name().isBlank()) {
                 continue;
             }
-            if (cam.isDetached() || !isInView(mc, other)) {
+            if (!isInView(mc, other)) {
                 continue;
             }
-            // 头顶位置（脚底上方一个身高 + 0.9，标签整体上移不挡头），partialTick 插值避免移动滞后
+            // 头顶位置（脚底上方一个身高 + 偏移），partialTick 插值避免移动滞后
             double tx = Mth.lerp(partialTick, other.xo, other.getX());
-            double ty = Mth.lerp(partialTick, other.yo, other.getY()) + other.getBbHeight() + 0.9;
+            double ty = Mth.lerp(partialTick, other.yo, other.getY()) + other.getBbHeight() + TAG_OFFSET;
             double tz = Mth.lerp(partialTick, other.zo, other.getZ());
-            double dx = tx - camPos.x;
-            double dy = ty - camPos.y;
-            double dz = tz - camPos.z;
-            double depth = dx * look.x + dy * look.y + dz * look.z;
-            if (depth <= 0.1) {
-                continue; // 在相机后方
-            }
-            double rx = dx * (-left.x) + dy * (-left.y) + dz * (-left.z);
-            double uy = dx * up.x + dy * up.y + dz * up.z;
-            double scale = (h / 2.0) / (depth * tanHalf);
-            int sx = (int) Math.round(w / 2.0 + rx * scale);
-            int sy = (int) Math.round(h / 2.0 - uy * scale);
-            // 视口外剔除
-            if (sx < -120 || sx > w + 120 || sy < -60 || sy > h + 60) {
-                continue;
-            }
-            // 透视距离缩放：远小近大（同原版名字牌），6 格处为 1.0
-            float distScale = (float) Math.max(0.3, Math.min(2.5, TAG_BASE_DIST / Math.max(1.0, depth)));
-            drawTag(gfx, font, sx, sy, tag, distScale);
+            poseStack.pushPose();
+            poseStack.translate(tx - camPos.x, ty - camPos.y, tz - camPos.z);
+            poseStack.mulPose(camRot);
+            poseStack.scale(-0.025F, -0.025F, 0.025F);
+            Matrix4f matrix = poseStack.last().pose();
+            drawTag(font, matrix, buffer, tag);
+            poseStack.popPose();
         }
     }
 
     private static void drawTag(
-            GuiGraphics gfx, Font font, int cx, int topY, ClientCharacterState.PlayerTag tag, float scale) {
-        // 整体缩放（徽章/文字/底衬一起远小近大），以 (cx, topY) 为标签左上角原点
-        PoseStack pose = gfx.pose();
-        pose.pushPose();
-        pose.translate(cx, topY, 0.0f);
-        pose.scale(scale, scale, 1.0f);
+            Font font, Matrix4f matrix, MultiBufferSource buffer, ClientCharacterState.PlayerTag tag) {
         int factionColor = factionColor(tag.factionId());
         String profession = professionDisplay(tag.professionId());
-        int badgeR = 7;
-        // 第一行：徽章(左) + 职业名(阵营色)
-        int pW = font.width(profession);
-        int row1W = badgeR * 2 + 4 + pW;
-        // 底衬
-        gfx.fill(-row1W / 2 - 3, -2, row1W / 2 + 3, 10, 0x66000000);
-        // 徽章（真实阵营图标）
-        com.google.gson.JsonObject faction = factionJson(tag.factionId());
-        RpIcons.factionBadge(gfx, -row1W / 2 + badgeR, 4, badgeR, faction, false);
-        // 职业名（阵营色，在徽章右侧）
-        gfx.drawString(font, profession, -row1W / 2 + badgeR * 2 + 4, 0, factionColor, true);
+        // 第一行：职业名（阵营色，居中；徽章简化为一枚阵营色圆点前缀）
+        Component line1 = Component.literal("● " + profession).withStyle(s -> s.withColor(factionColor));
         // 第二行：玩家名（白）
-        int y2 = 12;
-        int w2 = font.width(tag.name());
-        gfx.fill(-w2 / 2 - 3, y2 - 2, w2 / 2 + 3, y2 + 10, 0x66000000);
-        gfx.drawString(font, tag.name(), -w2 / 2, y2, 0xFFFFFFFF, true);
+        Component line2 = Component.literal(tag.name());
         // 第三行：等级（青）
-        int y3 = y2 + 12;
-        String lv = "Lv." + tag.level();
-        int w3 = font.width(lv);
-        gfx.fill(-w3 / 2 - 3, y3 - 2, w3 / 2 + 3, y3 + 10, 0x66000000);
-        gfx.drawString(font, lv, -w3 / 2, y3, 0xFF3DD2FF, true);
-        pose.popPose();
+        Component line3 = Component.literal("Lv." + tag.level()).withStyle(s -> s.withColor(0x3DD2FF));
+        int lineGap = 10;
+        int total = lineGap * 3;
+        float y = -total + lineGap; // 从标签底部向上排，锚点在头顶上方
+        // 每行半透明底衬（对齐原版名字牌的背景）
+        int bg = 0x66000000; // 40% 黑
+        int light = 0xF000F0; // FULL_BRIGHT 附近，保证任何光照下可读
+        drawCentered(font, matrix, buffer, line1, y, bg, light);
+        drawCentered(font, matrix, buffer, line2, y + lineGap, bg, light);
+        drawCentered(font, matrix, buffer, line3, y + lineGap * 2, bg, light);
+    }
+
+    private static void drawCentered(
+            Font font, Matrix4f matrix, MultiBufferSource buffer, Component text, float y, int bg, int light) {
+        float w = font.width(text);
+        font.drawInBatch(
+                text,
+                -w / 2.0F,
+                y,
+                0xFFFFFFFF,
+                false,
+                matrix,
+                buffer,
+                net.minecraft.client.gui.Font.DisplayMode.NORMAL,
+                bg,
+                light);
     }
 
     /** 粗略可见性判断：与游戏渲染距离一致（人物在该距离内才渲染，标签随之显示/隐藏）。 */
@@ -140,14 +126,14 @@ public final class PlayerNametagRenderer {
     private static int factionColor(String factionId) {
         com.google.gson.JsonObject f = factionJson(factionId);
         if (f == null) {
-            return 0xFF3DD2FF;
+            return 0x3DD2FF;
         }
         String c =
                 f.has("color") && !f.get("color").isJsonNull() ? f.get("color").getAsString() : "";
         try {
-            return 0xFF000000 | Integer.parseInt(c.replace("#", ""), 16);
+            return 0xFFFFFF & Integer.parseInt(c.replace("#", ""), 16);
         } catch (Exception ignored) {
-            return 0xFF3DD2FF;
+            return 0x3DD2FF;
         }
     }
 
