@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.15.3（流程编辑器回归：事件/阶段/刷新波行为序列弹窗编辑，界面仿出生点编辑器）
+- 管理面板事件/阶段/刷新波表单新增「编辑行为序列…」按钮，弹出流程编辑器（仿出生点管理弹窗）：
+  步骤列表（点选/↑↓ 上移下移/删）+「+ 添加步骤」+ 选中步骤类型切换（WAIT/WAVE/COMMAND/FORCE_PICK）
+  + 按类型参数输入框（WAIT=秒数 / WAVE=波ID / COMMAND=命令文本({{event}} {{phase}} {{seq}} 变量) /
+  FORCE_PICK=数量+职业ID+阵营ID），保存即走主表单 CRUD 落盘（sequence 字段）。
+- 保存链路：弹窗保存写 editedSequence → buildPayload 的 addSequenceField() 优先用编辑结果、否则透传原 sequence；
+  切换条目/新建时清空编辑缓存防串条。步骤引擎/执行逻辑不变（SequenceEngine 原有 WAIT/WAVE/COMMAND/FORCE_PICK）。
+- 构建：compileJava / spotlessCheck / test -PrunTests 全绿。
+
 ## 2.15.2（处决转职：在场玩家可点击部署，确认后服务端处死旧角色再部署为选定职位）
 - K 面板「部署」按钮对在场（ALIVE）玩家可用（按钮文案变「处决转职」），点击弹出确认框；
   确认后客户端发 KillDeployC2S → 服务端先统一退场处死旧角色（状态→观察+复活冷却+遗体+死亡结算，
