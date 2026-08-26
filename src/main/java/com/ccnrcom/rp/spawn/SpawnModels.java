@@ -4,6 +4,7 @@
  */
 package com.ccnrcom.rp.spawn;
 
+import com.ccnrcom.rp.status.CharacterStatus;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -14,16 +15,66 @@ import java.util.List;
 public final class SpawnModels {
 
     public enum Mode {
+        /** 存活人员可收到（持久化值沿用 SELF_DEPLOY 兼容旧配置）。 */
         SELF_DEPLOY,
+        /** 死亡人员可收到。 */
         RESURRECTION,
+        /** 皆可收到。 */
         BOTH;
 
-        public boolean selfDeployAllowed() {
+        /** 是否允许存活玩家收到本波邀请。 */
+        public boolean aliveReceiveAllowed() {
             return this == SELF_DEPLOY || this == BOTH;
         }
 
-        public boolean resurrectionAllowed() {
+        /** 是否允许死亡/观察玩家收到本波邀请。 */
+        public boolean deadReceiveAllowed() {
             return this == RESURRECTION || this == BOTH;
+        }
+
+        /** 是否可作为自部署落点（存活可收到即认为存活可用）。 */
+        public boolean selfDeployAllowed() {
+            return aliveReceiveAllowed();
+        }
+
+        /** 兼容旧版管理面板持久化的枚举值（v2.15.x 前 Modes 数组含 "RECRUIT"）：语义 = 仅死亡/观察可收到。 */
+        public static Mode legacyRecruit() {
+            return RESURRECTION;
+        }
+    }
+
+    /** 征召接受者的部署方式（docs/09 §4.3「判断条件 = 观察者角色」的显式化）：观察者/死亡 → 临时征召；存活 → 正式转职。 */
+    public enum ConscriptDeployMode {
+        TEMP,
+        FORMAL,
+        SKIP;
+
+        /** 按当前角色状态判定部署方式；null（异常）→ SKIP（不部署）。 */
+        public static ConscriptDeployMode of(CharacterStatus status) {
+            if (status == null) {
+                return SKIP;
+            }
+            return switch (status) {
+                case ALIVE -> FORMAL;
+                case OBSERVING, DEAD -> TEMP;
+            };
+        }
+    }
+
+    /** 通用波名额分配（纯逻辑）：存活征召与观察者选岗各占一半，总数不超过 count。 */
+    public record WaveQuota(int aliveShare, int pickTarget, boolean hasAlive, boolean hasPick) {
+
+        /**
+         * 拆分名额：count<=0 → 空分配（整波跳过，与指定类型波一致）；否则存活征召先取 ceil(count/2)，
+         * 剩余归观察者选岗；某一通道无候选时该通道不发邀请（名额不转移，防超招）。
+         */
+        public static WaveQuota split(int count, int alivePoolSize, boolean hasObservers) {
+            if (count <= 0) {
+                return new WaveQuota(0, 0, false, false);
+            }
+            int aliveShare = alivePoolSize > 0 ? Math.min(alivePoolSize, (count + 1) / 2) : 0;
+            int pickTarget = Math.max(0, count - aliveShare);
+            return new WaveQuota(aliveShare, pickTarget, aliveShare > 0, pickTarget > 0 && hasObservers);
         }
     }
 
@@ -131,12 +182,19 @@ public final class SpawnModels {
                 errors.add("waves[" + i + "]: 缺少 id");
                 continue;
             }
-            Mode mode = Mode.RESURRECTION;
-            try {
-                mode = Mode.valueOf(str(o, "mode", "RESURRECTION"));
-            } catch (Exception e) {
-                errors.add("waves[" + i + "]: 无效 mode '" + str(o, "mode", "") + "'");
-                continue;
+            String modeStr = str(o, "mode", "RESURRECTION");
+            Mode mode;
+            if ("RECRUIT".equalsIgnoreCase(modeStr)) {
+                // 兼容旧版管理面板持久化的 "RECRUIT"（v2.15.x 前 Modes 数组值）：映射为 RESURRECTION（仅死亡可收到）
+                mode = Mode.legacyRecruit();
+                errors.add("waves[" + i + "]: 旧模式 'RECRUIT' 已映射为 RESURRECTION（兼容存量配置）");
+            } else {
+                try {
+                    mode = Mode.valueOf(modeStr);
+                } catch (Exception e) {
+                    errors.add("waves[" + i + "]: 无效 mode '" + modeStr + "'");
+                    continue;
+                }
             }
             if (!o.has("deployAt")) {
                 errors.add("waves[" + i + "]: 缺少 deployAt");

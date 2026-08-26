@@ -54,14 +54,17 @@ public class RpAdminScreen extends Screen {
     /** 设定标签（serverconfig）滚动偏移。 */
     private int settingsScroll = 0;
 
-    // 阵营出生点编辑（P9）：可编辑坐标列表 + 分布规则（弹窗管理）
+    // 部署点编辑（P9 阵营出生点；职业复活点复用同一弹窗）：可编辑坐标列表 + 分布规则（弹窗管理）
     private final List<double[]> spawnPts = new ArrayList<>();
     private final List<String> spawnDims = new ArrayList<>();
     private String spawnRule = "SPREAD";
     private final List<int[]> spawnRowBounds = new ArrayList<>();
     private final List<String> spawnRowTexts = new ArrayList<>();
     private boolean spawnModalOpen = false;
-    private String spawnModalFaction = "";
+    /** 部署点弹窗目标：kind = faction|profession；targetId = 目标 id。 */
+    private String spawnModalKind = "faction";
+
+    private String spawnModalTarget = "";
     private int spX1, spY1, spX2, spY2;
     private int spRuleX1, spRuleY1, spRuleX2, spRuleY2;
     private int spAddX1, spAddY1, spAddX2, spAddY2;
@@ -396,10 +399,11 @@ public class RpAdminScreen extends Screen {
         idBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.id", id, edit);
         y += 30;
         int bw2 = (w - 4) / 2;
-        addRenderableWidget(RpButton.secondary(x, y, bw2, 18, Component.literal("模式: " + Modes[modeIdx]), b -> {
-            modeIdx = (modeIdx + 1) % Modes.length;
-            rebuild();
-        }));
+        addRenderableWidget(
+                RpButton.secondary(x, y, bw2, 18, Component.literal("模式: " + waveModeLabel(Modes[modeIdx])), b -> {
+                    modeIdx = (modeIdx + 1) % Modes.length;
+                    rebuild();
+                }));
         addRenderableWidget(
                 RpButton.secondary(x + bw2 + 4, y, bw2, 18, Component.literal("部署点: " + DeployTypes[deployIdx]), b -> {
                     deployIdx = (deployIdx + 1) % DeployTypes.length;
@@ -682,8 +686,23 @@ public class RpAdminScreen extends Screen {
         }
     }
 
-    private static final String[] Modes = {"SELF_DEPLOY", "RECRUIT", "BOTH"};
+    /** 召唤波模式（持久化值；展示文案走 waveModeLabel）。存活可收到 / 死亡可收到 / 皆可收到。 */
+    private static final String[] Modes = {"SELF_DEPLOY", "RESURRECTION", "BOTH"};
+
     private static final String[] DeployTypes = {"WORLD_SPAWN", "POS"};
+
+    /** 召唤波模式展示文案（存活人员可收到 / 死亡人员可收到 / 皆可收到）。 */
+    private static String waveModeLabel(String mode) {
+        return switch (mode) {
+            case "SELF_DEPLOY" -> Component.translatable("ccnr_rp.gui.admin.wave.mode.self_deploy")
+                    .getString();
+            case "RESURRECTION" -> Component.translatable("ccnr_rp.gui.admin.wave.mode.resurrection")
+                    .getString();
+            case "BOTH" -> Component.translatable("ccnr_rp.gui.admin.wave.mode.both")
+                    .getString();
+            default -> mode;
+        };
+    }
 
     // ---------- 职业表单 ----------
 
@@ -762,6 +781,9 @@ public class RpAdminScreen extends Screen {
                     }
                     RpChannels.sendToServer(new RpPackets.AdminProfessionSaveFullC2S(selProfId));
                 }));
+        // 职业复活点（P9 扩展）：弹窗管理坐标列表 + 分布规则（部署优先级：职业 > 阵营 > 世界复活点）
+        addRenderableWidget(RpButton.secondary(
+                x, y + 78, w, 20, Component.literal("管理职业复活点…（规则 / 坐标 / 添加当前坐标）"), b -> openSpawnModal("profession")));
     }
 
     private JsonObject selProf() {
@@ -860,9 +882,9 @@ public class RpAdminScreen extends Screen {
                     tierIdx = 1;
                     rebuild();
                 }));
-        // 出生点配置（P9）：弹出管理窗口（规则 + 坐标列表 + 一键添加当前坐标）
+        // 部署点配置（P9）：弹出管理窗口（规则 + 坐标列表 + 一键添加当前坐标）
         addRenderableWidget(RpButton.secondary(
-                x, y + 28, w, 18, Component.literal("管理出生点…（规则 / 坐标 / 添加当前坐标）"), b -> openSpawnModal()));
+                x, y + 28, w, 18, Component.literal("管理部署点…（规则 / 坐标 / 添加当前坐标）"), b -> openSpawnModal("faction")));
     }
 
     /** 从阵营 JSON 载入出生点配置到编辑状态。 */
@@ -896,16 +918,17 @@ public class RpAdminScreen extends Screen {
         }
     }
 
-    /** 打开出生点管理弹窗：从当前选中阵营载入配置到工作副本。 */
-    private void openSpawnModal() {
-        JsonObject fac = selFaction();
-        if (fac == null || str(fac, "id").isBlank()) {
-            notice = "请先在左侧选择阵营";
+    /** 打开部署点管理弹窗：kind=faction（阵营部署点）| profession（职业复活点），从当前选中条目载入配置到工作副本。 */
+    private void openSpawnModal(String kind) {
+        JsonObject target = "profession".equals(kind) ? selProf() : selFaction();
+        if (target == null || str(target, "id").isBlank()) {
+            notice = "请先在左侧选择" + ("profession".equals(kind) ? "职业" : "阵营");
             return;
         }
-        spawnModalFaction = str(fac, "id");
-        loadFactionSpawn(fac);
-        notice = ""; // 弹窗已打开，清掉残留的“请先选择阵营”提示
+        spawnModalKind = kind;
+        spawnModalTarget = str(target, "id");
+        loadFactionSpawn(target);
+        notice = ""; // 弹窗已打开，清掉残留的“请先选择”提示
         spawnModalOpen = true;
     }
 
@@ -925,10 +948,10 @@ public class RpAdminScreen extends Screen {
         spawnDims.add(dim);
     }
 
-    /** 发送出生点配置到服务端（写 faction spawn 字段），成功后关闭弹窗。 */
-    private void saveFactionSpawn() {
-        if (spawnModalFaction.isBlank()) {
-            notice = "请先选择阵营";
+    /** 发送部署点配置到服务端（写 faction/profession spawn 字段），成功后关闭弹窗。 */
+    private void saveSpawn() {
+        if (spawnModalTarget.isBlank()) {
+            notice = "请先选择目标";
             return;
         }
         com.google.gson.JsonArray arr = new com.google.gson.JsonArray();
@@ -941,7 +964,11 @@ public class RpAdminScreen extends Screen {
             o.addProperty("dim", spawnDims.get(i));
             arr.add(o);
         }
-        RpChannels.sendToServer(new RpPackets.AdminFactionSpawnC2S(spawnModalFaction, spawnRule, arr.toString()));
+        if ("profession".equals(spawnModalKind)) {
+            RpChannels.sendToServer(new RpPackets.AdminProfessionSpawnC2S(spawnModalTarget, spawnRule, arr.toString()));
+        } else {
+            RpChannels.sendToServer(new RpPackets.AdminFactionSpawnC2S(spawnModalTarget, spawnRule, arr.toString()));
+        }
         spawnModalOpen = false;
     }
 
@@ -958,7 +985,13 @@ public class RpAdminScreen extends Screen {
         spX2 = x1 + w;
         spY2 = y1 + h;
         RpTheme.terminalPanel(g, x1, y1, x1 + w, y1 + h, RpTheme.RADIUS_LARGE);
-        g.drawString(font, "管理出生点 — " + spawnModalFaction, x1 + 14, y1 + 10, RpTheme.CYAN, true);
+        g.drawString(
+                font,
+                ("profession".equals(spawnModalKind) ? "管理职业复活点 — " : "管理部署点 — ") + spawnModalTarget,
+                x1 + 14,
+                y1 + 10,
+                RpTheme.CYAN,
+                true);
         g.fill(x1 + 8, y1 + 26, x1 + w - 8, y1 + 27, RpTheme.CYAN_DIM);
 
         int cx = x1 + 14;
@@ -1073,7 +1106,7 @@ public class RpAdminScreen extends Screen {
             return true;
         }
         if (inRect((int) mx, (int) my, spSaveX1, spSaveY1, spSaveX2, spSaveY2)) {
-            saveFactionSpawn();
+            saveSpawn();
             return true;
         }
         if (inRect((int) mx, (int) my, spCancelX1, spCancelY1, spCancelX2, spCancelY2)) {
@@ -1258,7 +1291,9 @@ public class RpAdminScreen extends Screen {
             removeWidget(b);
         }
         seqBoxes.clear();
-        if (!seqModalOpen || isTriggerStep(stepSel)) {
+        // stepSel 可为 -1（序列只有触发锚点、无可编辑步骤时 firstEditableStep 返回 -1）：
+        // 此时不生成任何参数输入框，等待用户点「+ 添加步骤」后再重建
+        if (!seqModalOpen || stepSel < 0 || stepSel >= seqSteps.size() || isTriggerStep(stepSel)) {
             return;
         }
         JsonObject s = seqSteps.get(stepSel);
@@ -1266,18 +1301,43 @@ public class RpAdminScreen extends Screen {
         int x = sqFieldX1;
         int w = sqFieldX2 - sqFieldX1;
         int bw2 = (w - 4) / 2;
+        // 字段描述用输入框灰色占位提示（值空时显示，输入即消失），避免描述文本画在框内造成重叠
         switch (type) {
             case "WAIT" -> seqBoxes.put(
-                    "seconds", mkBox(x, sqFieldY1, w, "", String.valueOf(num(s, "seconds", 10)), false));
-            case "WAVE" -> seqBoxes.put("wave", mkBox(x, sqFieldY1, w, "", str(s, "wave"), false));
-            case "COMMAND" -> seqBoxes.put("command", mkBox(x, sqFieldY1, w, "", str(s, "command"), false));
+                    "seconds", seqBox(x, sqFieldY1, w, "等待秒数", String.valueOf(num(s, "seconds", 10))));
+            case "WAVE" -> seqBoxes.put("wave", seqBox(x, sqFieldY1, w, "刷新波 ID", str(s, "wave")));
+            case "COMMAND" -> seqBoxes.put(
+                    "command",
+                    seqBox(x, sqFieldY1, w, "命令文本：可用 {{event}} {{phase}} {{seq}} {{trigger}} 变量", str(s, "command")));
             case "FORCE_PICK" -> {
-                seqBoxes.put("count", mkBox(x, sqFieldY1, bw2, "", String.valueOf(num(s, "count", 1)), false));
-                seqBoxes.put("professions", mkBox(x + bw2 + 4, sqFieldY1, bw2, "", str(s, "professions"), false));
-                seqBoxes.put("faction", mkBox(x, sqFieldY1 + 24, w, "", str(s, "faction"), false));
+                seqBoxes.put("count", seqBox(x, sqFieldY1, bw2, "数量", String.valueOf(num(s, "count", 1))));
+                seqBoxes.put("professions", seqBox(x + bw2 + 4, sqFieldY1, bw2, "职业ID(逗号)", str(s, "professions")));
+                seqBoxes.put("faction", seqBox(x, sqFieldY1 + 24, w, "阵营ID", str(s, "faction")));
             }
             default -> {}
         }
+    }
+
+    /** 流程编辑器参数字段：带灰色占位提示；不注册 fieldLabels（弹窗关闭后由 closeSequenceModal 统一清理）。 */
+    private EditBox seqBox(int x, int y, int w, String hint, String value) {
+        EditBox box = new EditBox(font, x, y, w, 18, Component.literal(hint));
+        box.setMaxLength(512);
+        box.setValue(value == null ? "" : value);
+        box.setTextColor(RpTheme.CYAN);
+        box.setSuggestion(hint); // 值空时显示描述文本（占位提示），输入后自动消失，不重叠
+        box.setEditable(true);
+        addRenderableWidget(box);
+        return box;
+    }
+
+    /** 关闭流程编辑器：移除参数字段输入框并释放屏幕焦点（防关闭后残留 GUI / 焦点指向已移除控件）。 */
+    private void closeSequenceModal() {
+        for (EditBox b : seqBoxes.values()) {
+            removeWidget(b);
+        }
+        seqBoxes.clear();
+        setFocused(null);
+        seqModalOpen = false;
     }
 
     /** 把选中步骤的输入框值写回工作副本（保存/切行/切类型前调用）。 */
@@ -1322,7 +1382,7 @@ public class RpAdminScreen extends Screen {
             arr.add(s.deepCopy());
         }
         editedSequence = arr;
-        seqModalOpen = false;
+        closeSequenceModal();
         String kind = crudKind();
         boolean edit = !idBox.getValue().isBlank();
         requestCrud(kind, edit ? "update" : "create", buildPayload());
@@ -1518,23 +1578,7 @@ public class RpAdminScreen extends Screen {
         } else if (stepSel >= 0 && stepSel < seqSteps.size()) {
             String type = str(seqSteps.get(stepSel), "type", "WAIT").toUpperCase(java.util.Locale.ROOT);
             g.drawString(font, "步骤参数（" + type + "）：", sqFieldX1, sqFieldY1 - 12, RpTheme.TEXT_DIM);
-            switch (type) {
-                case "WAIT" -> g.drawString(font, "等待秒数", sqFieldX1, sqFieldY1 + 4, RpTheme.TEXT_DIM);
-                case "WAVE" -> g.drawString(font, "刷新波 ID", sqFieldX1, sqFieldY1 + 4, RpTheme.TEXT_DIM);
-                case "COMMAND" -> g.drawString(
-                        font,
-                        "命令文本（可用 {{event}} {{phase}} {{seq}} {{trigger}} 变量）",
-                        sqFieldX1,
-                        sqFieldY1 + 4,
-                        RpTheme.TEXT_DIM);
-                case "FORCE_PICK" -> {
-                    g.drawString(font, "数量", sqFieldX1, sqFieldY1 + 4, RpTheme.TEXT_DIM);
-                    int bw2 = (sqFieldX2 - sqFieldX1 - 4) / 2;
-                    g.drawString(font, "职业ID(逗号)", sqFieldX1 + bw2 + 4, sqFieldY1 + 4, RpTheme.TEXT_DIM);
-                    g.drawString(font, "阵营ID", sqFieldX1, sqFieldY1 + 28, RpTheme.TEXT_DIM);
-                }
-                default -> {}
-            }
+            // 字段描述以输入框灰色占位提示呈现（值空显示，输入即消失），不再画在框内与输入文本重叠
             for (EditBox b : seqBoxes.values()) {
                 b.render(g, mouseX, mouseY, partialTick);
             }
@@ -1556,7 +1600,7 @@ public class RpAdminScreen extends Screen {
             return true;
         }
         if (inRect((int) mx, (int) my, sqCancelX1, sqCancelY1, sqCancelX2, sqCancelY2)) {
-            seqModalOpen = false;
+            closeSequenceModal();
             return true;
         }
         for (int i = 0; i < sqUpBounds.size(); i++) {
@@ -1613,6 +1657,7 @@ public class RpAdminScreen extends Screen {
         }
         for (EditBox box : seqBoxes.values()) {
             if (box.mouseClicked(mx, my, button)) {
+                setFocused(box); // 弹窗点击绕过 super.mouseClicked，需手动把屏幕焦点给到输入框，键盘输入才能路由进来
                 return true;
             }
         }
@@ -1841,7 +1886,6 @@ public class RpAdminScreen extends Screen {
             case "forceObserving",
                     "openPanelOnJoin",
                     "forceRetain",
-                    "recruitInviteAlive",
                     "hudEnabled",
                     "hudProfessionText",
                     "firstJoinAutoDeploy" -> true;
@@ -2064,6 +2108,10 @@ public class RpAdminScreen extends Screen {
             endSettle = !item.has("settleOnEnd") || item.get("settleOnEnd").getAsBoolean();
         } else if (tab == TAB_WAVE) {
             String mode = str(item, "mode");
+            // 兼容旧版持久化的 "RECRUIT"：映射到 RESURRECTION 索引，避免重存时静默变 SELF_DEPLOY
+            if ("RECRUIT".equalsIgnoreCase(mode)) {
+                mode = "RESURRECTION";
+            }
             for (int i = 0; i < Modes.length; i++) {
                 if (Modes[i].equalsIgnoreCase(mode)) {
                     modeIdx = i;
@@ -2157,6 +2205,10 @@ public class RpAdminScreen extends Screen {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (seqModalOpen && keyCode == 256) { // Esc：关闭流程编辑器（含输入框清理），不关闭整个管理面板
+            closeSequenceModal();
+            return true;
+        }
         if (!camSugItems.isEmpty() && camSugBox != null && camSugBox.isFocused()) {
             if (keyCode == 264) { // Down
                 camSugIdx = (camSugIdx + 1) % camSugItems.size();
@@ -2576,8 +2628,6 @@ public class RpAdminScreen extends Screen {
             case "openPanelOnJoin" -> Component.translatable("ccnr_rp.gui.admin.setting.open_panel")
                     .getString();
             case "forceRetain" -> Component.translatable("ccnr_rp.gui.admin.setting.force_retain")
-                    .getString();
-            case "recruitInviteAlive" -> Component.translatable("ccnr_rp.gui.admin.setting.recruit_invite_alive")
                     .getString();
             case "hudEnabled" -> Component.translatable("ccnr_rp.gui.admin.setting.hud_enabled")
                     .getString();

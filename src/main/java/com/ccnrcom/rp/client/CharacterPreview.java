@@ -61,21 +61,6 @@ public final class CharacterPreview {
         InventoryScreen.renderEntityInInventoryFollowsMouse(g, cx, cy, scale, dx, dy, p);
     }
 
-    /**
-     * 立绘渲染（皮肤缩略图统一入口）：战术装备预览同款 3D 人物——水平（yaw）跟随鼠标、俯仰（pitch）锁定。
-     * 调用方只需传位置 + 角色 id；名字/职位装备自动解析（找不到角色时回退默认皮肤空装）。
-     */
-    public static void renderPortrait(GuiGraphics g, int cx, int cy, int scale, float mouseX, String charId) {
-        if (charId == null || charId.isBlank()) {
-            return;
-        }
-        com.google.gson.JsonObject c = com.ccnrcom.rp.client.ClientCharacterState.find(charId);
-        String name = c == null ? "" : str(c, "name");
-        String pid = c == null ? "" : str(c, "professionId");
-        JsonObject loadout = pid.isBlank() ? null : com.ccnrcom.rp.client.ClientCharacterState.professionLoadout(pid);
-        renderPortrait(g, cx, cy, scale, mouseX, charId, name, loadout);
-    }
-
     /** 立绘渲染（按 charId/name，供无完整角色 JSON 的场景：招募卡片等）。 */
     public static void renderPortrait(
             GuiGraphics g, int cx, int cy, int scale, float mouseX, String charId, String name, JsonObject loadout) {

@@ -38,7 +38,7 @@ public class CharacterManagementScreen extends Screen {
     private int navScroll = 0;
     private String notice = "";
     private long noticeUntil = 0;
-    /** 处决转职确认弹窗：非空=正在确认该职位（玩家在场时点部署弹出，确认后发 KillDeployC2S）。 */
+    /** 重新部署确认弹窗（暂时隐藏，不触发）：非空=正在确认该职位；如需恢复，在场点部署时置 confirmDeployId。 */
     private String confirmDeployId = "";
 
     // 布局几何
@@ -155,8 +155,9 @@ public class CharacterManagementScreen extends Screen {
             RpButton deploy =
                     RpButton.primary(x, ay, w, 22, Component.translatable("ccnr_rp.gui.character.deploy"), b -> {
                         if (ClientCharacterState.userStatus() == CharacterStatus.ALIVE) {
-                            // 在场：弹处决转职确认框（服务端处死旧角色后部署）
-                            confirmDeployId = selectedId;
+                            // 在场：重新部署（不处死/不留遗体/不结算死亡经验，服务端直接换装部署）
+                            // 二次确认暂时隐藏（无处决后果，直接执行；恢复确认框可置 confirmDeployId）
+                            RpChannels.sendToServer(new RpPackets.KillDeployC2S(selectedId));
                         } else {
                             RpChannels.sendToServer(new RpPackets.DeployPositionC2S(selectedId));
                         }
@@ -171,7 +172,7 @@ public class CharacterManagementScreen extends Screen {
                 deploy.setMessage(Component.translatable("ccnr_rp.gui.character.deploy"));
                 deploy.active = false;
             } else if (alive) {
-                // 在场可部署：按钮提示处决转职（点击弹确认框）
+                // 在场可部署：按钮提示重新部署
                 deploy.setMessage(Component.translatable("ccnr_rp.gui.character.deploy_kill"));
             }
             addRenderableWidget(deploy);
@@ -230,7 +231,7 @@ public class CharacterManagementScreen extends Screen {
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
         if (!confirmDeployId.isEmpty()) {
-            // 处决转职确认弹窗：确认/取消按钮，弹窗期间吞掉其余点击
+            // 重新部署确认弹窗（暂时隐藏）：确认/取消按钮，弹窗期间吞掉其余点击
             int[][] rects = confirmButtonRects();
             if (mx >= rects[0][0] && mx <= rects[0][2] && my >= rects[0][1] && my <= rects[0][3]) {
                 String id = confirmDeployId;
@@ -716,7 +717,7 @@ public class CharacterManagementScreen extends Screen {
         }
     }
 
-    // ---------- 处决转职确认弹窗 ----------
+    // ---------- 重新部署确认弹窗（暂时隐藏） ----------
 
     /** 确认弹窗两个按钮矩形（确认/取消），渲染与点击共用。 */
     private int[][] confirmButtonRects() {
@@ -745,7 +746,7 @@ public class CharacterManagementScreen extends Screen {
                         .getString(),
                 cx + 14,
                 cy + 12,
-                RpTheme.RED_LINE,
+                RpTheme.CYAN,
                 true);
         JsonObject p = findProfession(confirmDeployId);
         String name = p == null ? confirmDeployId : str(p, "name");
@@ -766,7 +767,7 @@ public class CharacterManagementScreen extends Screen {
                 rects[0][2],
                 rects[0][3],
                 5f,
-                hYes ? RpTheme.RED_LINE : RpTheme.alphaBlend(RpTheme.RED_LINE, 0xAA));
+                hYes ? RpTheme.ACCENT_HOVER : RpTheme.alphaBlend(RpTheme.ACCENT, 0xAA));
         g.drawCenteredString(
                 font,
                 Component.translatable("ccnr_rp.gui.character.kill_confirm_yes").getString(),

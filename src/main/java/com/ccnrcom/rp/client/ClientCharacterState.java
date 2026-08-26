@@ -17,7 +17,6 @@ public final class ClientCharacterState {
     private static final List<JsonObject> characters = new ArrayList<>();
     private static final List<JsonObject> factions = new ArrayList<>();
     private static final List<JsonObject> professions = new ArrayList<>();
-    private static String selected = "";
     private static JsonObject settings = new JsonObject();
     private static JsonObject serverConfig = new JsonObject();
     /** 等级曲线（服务端同步，客户端仅用于展示换算；未同步时回退服务端默认值）。 */
@@ -356,41 +355,11 @@ public final class ClientCharacterState {
         return "";
     }
 
-    public static synchronized void upsert(JsonObject data) {
-        String id = data.get("id").getAsString();
-        for (int i = 0; i < characters.size(); i++) {
-            if (characters.get(i).get("id").getAsString().equals(id)) {
-                characters.set(i, data);
-                refreshPanelLocked();
-                return;
-            }
-        }
-        characters.add(data);
-        refreshPanelLocked();
-    }
-
-    public static synchronized void remove(String charId) {
-        characters.removeIf(c -> c.get("id").getAsString().equals(charId));
-        refreshPanelLocked();
-    }
-
-    public static synchronized List<JsonObject> list() {
-        return List.copyOf(characters);
-    }
-
     public static synchronized JsonObject find(String charId) {
         return characters.stream()
                 .filter(c -> c.get("id").getAsString().equals(charId))
                 .findFirst()
                 .orElse(null);
-    }
-
-    public static synchronized String selected() {
-        return selected;
-    }
-
-    public static synchronized void select(String charId) {
-        selected = charId;
     }
 
     public static synchronized void setXp(String charId, long xp, int level) {
@@ -549,8 +518,6 @@ public final class ClientCharacterState {
     }
 
     public static synchronized void clear() {
-        characters.clear();
-        selected = "";
         playerTags.clear();
     }
 }

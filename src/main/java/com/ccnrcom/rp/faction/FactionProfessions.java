@@ -151,6 +151,36 @@ public final class FactionProfessions {
         return str(def, "cmdcamScene", "");
     }
 
+    /** 职业部署点（复活点）：从职业定义解析 spawn 字段（rule + points）；未配置返回 null。 */
+    public static com.ccnrcom.rp.faction.FactionManager.FactionSpawn spawn(JsonObject def) {
+        if (def == null || !def.has("spawn") || !def.get("spawn").isJsonObject()) {
+            return null;
+        }
+        JsonObject sp = def.getAsJsonObject("spawn");
+        String rule = com.ccnrcom.rp.faction.FactionManager.SPAWN_RULE_SINGLE.equalsIgnoreCase(str(sp, "rule", ""))
+                ? com.ccnrcom.rp.faction.FactionManager.SPAWN_RULE_SINGLE
+                : com.ccnrcom.rp.faction.FactionManager.SPAWN_RULE_SPREAD;
+        List<com.ccnrcom.rp.faction.FactionManager.SpawnPoint> pts = new ArrayList<>();
+        if (sp.has("points") && sp.get("points").isJsonArray()) {
+            for (com.google.gson.JsonElement e : sp.getAsJsonArray("points")) {
+                if (e.isJsonObject()) {
+                    JsonObject pp = e.getAsJsonObject();
+                    pts.add(new com.ccnrcom.rp.faction.FactionManager.SpawnPoint(
+                            dbl(pp, "x", 0), dbl(pp, "y", 64), dbl(pp, "z", 0), str(pp, "dim", "minecraft:overworld")));
+                }
+            }
+        }
+        return new com.ccnrcom.rp.faction.FactionManager.FactionSpawn(pts, rule);
+    }
+
+    private static double dbl(JsonObject o, String key, double def) {
+        try {
+            return o.has(key) ? o.get(key).getAsDouble() : def;
+        } catch (Exception e) {
+            return def; // 畸形配置（非数字）不崩服
+        }
+    }
+
     public static JsonObject loadout(JsonObject def) {
         return def.has("loadout") && def.get("loadout").isJsonObject()
                 ? def.getAsJsonObject("loadout")

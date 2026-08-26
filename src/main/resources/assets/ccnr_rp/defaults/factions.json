@@ -6,7 +6,7 @@
       "name": "行政总部",
       "color": "#FFC84C",
       "description": "量子科学公司最高管理层，直接对接集团行政总部（T0）",
-      "icon": "hex",
+      "icon": "img:admin_hq",
       "tier": 1
     },
     {
@@ -14,7 +14,7 @@
       "name": "麦迪逊研究所",
       "color": "#00BCD4",
       "description": "暗物质反应堆研发与设施内技术运行、科学研究（T1）",
-      "icon": "eye",
+      "icon": "img:madison",
       "tier": 1
     },
     {
@@ -22,7 +22,7 @@
       "name": "区域核能运营部",
       "color": "#FF9800",
       "description": "各核电站的运营与管理（T1）",
-      "icon": "storm",
+      "icon": "img:nuclear",
       "tier": 2
     },
     {
@@ -30,7 +30,7 @@
       "name": "研发与技术部",
       "color": "#9C27B0",
       "description": "Epsilon-8生物 / Kilo-9医药 / Beta-6物理实验室（T1）",
-      "icon": "cross",
+      "icon": "img:rd_tech",
       "tier": 1
     },
     {
@@ -38,7 +38,7 @@
       "name": "QDF司令部",
       "color": "#4CAF50",
       "description": "设施保全与武装力量指挥。量子科技与量子防御共同下属（T2）",
-      "icon": "shield",
+      "icon": "img:qdf",
       "tier": 2
     },
     {
@@ -46,7 +46,7 @@
       "name": "QSA综合处理小组",
       "color": "#FF3B30",
       "description": "高级安全保障部队，直属上级为CCNR安全保障总局（T2）",
-      "icon": "claw",
+      "icon": "img:qsa",
       "tier": 2
     },
     {
@@ -54,7 +54,7 @@
       "name": "QSO",
       "color": "#B26BFF",
       "description": "直属最高层的私人武装部队，非极端时刻不出场（T2）",
-      "icon": "target",
+      "icon": "img:qso",
       "tier": 1
     },
     {

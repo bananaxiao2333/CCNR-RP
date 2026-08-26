@@ -1,5 +1,40 @@
 # Changelog
 
+## 2.16.0（职业复活点管理：每个职业可配置部署点，优先级 职业 > 阵营 > 世界复活点）
+- 数据模型：职业定义（factions.json professions[]）新增可选 `spawn` 字段（结构与阵营出生点一致：
+  rule SPREAD/SINGLE + points[{x,y,z,dim}]），即职业专属部署点/复活点；未配置回退阵营部署点/世界复活点。
+- 部署链路：落点优先级改为 **职业部署点 → 阵营部署点 → wave deployAt → 世界复活点**（原为 阵营 → wave → 世界），
+  覆盖自部署 / 重新部署 / 首次入服自动部署 / 召唤波 / 征召部署全部入口（统一 teleport/resolveDeployLevel）；
+  职业部署点维度同样参与 CMDCam 场景维度解析。SPREAD/SINGLE 规则与阵营一致（分摊随机 / 集中稳定取点）。
+- 管理面板：职业表单新增「管理职业复活点…」按钮，弹窗管理坐标列表 + 分布规则（仿阵营部署点编辑器，
+  含「+ 添加当前坐标」/移除/规则切换）；阵营按钮文案改「管理部署点…」；弹窗按目标类型发不同网络包。
+- 网络：新增 AdminProfessionSpawnC2S（职业 id + 规则 + 坐标列表），服务端 CharacterService.onAdminProfessionSpawn
+  写 factions.json（权限 ccnnrp.admin.faction，仿阵营部署点）；保存职业 CRUD 不清除 spawn 字段。
+- 测试：FactionProfessionsTest 新增 spawn 解析用例（rule/points/缺省 null）；构建 compileJava / spotlessCheck /
+  test -PrunTests 全绿。
+- 文档：docs/09-spawn.md 部署优先级三处同步；docs/03-profession.md 数据模型补 spawn 字段说明。
+
+## 2.15.6（召唤波 mode 语义重定义 + 部署完成常驻横幅 + 招募审计修复）
+- 波模式重定义：mode 从「部署通道」（SELF_DEPLOY=仅自刷/RESURRECTION=仅复活波/BOTH=双通道）改为「谁能收到邀请」
+  （SELF_DEPLOY=存活可收到 / RESURRECTION=死亡可收到 / BOTH=皆可收到），并取代全局「向存活邀约」设置开关（已移除）；
+  三种模式均可作为召唤波触发（队伍创建轮询、命令、序列 WAVE 步骤）。存量配置 "RECRUIT" 值自动映射为 RESURRECTION（WARN）。
+- 无 CMDCam 场景/未装 CMDCam 时部署时序改为「开局直接落位切生存，电影 HUD/音乐与落位同一时刻开始」
+  （不再等动画播完；客户端播完后的 DeployLandC2S 为空操作）；CMDCam 延迟落位路径保持原「先播后落位」。
+- 部署完成常驻横幅：服务端 DeployNoticeS2C（部署者定向）→ 客户端顶部居中「已部署：职位」30s（下线清理、电影黑屏隐藏）；
+  邀请部署/波次完毕/人满提前部署/正式转职统一提示；非 TEMP 部署保留原 actionbar 消息（双提示并存）。
+- 存活玩家可被征召：FORCE_PICK/指定编制/通用波的存活拆分结算时按当前角色状态判别——
+  观察/死亡 → 临时征召部署（TEMP）；存活 → 正式转职部署（不处死，改用户角色 + ALIVE + 冷却清零）。
+- 招募审计修复：通用波名额分配防超招（count<=0 整波跳过、单通道空缺名额不转移、count=1 不再超招）；
+  征召结算先部署成功再标记在场（防「以征召在场」状态卡死）；结算时刻重新校验状态（已自行部署/漂移则跳过）；
+  候选池排除已有征召登记玩家（防重复邀请/重复部署）；v2（唯一身份）起 pick 邀请接受即按自己职业部署（移除选岗菜单）。
+- 死代码清理：删除误入 java 树的重复 defaults 资源、孤儿角色更新 handler、选岗屏幕与语言键。
+- 流程编辑器修复：关闭/保存/Esc 时统一移除参数字段输入框并释放屏幕焦点（不再残留 GUI）；字段描述改为输入框灰色占位提示
+  （不再画在框内与输入文本重叠）；点击输入框同步设置屏幕焦点（弹窗内可直接键盘输入）。
+- 处决转职 → 重新部署：在场（ALIVE）玩家点「部署」直接重新部署为选定职位——不处死、不留遗体、不结算死亡经验
+  （移除处死+遗体延迟队列，走统一 deploy() FORCE_DEPLOY：清背包 → 新职位装备 → 传送部署点 → 入场电影 → ALIVE）；
+  二次确认弹窗暂时隐藏（客户端直接发请求）；按钮与确认文案改「重新部署」。
+- 构建：compileJava / spotlessCheck / test -PrunTests 全绿（含新增 WaveQuota/ConscriptDeployMode/RECRUIT 兼容用例）。
+
 ## 2.15.5（行为序列「触发事件」锚点：序列内只读锚点，不可删/不可改类型/不可编辑参数，可上移下移）
 - 数据模型：序列新增 TRIGGER 锚点步骤（{"type":"TRIGGER","source":"<kind>:<id>","label":"..."}），
   代表触发本序列的真实事件/环境（如事件 qdf_support 即「征召」上下文）；保存时自动写入/对齐，旧数据缺失自动补插。
