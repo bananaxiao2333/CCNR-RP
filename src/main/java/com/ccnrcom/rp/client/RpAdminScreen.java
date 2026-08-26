@@ -2113,7 +2113,7 @@ public class RpAdminScreen extends Screen {
                         RpChannels.sendToServer(new RpPackets.ManagerSetC2S(key, String.valueOf(!value(key))));
                     }
                 } else {
-                    JsonObject item = visibleItem(i - 6);
+                    JsonObject item = visibleItem(i - TABS.length);
                     if (item != null) {
                         selectItem(item);
                     }
