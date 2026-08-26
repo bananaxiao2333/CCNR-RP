@@ -12,17 +12,17 @@ import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
-import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /**
- * 关系管理面板（全屏、独立）：管理关系规则列表（多对多 from/to、内部关系、类型），
- * 增/改/删走 RelationEditC2S → 服务端权威校验+落盘；提供「关系测定图」入口。
- * 关闭（✕ / Esc）返回上层面板（从管理面板打开则回到管理面板）。
+ * 管理面板「关系管理」页签（与「经验规则」页签并列）：关系规则列表 + 编辑器。
+ * 左侧规则列表（从上到下优先级），右侧编辑 from/to（多阵营/组、逗号分隔）、类型三选，
+ * 留空 to = 内部关系（列表内两两互设）；新增/保存/删除走 RelationEditC2S →
+ * 服务端权威校验+落盘。页签内提供「打开关系测定图」入口（全屏图，关闭返回管理面板）。
  */
-public final class RelationManagerScreen extends Screen {
+public final class RpRelationTab {
 
-    private final Screen parent;
+    private final RpAdminScreen screen;
     private int px1, py1, px2, py2;
     private int listX1, listX2, listY1, listY2;
     private int scroll = 0;
@@ -35,39 +35,40 @@ public final class RelationManagerScreen extends Screen {
     private String notice = "";
     private long noticeUntil = 0;
 
-    private static final int CLOSE_SIZE = 20;
-    private static final int CLOSE_X = 8;
-    private static final int CLOSE_Y = 8;
-
-    public RelationManagerScreen() {
-        super(Component.translatable("ccnr_rp.gui.admin.relation.title"));
-        this.parent = Minecraft.getInstance().screen;
+    public RpRelationTab(RpAdminScreen screen) {
+        this.screen = screen;
     }
 
-    @Override
-    protected void init() {
-        int pw = Math.max(640, Math.min(width - 40, 900));
-        int ph = Math.max(400, Math.min(height - 60, 560));
-        px1 = (width - pw) / 2;
-        py1 = (height - ph) / 2;
-        px2 = px1 + pw;
-        py2 = py1 + ph;
+    /** 由 RpAdminScreen.rebuild 调用（tab==TAB_RELATION）。 */
+    public void rebuild(int px1, int py1, int px2, int py2) {
+        this.px1 = px1;
+        this.py1 = py1;
+        this.px2 = px2;
+        this.py2 = py2;
         listX1 = px1 + 12;
         listX2 = listX1 + Math.min(300, (px2 - px1) * 42 / 100);
         listY1 = py1 + 44;
         listY2 = py2 - 56;
         int ex = listX2 + 16;
         int ew = px2 - ex - 12;
-        fromBox = new EditBox(Minecraft.getInstance().font, ex, listY1, ew, 18, Component.literal("from"));
-        fromBox.setMaxLength(256);
-        toBox = new EditBox(Minecraft.getInstance().font, ex, listY1 + 34, ew, 18, Component.literal("to"));
-        toBox.setMaxLength(256);
-        addRenderableWidget(fromBox);
-        addRenderableWidget(toBox);
+        if (fromBox == null) {
+            fromBox = new EditBox(Minecraft.getInstance().font, ex, listY1, ew, 18, Component.literal("from"));
+            fromBox.setMaxLength(256);
+            toBox = new EditBox(Minecraft.getInstance().font, ex, listY1 + 34, ew, 18, Component.literal("to"));
+            toBox.setMaxLength(256);
+            screen.addXpWidget(fromBox);
+            screen.addXpWidget(toBox);
+        } else {
+            fromBox.setX(ex);
+            fromBox.setWidth(ew);
+            fromBox.setY(listY1);
+            toBox.setX(ex);
+            toBox.setWidth(ew);
+            toBox.setY(listY1 + 34);
+        }
         clearEditor();
     }
 
-    // 编辑器几何（供渲染与点击共用）
     private int editorX() {
         return listX2 + 16;
     }
@@ -139,12 +140,7 @@ public final class RelationManagerScreen extends Screen {
 
     // ---------- 交互 ----------
 
-    @Override
-    public boolean mouseClicked(double mx, double my, int button) {
-        if (button == 0 && mx >= CLOSE_X && mx <= CLOSE_X + CLOSE_SIZE && my >= CLOSE_Y && my <= CLOSE_Y + CLOSE_SIZE) {
-            onClose();
-            return true;
-        }
+    public boolean mouseClicked(int mx, int my, int button) {
         // 类型三选
         int bw = 54;
         int ex = editorX();
@@ -174,9 +170,9 @@ public final class RelationManagerScreen extends Screen {
             removeRule();
             return true;
         }
-        // 测定图入口
+        // 测定图入口（全屏；关闭返回管理面板）
         if (mx >= ex && mx <= ex + aw + 6 + aw && my >= ay + 26 && my <= ay + 46) {
-            Minecraft.getInstance().setScreen(new FactionGraphScreen(this));
+            Minecraft.getInstance().setScreen(new FactionGraphScreen());
             return true;
         }
         // 列表行选择
@@ -188,36 +184,21 @@ public final class RelationManagerScreen extends Screen {
                 return true;
             }
         }
-        return super.mouseClicked(mx, my, button);
+        return false;
     }
 
-    @Override
-    public boolean mouseScrolled(double mx, double my, double delta) {
-        int max = Math.max(0, rules().size() - Math.max(1, (listY2 - listY1) / ROW_H));
-        if (delta > 0) {
-            scroll = Math.max(0, scroll - 2);
-        } else {
-            scroll = Math.min(max, scroll + 2);
+    public void mouseScrolled(int mouseX, int mouseY, double delta) {
+        if (mouseX >= listX1 && mouseX <= listX2 && mouseY >= listY1 && mouseY <= listY2) {
+            int max = Math.max(0, rules().size() - Math.max(1, (listY2 - listY1) / ROW_H));
+            if (delta > 0) {
+                scroll = Math.max(0, scroll - 2);
+            } else {
+                scroll = Math.min(max, scroll + 2);
+            }
         }
-        return true;
     }
 
-    @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (keyCode == 256) { // Esc
-            onClose();
-            return true;
-        }
-        return super.keyPressed(keyCode, scanCode, modifiers);
-    }
-
-    @Override
-    public void onClose() {
-        Minecraft.getInstance().setScreen(parent); // 返回上层（管理面板）；无上层则回游戏
-    }
-
-    @Override
-    public boolean isPauseScreen() {
         return false;
     }
 
@@ -291,30 +272,8 @@ public final class RelationManagerScreen extends Screen {
 
     // ---------- 渲染 ----------
 
-    @Override
-    public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
-        g.fill(0, 0, width, height, 0xEE15181E);
-        RpTheme.scanlines(g, 0, 0, width, height);
+    public void render(GuiGraphics g, int mx, int my) {
         var font = Minecraft.getInstance().font;
-
-        // 标题 + 关闭
-        g.drawCenteredString(
-                font, Component.translatable("ccnr_rp.gui.admin.relation.title"), width / 2, 12, RpTheme.CYAN);
-        boolean closeHover = mouseX >= CLOSE_X
-                && mouseX <= CLOSE_X + CLOSE_SIZE
-                && mouseY >= CLOSE_Y
-                && mouseY <= CLOSE_Y + CLOSE_SIZE;
-        RpRoundRect.outlined(
-                g, CLOSE_X, CLOSE_Y, CLOSE_X + CLOSE_SIZE, CLOSE_Y + CLOSE_SIZE, 2, RpTheme.PANEL_BORDER, 0x00);
-        g.drawCenteredString(
-                font,
-                Component.literal("✕"),
-                CLOSE_X + CLOSE_SIZE / 2,
-                CLOSE_Y + 4,
-                closeHover ? 0xFFFFFFFF : RpTheme.TEXT_PRIMARY);
-
-        RpTheme.terminalPanel(g, px1, py1, px2, py2, RpTheme.RADIUS_LARGE);
-
         // 左侧：规则列表
         g.drawString(
                 font,
@@ -415,7 +374,7 @@ public final class RelationManagerScreen extends Screen {
                 tr("ccnr_rp.gui.admin.relation.remove"),
                 RpTheme.RED_DIM,
                 false);
-        // 测定图入口
+        // 测定图入口（全屏；关闭返回管理面板）
         RpButton.draw(
                 g,
                 ex,
@@ -427,12 +386,12 @@ public final class RelationManagerScreen extends Screen {
                 true);
         // 提示
         if (System.currentTimeMillis() < noticeUntil) {
-            g.drawCenteredString(font, Component.literal(notice), width / 2, py2 - 24, RpTheme.TEXT_SECONDARY);
+            g.drawCenteredString(font, Component.literal(notice), (px1 + px2) / 2, py2 - 24, RpTheme.TEXT_SECONDARY);
         }
         g.drawString(font, Component.translatable("ccnr_rp.gui.admin.relation.hint"), ex, py2 - 40, RpTheme.TEXT_DIM);
-
-        // 输入框控件绘制（EditBox）
-        super.render(g, mouseX, mouseY, partialTick);
+        // 输入框背景（EditBox 自身绘制，此处仅补充面板底色一致性）
+        g.fill(ex - 1, listY1 - 1, ex + (px2 - ex - 12) + 1, listY1 + 19, 0x99383838);
+        g.fill(ex - 1, listY1 + 33, ex + (px2 - ex - 12) + 1, listY1 + 53, 0x99383838);
     }
 
     private static String tr(String key) {
@@ -453,12 +412,12 @@ public final class RelationManagerScreen extends Screen {
     private static String typeTag(String type) {
         RelationType t = RelationType.parse(type);
         if (t == RelationType.HOSTILE) {
-            return "敌对";
+            return tr("ccnr_rp.gui.admin.relation.type_hostile");
         }
         if (t == RelationType.FRIENDLY) {
-            return "友好";
+            return tr("ccnr_rp.gui.admin.relation.type_friendly");
         }
-        return "中立";
+        return tr("ccnr_rp.gui.admin.relation.type_neutral");
     }
 
     private static int typeColor(String type) {
