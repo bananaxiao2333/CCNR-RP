@@ -79,6 +79,7 @@ public final class ClientSetup {
         event.registerAboveAll(
                 "ccnr_rp_deploy_notice", (gui, gfx, partial, w, h) -> DeployNoticeBanner.render(gfx, w, h));
         // 玩家头顶标签（旁观者视角：阵营徽章 + 职业名 + 玩家名 + 等级）
-        event.registerAboveAll("ccnr_rp_nametag", (gui, gfx, partial, w, h) -> PlayerNametagRenderer.render(gfx, w, h));
+        event.registerAboveAll(
+                "ccnr_rp_nametag", (gui, gfx, partial, w, h) -> PlayerNametagRenderer.render(gfx, w, h, partial));
     }
 }
