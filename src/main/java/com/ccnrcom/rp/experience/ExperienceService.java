@@ -267,6 +267,26 @@ public final class ExperienceService {
         }
     }
 
+    /**
+     * 管理员手动记分（/rp xp add）：向用户待结算列表追加一条自定义标题/数值的变化（可为负）。
+     * 同标题条目合并（数值相加、标题取后来者）；返回错误消息（空 = 成功）。
+     */
+    public String addManualScore(String playerUuid, String title, long value) {
+        UserService users = CCNRRPMod.users;
+        if (users == null || playerUuid == null || title == null || title.isBlank()) {
+            return "ccnr_rp.xp.add.invalid";
+        }
+        if (!users.hasProfile(playerUuid)) {
+            return "ccnr_rp.error.player_not_found";
+        }
+        String ruleId = "manual:" + title; // 同标题合并；与规则条目（规则 id 前缀不同）不冲突
+        List<XpChange> list = XpChangeList.add(users.pendingXp(playerUuid), ruleId, title, value);
+        users.setPendingXp(playerUuid, list);
+        users.save();
+        pushXpList(playerUuid);
+        return "";
+    }
+
     /** 规则引擎核心：订阅匹配规则 → 判断 → 求值 → 并入列表；返回是否有变化（不落盘，由调用方决定）。 */
     private boolean applyEvent(String eventId, Map<String, Object> params, String targetUuid) {
         UserService users = CCNRRPMod.users;
