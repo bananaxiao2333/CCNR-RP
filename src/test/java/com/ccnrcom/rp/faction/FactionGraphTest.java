@@ -151,12 +151,12 @@ class FactionGraphTest {
         com.google.gson.JsonObject f = new com.google.gson.JsonObject();
         f.addProperty("id", "x");
         f.addProperty("name", "X");
-        f.addProperty("music", "audio/x.wav");
+        f.addProperty("music", "audio/x.ogg");
         fa.add(f);
         root.add("factions", fa);
         ParseResult r = FactionManager.parse(root);
         assertTrue(r.success(), () -> r.errors().toString());
-        assertEquals("audio/x.wav", r.graph().factions().get("x").music());
+        assertEquals("audio/x.ogg", r.graph().factions().get("x").music());
     }
 
     @Test
