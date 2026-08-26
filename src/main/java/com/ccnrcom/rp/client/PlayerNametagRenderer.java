@@ -36,8 +36,10 @@ public final class PlayerNametagRenderer {
         Font font = mc.font;
         Camera cam = mc.gameRenderer.getMainCamera();
         Vec3 camPos = cam.getPosition();
-        // 动态投影矩阵（含疾跑 FOV 加成）：m11 = 1/tan(fov/2)，用于垂直方向像素缩放
-        float tanHalf = 1.0f / mc.gameRenderer.getProjectionMatrix(partialTick).m11();
+        // FOV 半角正切（mc.options.fov 为静态设置值，与原实现一致；注意 GameRenderer.getProjectionMatrix
+        // 的参数是 FOV 度数而非 partialTick，不可直接传入）
+        double fov = mc.options.fov().get();
+        float tanHalf = (float) Math.tan(Math.toRadians(fov) / 2.0);
         // 相机正交基（1.20.1 官方 API，方向保证正确；right = -left）
         Vector3f look = cam.getLookVector();
         Vector3f up = cam.getUpVector();
