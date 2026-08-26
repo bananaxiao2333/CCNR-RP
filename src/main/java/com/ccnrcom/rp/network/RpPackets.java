@@ -585,38 +585,6 @@ public final class RpPackets {
         }
     }
 
-    /** 经验/等级更新（owner 定向；保留旧角色维度，新结算用 UserXpS2C + XpLinesS2C）。 */
-    public static final class XpUpdateS2C {
-        public final String charId;
-        public final long xp;
-        public final int level;
-
-        public XpUpdateS2C(String charId, long xp, int level) {
-            this.charId = charId;
-            this.xp = xp;
-            this.level = level;
-        }
-
-        public XpUpdateS2C(FriendlyByteBuf buf) {
-            this(buf.readUtf(256), buf.readLong(), buf.readVarInt());
-        }
-
-        public void encode(FriendlyByteBuf buf) {
-            buf.writeUtf(charId, 256);
-            buf.writeLong(xp);
-            buf.writeVarInt(level);
-        }
-
-        public static void handle(XpUpdateS2C msg, Supplier<NetworkEvent.Context> ctx) {
-            ctx.get()
-                    .enqueueWork(() -> net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(
-                            net.minecraftforge.api.distmarker.Dist.CLIENT,
-                            () -> () ->
-                                    com.ccnrcom.rp.client.ClientPacketHandlers.onXp(msg.charId, msg.xp, msg.level)));
-            ctx.get().setPacketHandled(true);
-        }
-    }
-
     /** 部署入场电影（S2C）：JSON（名字/职业/阵营/图标/等级/简历/阵营关系）。 */
     public static final class CinematicS2C {
         public final String payload;
@@ -695,39 +663,6 @@ public final class RpPackets {
                     .enqueueWork(() -> net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(
                             net.minecraftforge.api.distmarker.Dist.CLIENT,
                             () -> () -> com.ccnrcom.rp.client.ClientPacketHandlers.onRecruitOffer(msg)));
-            ctx.get().setPacketHandled(true);
-        }
-    }
-
-    /** 远征/经验结算明细（S2C）：每行 "sign|value|key|args"。 */
-    public static final class XpLinesS2C {
-        public final String[] lines;
-
-        public XpLinesS2C(String[] lines) {
-            this.lines = lines == null ? new String[0] : lines;
-        }
-
-        public XpLinesS2C(FriendlyByteBuf buf) {
-            int n = buf.readVarInt();
-            String[] l = new String[Math.min(n, 16)];
-            for (int i = 0; i < l.length; i++) {
-                l[i] = buf.readUtf(256);
-            }
-            this.lines = l;
-        }
-
-        public void encode(FriendlyByteBuf buf) {
-            buf.writeVarInt(lines.length);
-            for (String s : lines) {
-                buf.writeUtf(s == null ? "" : s, 256);
-            }
-        }
-
-        public static void handle(XpLinesS2C msg, Supplier<NetworkEvent.Context> ctx) {
-            ctx.get()
-                    .enqueueWork(() -> net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(
-                            net.minecraftforge.api.distmarker.Dist.CLIENT,
-                            () -> () -> com.ccnrcom.rp.client.ClientPacketHandlers.onXpLines(msg.lines)));
             ctx.get().setPacketHandled(true);
         }
     }
@@ -856,6 +791,105 @@ public final class RpPackets {
                     .enqueueWork(() -> net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(
                             net.minecraftforge.api.distmarker.Dist.CLIENT,
                             () -> () -> com.ccnrcom.rp.client.ClientPacketHandlers.onUserXp(msg.xp, msg.level)));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    /** 经验列表状态推送（S2C，经验系统 v3）：JSON {total, items:[{title,value}]}。 */
+    public static final class XpListS2C {
+        public final String payload;
+
+        public XpListS2C(String payload) {
+            this.payload = payload;
+        }
+
+        public XpListS2C(FriendlyByteBuf buf) {
+            this(buf.readUtf(8192));
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(payload, 8192);
+        }
+
+        public static void handle(XpListS2C msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(
+                            net.minecraftforge.api.distmarker.Dist.CLIENT,
+                            () -> () -> com.ccnrcom.rp.client.ClientPacketHandlers.onXpList(msg.payload)));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    /** 经验结算动画（S2C，经验系统 v3）：JSON {total, items:[{title,value}]}，客户端逐项吸入动画。 */
+    public static final class XpSettleAnimS2C {
+        public final String payload;
+
+        public XpSettleAnimS2C(String payload) {
+            this.payload = payload;
+        }
+
+        public XpSettleAnimS2C(FriendlyByteBuf buf) {
+            this(buf.readUtf(8192));
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(payload, 8192);
+        }
+
+        public static void handle(XpSettleAnimS2C msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(
+                            net.minecraftforge.api.distmarker.Dist.CLIENT,
+                            () -> () -> com.ccnrcom.rp.client.ClientPacketHandlers.onXpSettleAnim(msg.payload)));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    /** 经验规则集（S2C）：JSON {version, rules:[...]}，管理面板「经验规则」页展示。 */
+    public static final class RulesStateS2C {
+        public final String payload;
+
+        public RulesStateS2C(String payload) {
+            this.payload = payload;
+        }
+
+        public RulesStateS2C(FriendlyByteBuf buf) {
+            this(buf.readUtf(16384));
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(payload, 16384);
+        }
+
+        public static void handle(RulesStateS2C msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(
+                            net.minecraftforge.api.distmarker.Dist.CLIENT,
+                            () -> () -> com.ccnrcom.rp.client.ClientPacketHandlers.onRulesState(msg.payload)));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    /** 经验规则编辑（C2S）：{action: add|update|remove|toggle, rule: {...}|id}；服务端校验+落盘+回执。 */
+    public static final class RuleEditC2S {
+        public final String payload;
+
+        public RuleEditC2S(String payload) {
+            this.payload = payload;
+        }
+
+        public RuleEditC2S(FriendlyByteBuf buf) {
+            this(buf.readUtf(8192));
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(payload, 8192);
+        }
+
+        public static void handle(RuleEditC2S msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> com.ccnrcom.rp.experience.ExperienceService.onRuleEdit(
+                            ctx.get().getSender(), msg.payload));
             ctx.get().setPacketHandled(true);
         }
     }

@@ -5,7 +5,6 @@
 package com.ccnrcom.rp.client;
 
 import com.google.gson.JsonObject;
-import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
@@ -49,7 +48,6 @@ public final class StatusHud {
         int margin = 10;
         int px = w - rowW - margin;
         int py = h - margin - (barH * 3 + rowGap * 2) - 12;
-        renderXpLines(g, px + iconS, py - margin, w - px - iconS);
     }
 
     public static void render(GuiGraphics g, int w, int h) {
@@ -96,8 +94,6 @@ public final class StatusHud {
         int margin = 10;
         int px = w - rowW - margin;
         int py = h - margin - (barH * 3 + rowGap * 2) - 12;
-        // 结算明细：右下角逐行（绿=加分 / 红=减分，如「-10 死亡」），置于状态栏上方
-        renderXpLines(g, px + iconS, py - margin, w - px - iconS);
 
         int rowY = py;
         // 职位
@@ -212,55 +208,6 @@ public final class StatusHud {
             }
         }
         return null;
-    }
-
-    /** 结算明细逐行渲染（右下角，绿=加分 / 红=减分，如「-10 死亡」）。 */
-    private static void renderXpLines(GuiGraphics g, int x1, int y, int x2) {
-        List<String[]> lines = ClientCharacterState.xpLines();
-        if (lines.isEmpty()) {
-            return;
-        }
-        var font = Minecraft.getInstance().font;
-        int lineH = 14;
-        int ny = y - lines.size() * lineH;
-        for (String[] p : lines) {
-            if (p.length < 3) {
-                continue;
-            }
-            boolean plus = "+".equals(p[0]);
-            long value = 0;
-            try {
-                value = Long.parseLong(p[1]);
-            } catch (Exception ignored) {
-                // 非数字按 0 展示
-            }
-            String key = p[2];
-            String[] args = p.length > 3 && p[3] != null && !p[3].isBlank() ? p[3].split(",") : new String[0];
-            String label;
-            if (key.endsWith(".evac")) {
-                String m = args.length > 0 ? args[0] : "";
-                label = switch (m) {
-                    case "DIED" -> Component.translatable("ccnr_rp.xp.line.evac.died")
-                            .getString();
-                    case "SAFE_RESCUE" -> Component.translatable("ccnr_rp.xp.line.evac.safe")
-                            .getString();
-                    case "STAY_BEHIND" -> Component.translatable("ccnr_rp.xp.line.evac.stay")
-                            .getString();
-                    case "OBSERVING_END" -> Component.translatable("ccnr_rp.xp.line.evac.observe")
-                            .getString();
-                    default -> Component.translatable("ccnr_rp.xp.line.evac").getString();};
-            } else {
-                try {
-                    label = Component.translatable(key, (Object[]) args).getString();
-                } catch (Exception e) {
-                    label = key;
-                }
-            }
-            String text = (plus ? "+" : "-") + value + " " + label;
-            int color = plus ? 0xFF35E07A : 0xFFFF4C4C;
-            g.drawString(font, text, x1, ny, color, true);
-            ny += lineH;
-        }
     }
 
     private static int tierOf(JsonObject f) {

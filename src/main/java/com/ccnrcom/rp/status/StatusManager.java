@@ -69,6 +69,9 @@ public final class StatusManager {
             return; // 未开启“强制保留角色”：离服不自动判死
         }
         if (CCNRRPMod.users.isAlive(uuid)) {
+            if (CCNRRPMod.experience != null) {
+                CCNRRPMod.experience.emitDeath(uuid, "offline");
+            }
             retire(uuid, player, "offline", RetireFlag.of(RetireFlag.SPAWN_CORPSE, RetireFlag.OFFLINE));
         }
     }
@@ -141,14 +144,32 @@ public final class StatusManager {
             CCNRRPMod.users.setXpDuty(uuid, CCNRRPMod.users.userXp(uuid), duty);
             CCNRRPMod.users.save();
         }
+        // 击杀事件：玩家击杀任意生物 → 击杀者（仅正式用户在场时广播，经验系统 v3 规则引擎消费）。
+        // 直接伤害源为弹射物（弓箭等）时取造成者（getEntity 已回退 causingEntity）。
+        net.minecraft.world.entity.Entity killer = event.getSource().getEntity();
+        if (!(killer instanceof net.minecraft.server.level.ServerPlayer)) {
+            killer = event.getSource().getDirectEntity();
+        }
+        if (CCNRRPMod.experience != null
+                && killer instanceof net.minecraft.server.level.ServerPlayer attacker
+                && !attacker.getUUID().equals(player.getUUID())
+                && CCNRRPMod.users != null
+                && CCNRRPMod.users.isAlive(attacker.getUUID().toString())) {
+            CCNRRPMod.experience.emitKill(attacker.getUUID().toString(), attacker, player);
+        }
         // 统一：清除客户端征召身份（幂等）。
         // 注意：不在死亡瞬间切旁观者——否则打断原版掉落与 Corpse 尸体生成；重生时由 onPlayerRespawn 切旁观并传回尸体旁。
         RpChannels.sendTo(player, new RpPackets.ConscriptStateS2C(""));
         if (CCNRRPMod.users != null && CCNRRPMod.users.isAlive(uuid)) {
-            // 正式用户死亡：统一退场（状态迁移 + 冷却 + 结算 + 逐行；遗体由 Corpse 模组自动生成，不 SPAWN_CORPSE）
+            // 死亡事件（结算开始前赋予）：规则先入列表，随后结算把死亡扣分/加分并入最终结果
+            if (CCNRRPMod.experience != null) {
+                CCNRRPMod.experience.emitDeath(uuid, "death");
+            }
+            // 正式用户死亡：统一退场（状态迁移 + 冷却 + 结算；遗体由 Corpse 模组自动生成，不 SPAWN_CORPSE）
             retire(uuid, player, "death", RetireFlag.of());
         } else if (wasConscript && CCNRRPMod.experience != null) {
-            // 征召兵死亡（用户本身非在场，状态 OBSERVING）：同一结算函数 + 同一逐行绿/红（执勤时长已并入档案）
+            // 征召兵死亡（用户本身非在场，状态 OBSERVING）：同一结算函数（执勤时长已并入档案）
+            CCNRRPMod.experience.emitDeath(uuid, "death");
             CCNRRPMod.experience.settleUserDown(uuid, player, "ccnr_rp.xp.settle.death");
         }
     }
@@ -181,6 +202,9 @@ public final class StatusManager {
                 // 损坏 uuid：跳过该用户，不打断轮询
             }
             if (player == null) {
+                if (CCNRRPMod.experience != null) {
+                    CCNRRPMod.experience.emitDeath(uuid, "offline");
+                }
                 retire(uuid, null, "offline-late", RetireFlag.of(RetireFlag.OFFLINE));
             }
         }

@@ -32,20 +32,26 @@ public final class ClientPacketHandlers {
         ClientAnimationPlayer.play(payload);
     }
 
-    public static void onXp(String charId, long xp, int level) {
-        ClientCharacterState.setXp(charId, xp, level);
-        CharacterManagementScreen.refreshIfOpen();
-    }
-
     /** 用户经验/等级更新（经验随用户走）。 */
     public static void onUserXp(long xp, int level) {
         ClientCharacterState.setUserXp(xp, level);
         CharacterManagementScreen.refreshIfOpen();
     }
 
-    /** 结算明细逐行（右下角逐行红/绿显示；每条 sign|value|key|args）。 */
-    public static void onXpLines(String[] lines) {
-        ClientCharacterState.setXpLines(java.util.Arrays.asList(lines.length == 0 ? new String[0] : lines));
+    /** 经验列表状态推送（HUD 常驻显示待结算项目 + 当前总经验）。 */
+    public static void onXpList(String payload) {
+        XpHudOverlay.setList(payload);
+    }
+
+    /** 经验结算动画（HUD 逐项吸入，纯视觉）。 */
+    public static void onXpSettleAnim(String payload) {
+        XpHudOverlay.playSettle(payload);
+    }
+
+    /** 经验规则集（管理面板「经验规则」页）。 */
+    public static void onRulesState(String payload) {
+        ClientCharacterState.setXpRules(payload);
+        RpAdminScreen.refreshIfOpen();
     }
 
     /** 征召兵身份状态：非空=在场（HUD 显示征召编制），空串=清除（阵亡/结束）。 */

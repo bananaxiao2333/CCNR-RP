@@ -24,19 +24,7 @@ public final class CCNRRPConfig {
     public static final ConfigValue<Integer> SPAWN_POLL_TICKS;
     /** 出生复活延迟（tick，防传送闪断）。 */
     public static final ConfigValue<Integer> SPAWN_DELAY_TICKS;
-    /** 经验：值班时间每秒 XP。 */
-    public static final ConfigValue<Double> XP_DUTY_PER_SECOND;
-    /** 经验：任务默认 XP。 */
-    public static final ConfigValue<Integer> XP_TASK_DEFAULT;
-    /** 经验：疏散方式——安全撤离。 */
-    public static final ConfigValue<Integer> XP_EVAC_SAFE;
-    /** 经验：疏散方式——阵亡。 */
-    public static final ConfigValue<Integer> XP_EVAC_DIED;
-    /** 经验：疏散方式——观察结束。 */
-    public static final ConfigValue<Integer> XP_EVAC_OBSERVING;
-    /** 经验：疏散方式——滞留。 */
-    public static final ConfigValue<Integer> XP_EVAC_STAY_BEHIND;
-    /** 等级曲线：level(n) = base * n^pow。 */
+    /** 等级曲线：level(n) = base * n^pow（经验系统 v3：数值/判断由规则表达式承担，见 docs/06）。 */
     public static final ConfigValue<Double> LEVEL_BASE;
 
     public static final ConfigValue<Double> LEVEL_POW;
@@ -64,14 +52,6 @@ public final class CCNRRPConfig {
         SPAWN_POLL_TICKS = b.comment("复活波/团队创建轮询间隔（tick）").define("pollTicks", 20);
         SPAWN_DELAY_TICKS = b.comment("部署延迟（tick）").define("deployDelayTicks", 5);
         b.pop();
-        b.push("xp");
-        XP_DUTY_PER_SECOND = b.comment("值班时间每秒 XP").define("dutyXpPerSecond", 0.1);
-        XP_TASK_DEFAULT = b.comment("任务行为默认 XP（事件可覆盖 xp）").define("taskDefaultXp", 50);
-        XP_EVAC_SAFE = b.comment("疏散方式 SAFE_RESCUE 的 XP").define("evacSafeXp", 200);
-        XP_EVAC_DIED = b.comment("疏散方式 DIED 的 XP（可为负数：死亡扣分）").define("evacDiedXp", -10);
-        XP_EVAC_OBSERVING = b.comment("疏散方式 OBSERVING_END 的 XP").define("evacObservingXp", 0);
-        XP_EVAC_STAY_BEHIND = b.comment("疏散方式 STAY_BEHIND 的 XP").define("evacStayBehindXp", 150);
-        b.pop();
         b.push("level");
         LEVEL_BASE = b.comment("等级曲线基数：xpForLevel(n) = base * n^pow").define("base", 100.0);
         LEVEL_POW = b.comment("等级曲线指数").define("pow", 2.0);
@@ -97,12 +77,6 @@ public final class CCNRRPConfig {
                 "evalIntervalTicks",
                 "pollTicks",
                 "deployDelayTicks",
-                "dutyXpPerSecond",
-                "taskDefaultXp",
-                "evacSafeXp",
-                "evacDiedXp",
-                "evacObservingXp",
-                "evacStayBehindXp",
                 "base",
                 "pow",
                 "enabled",
@@ -119,12 +93,6 @@ public final class CCNRRPConfig {
         o.addProperty("evalIntervalTicks", EVENT_EVAL_INTERVAL_TICKS.get());
         o.addProperty("pollTicks", SPAWN_POLL_TICKS.get());
         o.addProperty("deployDelayTicks", SPAWN_DELAY_TICKS.get());
-        o.addProperty("dutyXpPerSecond", XP_DUTY_PER_SECOND.get());
-        o.addProperty("taskDefaultXp", XP_TASK_DEFAULT.get());
-        o.addProperty("evacSafeXp", XP_EVAC_SAFE.get());
-        o.addProperty("evacDiedXp", XP_EVAC_DIED.get());
-        o.addProperty("evacObservingXp", XP_EVAC_OBSERVING.get());
-        o.addProperty("evacStayBehindXp", XP_EVAC_STAY_BEHIND.get());
         o.addProperty("base", LEVEL_BASE.get());
         o.addProperty("pow", LEVEL_POW.get());
         o.addProperty("enabled", NAMETAG_ENABLED.get());
@@ -143,12 +111,6 @@ public final class CCNRRPConfig {
                 case "evalIntervalTicks" -> EVENT_EVAL_INTERVAL_TICKS.set(Integer.parseInt(value.trim()));
                 case "pollTicks" -> SPAWN_POLL_TICKS.set(Integer.parseInt(value.trim()));
                 case "deployDelayTicks" -> SPAWN_DELAY_TICKS.set(Integer.parseInt(value.trim()));
-                case "dutyXpPerSecond" -> XP_DUTY_PER_SECOND.set(Double.parseDouble(value.trim()));
-                case "taskDefaultXp" -> XP_TASK_DEFAULT.set(Integer.parseInt(value.trim()));
-                case "evacSafeXp" -> XP_EVAC_SAFE.set(Integer.parseInt(value.trim()));
-                case "evacDiedXp" -> XP_EVAC_DIED.set(Integer.parseInt(value.trim()));
-                case "evacObservingXp" -> XP_EVAC_OBSERVING.set(Integer.parseInt(value.trim()));
-                case "evacStayBehindXp" -> XP_EVAC_STAY_BEHIND.set(Integer.parseInt(value.trim()));
                 case "base" -> LEVEL_BASE.set(Double.parseDouble(value.trim()));
                 case "pow" -> LEVEL_POW.set(Double.parseDouble(value.trim()));
                 case "enabled" -> NAMETAG_ENABLED.set(Boolean.parseBoolean(value.trim()));

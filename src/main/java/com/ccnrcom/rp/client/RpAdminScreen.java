@@ -32,8 +32,19 @@ public class RpAdminScreen extends Screen {
     private static final int TAB_PHASE = 4;
     private static final int TAB_WAVE = 5;
     private static final int TAB_LIMITS = 6;
+    private static final int TAB_XP = 7;
 
     private int tab = TAB_SETTINGS;
+    /** 经验规则页签（经验系统 v3）：自包含编辑器；首次使用才构造（避免构造期 this 逃逸）。 */
+    private RpRulesTab rulesTab;
+
+    private RpRulesTab rulesTab() {
+        if (rulesTab == null) {
+            rulesTab = new RpRulesTab(this);
+        }
+        return rulesTab;
+    }
+
     private int px1, py1, px2, py2;
     private int listX1, listX2, listY1, listY2;
     private final List<int[]> rowBounds = new ArrayList<>();
@@ -183,7 +194,8 @@ public class RpAdminScreen extends Screen {
         "ccnr_rp.gui.admin.tab.event",
         "ccnr_rp.gui.admin.tab.phase",
         "ccnr_rp.gui.admin.tab.wave",
-        "ccnr_rp.gui.admin.tab.limits"
+        "ccnr_rp.gui.admin.tab.limits",
+        "ccnr_rp.gui.admin.tab.xp"
     };
 
     /** 限制类型（部署人数上限规则）：GLOBAL=通用角色上限（职业无专属时兜底）/ FACTION=阵营上限 / PROFESSION=职业上限。 */
@@ -197,6 +209,11 @@ public class RpAdminScreen extends Screen {
         if (open != null) {
             open.rebuild();
         }
+    }
+
+    /** 经验规则页签向本屏幕注册输入框控件（addRenderableWidget 为 protected）。 */
+    public void addXpWidget(net.minecraft.client.gui.components.AbstractWidget widget) {
+        addRenderableWidget(widget);
     }
 
     @Override
@@ -224,7 +241,11 @@ public class RpAdminScreen extends Screen {
         clearWidgets();
         rowBounds.clear();
         fieldLabels.clear();
-        int tabW = Math.min(80, (px2 - px1 - 36) / 7);
+        if (tab == TAB_XP) {
+            rulesTab().rebuild(px1, py1, px2, py2);
+            return;
+        }
+        int tabW = Math.min(76, (px2 - px1 - 36) / 8);
         int tx = px1 + 12;
         for (int i = 0; i < TABS.length; i++) {
             int x = tx + i * (tabW + 4);
@@ -2164,6 +2185,11 @@ public class RpAdminScreen extends Screen {
                 return true;
             }
         }
+        if (tab == TAB_XP) {
+            if (rulesTab().mouseClicked((int) mx, (int) my, button)) {
+                return true;
+            }
+        }
         if (!ClientCharacterState.isAdmin() && tab != TAB_SETTINGS) {
             notice = Component.translatable("ccnr_rp.gui.admin.no_perm").getString();
             return true;
@@ -2354,6 +2380,10 @@ public class RpAdminScreen extends Screen {
         if (impactOpen || spawnModalOpen) {
             return true; // 弹窗打开时不滚动底层列表
         }
+        if (tab == TAB_XP) {
+            rulesTab().mouseScrolled((int) mouseX, (int) mouseY, delta);
+            return true;
+        }
         if (tab == TAB_PROFESSION) {
             scroll = (int) Math.max(0, scroll - delta / 8);
             rebuild();
@@ -2527,6 +2557,8 @@ public class RpAdminScreen extends Screen {
 
             if (tab == TAB_SETTINGS) {
                 renderSettings(g, mouseX, mouseY);
+            } else if (tab == TAB_XP) {
+                rulesTab().render(g, mouseX, mouseY);
             } else {
                 renderListTab(g, mouseX, mouseY);
             }

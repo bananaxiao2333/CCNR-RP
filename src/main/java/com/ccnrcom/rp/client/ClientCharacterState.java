@@ -58,9 +58,8 @@ public final class ClientCharacterState {
     private static String userProfessionId = "";
     private static String userFactionId = "";
     private static long userCooldownUntil = 0;
-    // 结算明细逐行（右下角逐行渲染，绿色加分/红色减分）
-    private static List<String[]> xpLines = new ArrayList<>();
-    private static long xpLinesUntil = 0;
+    // 经验规则集（管理面板「经验规则」页展示；服务端 RulesStateS2C 下发）
+    private static final List<JsonObject> xpRules = new ArrayList<>();
     // 全玩家头顶标签（uuid -> 档案摘要；旁观者视角渲染其他玩家阵营/职业/等级）
     private static final java.util.Map<String, PlayerTag> playerTags = new java.util.HashMap<>();
 
@@ -294,26 +293,28 @@ public final class ClientCharacterState {
         userFactionId = factionId == null ? "" : factionId;
     }
 
-    /** 结算明细逐行（每条 "sign|value|key|args"，客户端拆分渲染）。 */
-    public static synchronized void setXpLines(java.util.List<String> lines) {
-        xpLines.clear();
-        if (lines != null) {
-            for (String l : lines) {
-                if (l == null) {
-                    continue;
-                }
-                String[] p = l.split("\\|", -1);
-                xpLines.add(p);
-            }
+    /** 经验规则集（管理面板展示用）。 */
+    public static synchronized void setXpRules(String payload) {
+        xpRules.clear();
+        if (payload == null || payload.isBlank()) {
+            return;
         }
-        xpLinesUntil = System.currentTimeMillis() + 6000; // 结算结果展示 6 秒
+        try {
+            JsonObject root = JsonUtil.GSON.fromJson(payload, JsonObject.class);
+            if (root != null && root.has("rules") && root.get("rules").isJsonArray()) {
+                for (var el : root.getAsJsonArray("rules")) {
+                    if (el.isJsonObject()) {
+                        xpRules.add(el.getAsJsonObject());
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            // 规则数据异常仅丢弃本次更新
+        }
     }
 
-    public static synchronized java.util.List<String[]> xpLines() {
-        if (xpLinesUntil <= 0 || System.currentTimeMillis() > xpLinesUntil) {
-            return java.util.List.of();
-        }
-        return java.util.List.copyOf(xpLines);
+    public static synchronized java.util.List<JsonObject> xpRules() {
+        return java.util.List.copyOf(xpRules);
     }
 
     /** 面板锁（v2：已取消打开限制，恒为 false，K 面板任意时刻可开）。 */
@@ -407,14 +408,6 @@ public final class ClientCharacterState {
                 .filter(c -> c.get("id").getAsString().equals(charId))
                 .findFirst()
                 .orElse(null);
-    }
-
-    public static synchronized void setXp(String charId, long xp, int level) {
-        JsonObject c = find(charId);
-        if (c != null) {
-            c.addProperty("xp", xp);
-            c.addProperty("level", level);
-        }
     }
 
     /** serverconfig 当前值（管理面板程序化设定；key → 数值）。 */

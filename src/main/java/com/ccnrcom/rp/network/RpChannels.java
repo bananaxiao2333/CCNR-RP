@@ -62,16 +62,6 @@ public final class RpChannels {
                 .decoder(RpPackets.AnimationPlayS2C::new)
                 .consumerNetworkThread(RpPackets.AnimationPlayS2C::handle)
                 .add();
-        CHANNEL.messageBuilder(RpPackets.XpUpdateS2C.class, id++, NetworkDirection.PLAY_TO_CLIENT)
-                .encoder(RpPackets.XpUpdateS2C::encode)
-                .decoder(RpPackets.XpUpdateS2C::new)
-                .consumerNetworkThread(RpPackets.XpUpdateS2C::handle)
-                .add();
-        CHANNEL.messageBuilder(RpPackets.XpLinesS2C.class, id++, NetworkDirection.PLAY_TO_CLIENT)
-                .encoder(RpPackets.XpLinesS2C::encode)
-                .decoder(RpPackets.XpLinesS2C::new)
-                .consumerNetworkThread(RpPackets.XpLinesS2C::handle)
-                .add();
         CHANNEL.messageBuilder(RpPackets.RecruitOfferS2C.class, id++, NetworkDirection.PLAY_TO_CLIENT)
                 .encoder(RpPackets.RecruitOfferS2C::encode)
                 .decoder(RpPackets.RecruitOfferS2C::new)
@@ -226,6 +216,26 @@ public final class RpChannels {
                 .encoder(RpPackets.DeployNoticeS2C::encode)
                 .decoder(RpPackets.DeployNoticeS2C::new)
                 .consumerNetworkThread(RpPackets.DeployNoticeS2C::handle)
+                .add();
+        CHANNEL.messageBuilder(RpPackets.XpListS2C.class, id++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(RpPackets.XpListS2C::encode)
+                .decoder(RpPackets.XpListS2C::new)
+                .consumerNetworkThread(RpPackets.XpListS2C::handle)
+                .add();
+        CHANNEL.messageBuilder(RpPackets.XpSettleAnimS2C.class, id++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(RpPackets.XpSettleAnimS2C::encode)
+                .decoder(RpPackets.XpSettleAnimS2C::new)
+                .consumerNetworkThread(RpPackets.XpSettleAnimS2C::handle)
+                .add();
+        CHANNEL.messageBuilder(RpPackets.RulesStateS2C.class, id++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(RpPackets.RulesStateS2C::encode)
+                .decoder(RpPackets.RulesStateS2C::new)
+                .consumerNetworkThread(RpPackets.RulesStateS2C::handle)
+                .add();
+        CHANNEL.messageBuilder(RpPackets.RuleEditC2S.class, id++, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(RpPackets.RuleEditC2S::encode)
+                .decoder(RpPackets.RuleEditC2S::new)
+                .consumerNetworkThread(RpPackets.RuleEditC2S::handle)
                 .add();
     }
 
