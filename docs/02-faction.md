@@ -8,8 +8,12 @@
 - `Faction {id, name, color(hex), description, icon, tier, music?}`（music 为阵营出场音乐，可选；音乐传递优先级：启动程序指定 > 职业 music > 阵营 music）
 - `RelationType {HOSTILE, NEUTRAL, FRIENDLY}`
 - `FactionGroup {id, memberIds[]}`
-- `RelationRule {from, to, type}`（from/to 可单阵营或组；组×组 = 任意成员对；组内规则 from=to=组）
-- **解析优先级**：单点 > 组×组 > 组内；同优先级重复声明 → WARN 且后者覆盖。
+- `RelationRule {from[], to?, type}`（**多对多**：from/to 各为一个 id 列表，列表项可为阵营或组，
+  组自动展开为成员；生效范围 = from × to 的笛卡尔积，关系双向对称；兼容旧格式单字符串）
+- **内部关系**：省略 `to`（或 from=to 同一列表）= 该列表内所有阵营**两两互设**该关系
+  （如 from 为 [qdf, qsa, qso] 且不写 to → 三者两两友好，一行搞定全组互连）
+- **解析优先级**：关系列表**从上到下**，先声明（靠前）的规则命中即生效；
+  重复声明（后者被前者覆盖）→ WARN 且后者被忽略。
 
 ## 3. 配置格式（config/ccnr_rp/factions.json）
 ```json
@@ -29,9 +33,10 @@
     {"id": "sec_force", "memberIds": ["qdf", "qsa", "qso"]}
   ],
   "relations": [
-    {"from": "sec_force", "to": "qsec_group", "type": "friendly"},
-    {"from": "qso", "to": "qdf", "type": "friendly"},
-    {"from": "logistics", "to": "qsec_group", "type": "friendly"}
+    {"from": ["sec_force"], "to": ["qsec_group"], "type": "friendly"},
+    {"from": ["qso", "qdf"], "to": ["logistics"], "type": "friendly"},
+    {"from": ["qdf", "qsa", "qso"], "type": "friendly"},
+    {"from": ["quantum_science"], "to": ["madison"], "type": "neutral"}
   ]
 }
 ```
@@ -39,8 +44,16 @@
 
 ## 4. 命令（OP≥2 或 ccnnrp.admin.faction）
 `/rp faction list`、`/rp faction relation <a> <b>`、`/rp faction relation set <a> <b> <hostile|neutral|friendly>`、
-`/rp faction group list`、`/rp faction group create <id> <ids...>`、`/rp faction group relation <g1> <g2> <type>`。
+`/rp faction group list`、`/rp faction group create <id> <ids...>`、`/rp faction group relation <g1> <g2> <type>`、
+`/rp faction graph`（管理员，打开**关系测定图**全屏界面）。
 所有 set 写回配置并立即重载；写前做防循环/自引用校验（组不可嵌套组）。
+
+## 4.5 关系测定图（全屏）
+
+- 入口：管理面板「阵营」页签按钮 或 `/rp faction graph`（管理员）；打开时下层管理面板暂时隐藏（Esc 关闭返回）。
+- 内容：每个阵营 = **徽章 + 名称标签**；有关系的阵营对之间**连线**——
+  **白 = 中立 / 红 = 敌对 / 绿 = 友好**（按从上到下优先级的生效类型）。
+- 交互：**左键拖动平移 · 滚轮缩放 · Esc 关闭**；数据来自 CharacterListS2C 的 `relations` 边（服务端 `FactionGraph.edges()`）。
 
 ## 5. WBS 小任务
 1. 模型 + 默认配置资源；2. `FactionGraph` 纯类：装载/解析/校验/resolve(a,b)；3. `FactionManager`：读写/重载/默认生成；

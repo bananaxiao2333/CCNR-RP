@@ -1135,4 +1135,21 @@ public final class RpPackets {
             ctx.get().setPacketHandled(true);
         }
     }
+
+    /** 打开关系测定图（S2C，空载荷）：/rp faction graph 或管理面板按钮触发，客户端弹出全屏图。 */
+    public static final class FactionGraphOpenS2C {
+        public FactionGraphOpenS2C() {}
+
+        public FactionGraphOpenS2C(FriendlyByteBuf buf) {}
+
+        public void encode(FriendlyByteBuf buf) {}
+
+        public static void handle(FactionGraphOpenS2C msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(
+                            net.minecraftforge.api.distmarker.Dist.CLIENT,
+                            () -> () -> com.ccnrcom.rp.client.ClientPacketHandlers.onFactionGraphOpen()));
+            ctx.get().setPacketHandled(true);
+        }
+    }
 }

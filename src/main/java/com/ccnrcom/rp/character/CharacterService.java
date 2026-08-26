@@ -966,6 +966,19 @@ public final class CharacterService {
             });
         }
         root.add("factions", fa);
+        // 关系测定图数据：已解析的阵营对边（a<b 去重，含生效类型；白=中立/红=敌对/绿=友好）
+        JsonArray rela = new JsonArray();
+        if (CCNRRPMod.factions != null) {
+            for (com.ccnrcom.rp.faction.FactionModels.RelationEdge e :
+                    CCNRRPMod.factions.graph().edges()) {
+                JsonObject o = new JsonObject();
+                o.addProperty("a", e.a());
+                o.addProperty("b", e.b());
+                o.addProperty("type", e.type().name().toLowerCase(java.util.Locale.ROOT));
+                rela.add(o);
+            }
+        }
+        root.add("relations", rela);
         JsonArray pa = new JsonArray();
         if (CCNRRPMod.factions != null) {
             for (String pid : CCNRRPMod.factions.professionIds()) {

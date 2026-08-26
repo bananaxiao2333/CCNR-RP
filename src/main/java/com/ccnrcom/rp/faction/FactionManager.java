@@ -109,14 +109,20 @@ public final class FactionManager {
         JsonArray ra = root.has("relations") ? root.getAsJsonArray("relations") : new JsonArray();
         for (int i = 0; i < ra.size(); i++) {
             JsonObject o = ra.get(i).getAsJsonObject();
-            if (!o.has("from") || !o.has("to")) {
-                return ParseResult.failure(List.of("relations[" + i + "]: 缺少 from/to"));
+            if (!o.has("from")) {
+                return ParseResult.failure(List.of("relations[" + i + "]: 缺少 from"));
             }
             RelationType type = RelationType.parse(str(o, "type", ""));
             if (type == null) {
                 return ParseResult.failure(List.of("relations[" + i + "]: 无效类型 '" + str(o, "type", "") + "'"));
             }
-            rules.add(new RelationRule(o.get("from").getAsString(), o.get("to").getAsString(), type));
+            // from/to 支持数组（多对多）或单字符串（兼容旧配置）；省略 to = 内部关系（单列表内两两互设）
+            List<String> from = idList(o.get("from"));
+            List<String> to = o.has("to") ? idList(o.get("to")) : from;
+            if (from.isEmpty() || to.isEmpty()) {
+                return ParseResult.failure(List.of("relations[" + i + "]: from/to 为空"));
+            }
+            rules.add(new RelationRule(from, to, type));
         }
         return FactionGraph.parse(factions, groups, rules);
     }
@@ -139,6 +145,24 @@ public final class FactionManager {
         }
     }
 
+    /** from/to 项：数组 = 多对多列表；单字符串 = 兼容旧格式单元素。 */
+    private static List<String> idList(JsonElement el) {
+        List<String> out = new ArrayList<>();
+        if (el == null || el.isJsonNull()) {
+            return out;
+        }
+        if (el.isJsonArray()) {
+            for (JsonElement e : el.getAsJsonArray()) {
+                if (e.isJsonPrimitive() && e.getAsJsonPrimitive().isString()) {
+                    out.add(e.getAsString());
+                }
+            }
+        } else if (el.isJsonPrimitive() && el.getAsJsonPrimitive().isString()) {
+            out.add(el.getAsString());
+        }
+        return out;
+    }
+
     private static String str(JsonObject o, String key, String def) {
         return o.has(key) && !o.get(key).isJsonNull() ? o.get(key).getAsString() : def;
     }
@@ -159,7 +183,7 @@ public final class FactionManager {
         return graph.factions().containsKey(id) || graph.groups().containsKey(id);
     }
 
-    /** 设置关系并落盘；校验失败时回滚（不写盘）并返回错误消息列表。 */
+    /** 设置单对关系并落盘（兼容命令入口，写为单元素数组）；校验失败时回滚（不写盘）并返回错误消息列表。 */
     public List<String> setRelation(String a, String b, RelationType type) {
         if (!hasFactionOrGroup(a) || !hasFactionOrGroup(b)) {
             return List.of("未找到阵营或组: " + a + " / " + b);
@@ -170,10 +194,15 @@ public final class FactionManager {
         boolean replaced = false;
         for (int i = 0; i < relations.size(); i++) {
             JsonObject o = relations.get(i).getAsJsonObject();
-            if ((str(o, "from", "").equals(a) && str(o, "to", "").equals(b))
-                    || (str(o, "from", "").equals(b) && str(o, "to", "").equals(a))) {
-                o.addProperty("from", a);
-                o.addProperty("to", b);
+            if (samePair(o, a, b)) {
+                o.remove("from");
+                o.remove("to");
+                JsonArray fa = new JsonArray();
+                fa.add(a);
+                JsonArray ta = new JsonArray();
+                ta.add(b);
+                o.add("from", fa);
+                o.add("to", ta);
                 o.addProperty("type", type.name().toLowerCase(java.util.Locale.ROOT));
                 replaced = true;
                 break;
@@ -181,8 +210,12 @@ public final class FactionManager {
         }
         if (!replaced) {
             JsonObject o = new JsonObject();
-            o.addProperty("from", a);
-            o.addProperty("to", b);
+            JsonArray fa = new JsonArray();
+            fa.add(a);
+            JsonArray ta = new JsonArray();
+            ta.add(b);
+            o.add("from", fa);
+            o.add("to", ta);
             o.addProperty("type", type.name().toLowerCase(java.util.Locale.ROOT));
             relations.add(o);
         }
@@ -194,6 +227,20 @@ public final class FactionManager {
         this.root = candidate;
         this.graph = result.graph();
         return List.of();
+    }
+
+    /** 关系条目是否恰好声明该单对（兼容数组与旧字符串两种格式）。 */
+    private static boolean samePair(JsonObject o, String a, String b) {
+        List<String> from = idList(o.get("from"));
+        List<String> to = idList(o.get("to"));
+        return (from.size() == 1
+                        && to.size() == 1
+                        && from.get(0).equals(a)
+                        && to.get(0).equals(b))
+                || (from.size() == 1
+                        && to.size() == 1
+                        && from.get(0).equals(b)
+                        && to.get(0).equals(a));
     }
 
     /** 创建阵营组并落盘。 */

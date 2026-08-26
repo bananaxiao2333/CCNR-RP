@@ -1033,6 +1033,11 @@ public class RpAdminScreen extends Screen {
         // 部署点配置（P9）：弹出管理窗口（规则 + 坐标列表 + 一键添加当前坐标）
         addRenderableWidget(RpButton.secondary(
                 x, y + 28, w, 18, Component.literal("管理部署点…（规则 / 坐标 / 添加当前坐标）"), b -> openSpawnModal("faction")));
+        // 关系测定图（全屏）：阵营徽章 + 连线（白中立/红敌对/绿友好），可拖动缩放；打开时下层面板暂时隐藏
+        addRenderableWidget(
+                RpButton.secondary(x, y + 50, w, 18, Component.translatable("ccnr_rp.gui.admin.graph.button"), b -> {
+                    net.minecraft.client.Minecraft.getInstance().setScreen(new FactionGraphScreen());
+                }));
     }
 
     /** 从阵营 JSON 载入出生点配置到编辑状态。 */
