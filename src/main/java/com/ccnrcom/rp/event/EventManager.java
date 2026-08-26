@@ -10,9 +10,7 @@ import com.ccnrcom.rp.config.CCNRRPConfig;
 import com.ccnrcom.rp.event.EventModels.EventDefinition;
 import com.ccnrcom.rp.event.EventModels.EventState;
 import com.ccnrcom.rp.event.EventModels.GamePhase;
-import com.ccnrcom.rp.event.EventModels.Task;
 import com.ccnrcom.rp.event.EventModels.TriggerContext;
-import com.ccnrcom.rp.experience.ExperienceService;
 import com.ccnrcom.rp.network.RpChannels;
 import com.ccnrcom.rp.network.RpPackets;
 import com.ccnrcom.rp.status.CharacterStatus;
@@ -86,35 +84,12 @@ public final class EventManager {
             EventDefinition def = events.get(i);
             if (def.state() == EventState.RUNNING) {
                 events.set(i, def.withState(EventState.SETTLED));
-                clearEventTasks(def);
                 out.add(def.id());
             }
         }
         resetEvents();
         broadcastState();
         return out;
-    }
-
-    /** 事件结束后清除其任务标记（防 clear 重触发后任务 XP 无限累加）。 */
-    private void clearEventTasks(EventDefinition def) {
-        if (def.tasks().isEmpty() || CCNRRPMod.users == null) {
-            return;
-        }
-        for (String uuid : CCNRRPMod.users.uuids()) {
-            java.util.Map<String, Integer> tasks = new java.util.HashMap<>(CCNRRPMod.users.tasks(uuid));
-            boolean changed = false;
-            for (Task t : def.tasks()) {
-                if (tasks.remove(t.id()) != null) {
-                    changed = true;
-                }
-            }
-            if (changed) {
-                CCNRRPMod.users.setXpDuty(uuid, CCNRRPMod.users.userXp(uuid), CCNRRPMod.users.dutySeconds(uuid));
-                CCNRRPMod.users.tasks(uuid).clear();
-                CCNRRPMod.users.tasks(uuid).putAll(tasks);
-            }
-        }
-        CCNRRPMod.users.save();
     }
 
     public PhaseClock clock() {
@@ -248,15 +223,6 @@ public final class EventManager {
                         def.startSequence(), java.util.Map.of("event", def.id(), "phase", clock.phaseId()));
             }
         }
-        // 任务登记：事件开始时只标记给在场（ALIVE）参与用户，避免未参与者获得任务 XP
-        if (!def.tasks().isEmpty() && CCNRRPMod.users != null) {
-            List<String> participants = CCNRRPMod.users.uuids().stream()
-                    .filter(uuid -> CCNRRPMod.users.status(uuid) == CharacterStatus.ALIVE)
-                    .toList();
-            for (Task t : def.tasks()) {
-                participants.forEach(uuid -> ExperienceService.markTask(uuid, t.id(), t.xp()));
-            }
-        }
     }
 
     private void autoEndRunnings() {
@@ -356,7 +322,6 @@ public final class EventManager {
     private void endEvent(int index) {
         EventDefinition def = events.get(index);
         events.set(index, def.withState(EventState.SETTLED));
-        clearEventTasks(def);
         LOGGER.info("[CCNR-RP] 事件结束: {} ", def.id());
         List<ServerPlayer> targets = onlinePlayers();
         targets.forEach(p -> RpChannels.sendTo(p, new RpPackets.ErrorS2C("ccnr_rp.event.ended", def.id())));
@@ -366,19 +331,8 @@ public final class EventManager {
         }
     }
 
-    /** 游戏结束：自动疏散裁定 + 全员结算 + game_end 动画钩子。 */
+    /** 游戏结束：全员结算（经验系统 v3：列表求和，可为负）+ game_end 动画钩子。 */
     public void gameOver() {
-        if (CCNRRPMod.users != null) {
-            for (String uuid : CCNRRPMod.users.uuids()) {
-                com.ccnrcom.rp.experience.SettlementCalcs.EvacuationMethod m =
-                        switch (CCNRRPMod.users.status(uuid)) {
-                            case ALIVE -> com.ccnrcom.rp.experience.SettlementCalcs.EvacuationMethod.SAFE_RESCUE;
-                            case DEAD -> com.ccnrcom.rp.experience.SettlementCalcs.EvacuationMethod.DIED;
-                            case OBSERVING -> com.ccnrcom.rp.experience.SettlementCalcs.EvacuationMethod.OBSERVING_END;
-                        };
-                ExperienceService.setEvacuation(uuid, m);
-            }
-        }
         if (CCNRRPMod.experience != null) {
             CCNRRPMod.experience.settleAll(null);
         }

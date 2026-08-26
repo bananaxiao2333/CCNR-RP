@@ -5,9 +5,7 @@
 package com.ccnrcom.rp.command;
 
 import com.ccnrcom.rp.CCNRRPMod;
-import com.ccnrcom.rp.experience.ExperienceService.SettleLine;
 import com.ccnrcom.rp.experience.ExperienceService.SettleSummary;
-import com.ccnrcom.rp.experience.SettlementCalcs.EvacuationMethod;
 import com.ccnrcom.rp.util.Permissions;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.tree.LiteralCommandNode;
@@ -17,7 +15,7 @@ import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 
-/** /rp settle / rp xp / rp level / rp evac（P9，v2：经验与等级随用户走）。 */
+/** /rp settle / rp xp / rp level（经验系统 v3：规则引擎结算，经验随用户走）。 */
 final class XpCommand {
 
     private XpCommand() {}
@@ -43,17 +41,6 @@ final class XpCommand {
                         .suggests(RpSuggest.players())
                         .executes(ctx -> info(ctx.getSource(), StringArgumentType.getString(ctx, "player"), false)))
                 .build());
-        rp.addChild(Commands.literal("evac")
-                .executes(ctx -> RpCommand.usageHint(ctx.getSource(), "ccnr_rp.command.usage.xp"))
-                .requires(RpCommand.admin(Permissions.ADMIN_SETTLE))
-                .then(Commands.argument("player", StringArgumentType.word())
-                        .suggests(RpSuggest.players())
-                        .then(Commands.argument("method", StringArgumentType.word())
-                                .executes(ctx -> evac(
-                                        ctx.getSource(),
-                                        StringArgumentType.getString(ctx, "player"),
-                                        StringArgumentType.getString(ctx, "method")))))
-                .build());
     }
 
     private static int settle(CommandSourceStack source, String playerName) {
@@ -69,16 +56,12 @@ final class XpCommand {
         if (s == null) {
             return 0;
         }
-        long gain = s.lines().stream().mapToLong(SettleLine::value).sum();
         source.sendSuccess(
                 () -> Component.translatable(
                         "ccnr_rp.xp.settle.result",
                         playerName,
-                        String.valueOf(gain),
-                        String.valueOf(line(s.lines(), "duty")),
-                        String.valueOf(line(s.lines(), "task")),
-                        String.valueOf(line(s.lines(), "evac")),
-                        String.valueOf(s.totalXp()),
+                        String.valueOf(s.gain()),
+                        String.valueOf(s.newXp()),
                         String.valueOf(s.newLevel())),
                 false);
         return 1;
@@ -120,35 +103,5 @@ final class XpCommand {
                     false);
         }
         return 1;
-    }
-
-    private static int evac(CommandSourceStack source, String playerName, String methodName) {
-        ServerPlayer target = source.getServer().getPlayerList().getPlayerByName(playerName);
-        if (target == null) {
-            source.sendSuccess(() -> Component.translatable("ccnr_rp.error.player_not_found", playerName), false);
-            return 0;
-        }
-        EvacuationMethod method;
-        try {
-            method = EvacuationMethod.valueOf(methodName.toUpperCase(java.util.Locale.ROOT));
-        } catch (Exception e) {
-            source.sendSuccess(() -> Component.translatable("ccnr_rp.xp.error.method", methodName), false);
-            return 0;
-        }
-        if (CCNRRPMod.experience == null || CCNRRPMod.users == null) {
-            return 0;
-        }
-        CCNRRPMod.experience.setEvacuation(target.getUUID().toString(), method);
-        source.sendSuccess(() -> Component.translatable("ccnr_rp.xp.evac.set", playerName, method.name()), false);
-        return 1;
-    }
-
-    private static long line(List<SettleLine> lines, String key) {
-        for (SettleLine l : lines) {
-            if (l.key().equals(key)) {
-                return l.value();
-            }
-        }
-        return 0;
     }
 }

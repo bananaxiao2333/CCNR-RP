@@ -694,7 +694,7 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
     /**
      * 唯一部署核心：自部署 / 管理员刷人 / 复活波 / 强制征召 / 手动部署全部汇入此入口。
      * 行为差异一律由 {@link DeployFlag} 控制（SKIP_CINEMATIC / FORCE_DEPLOY / NO_MUSIC / QUIET / TEMP），
-     * 不定义预设与来源：装备 → 传送 → 生存 → 入场电影（按 SKIP/NO_MUSIC）→ 状态/角色（按 TEMP）→ 广播（按 QUIET）→ evac 重置。
+     * 不定义预设与来源：装备 → 传送 → 生存 → 入场电影（按 SKIP/NO_MUSIC）→ 状态/角色（按 TEMP）→ 广播（按 QUIET）→ 经验回合重置。
      */
     public boolean deploy(ServerPlayer player, String professionId, Wave wave, Set<DeployFlag> flags) {
         if (player == null
@@ -763,16 +763,14 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
                         "ccnr_rp.spawn.conscript.deployed", player.getName().getString(), displayName);
             }
         } else {
-            // 正式用户：状态 ALIVE + 疏散裁定重置 + 冷却清零（部署 = 新一局开始）
+            // 正式用户：状态 ALIVE + 冷却清零 + 经验回合重置（部署 = 新一局开始：
+            // 待结算经验变化列表清空、存活秒数归零；已累计用户 XP 保留）
             CCNRRPMod.users.setRole(uuid, professionId, factionId);
-            CCNRRPMod.users.setEvacuation(uuid, "none");
             CCNRRPMod.users.setStatus(uuid, CharacterStatus.ALIVE);
             CCNRRPMod.users.setCooldown(uuid, 0);
+            CCNRRPMod.users.setXpDuty(uuid, CCNRRPMod.users.userXp(uuid), 0);
+            CCNRRPMod.users.setPendingXp(uuid, java.util.List.of());
             CCNRRPMod.users.save();
-            if (CCNRRPMod.experience != null) {
-                CCNRRPMod.experience.ledger().setEvacSettled(uuid, false);
-                CCNRRPMod.experience.ledger().save();
-            }
             if (CCNRRPMod.characters != null) {
                 CCNRRPMod.characters.sendList(player);
             }

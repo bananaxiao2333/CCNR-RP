@@ -131,9 +131,13 @@ public class CCNRRPMod {
                 player.setGameMode(net.minecraft.world.level.GameType.SPECTATOR);
             }
         }
-        // 补发离线期间的结算通知（死亡/断联结算结果）
+        // 补发离线期间的结算通知（死亡/断联结算结果）+ 经验规则集（管理面板展示）
         if (experience != null && event.getEntity() instanceof net.minecraft.server.level.ServerPlayer p2) {
             experience.flushPending(p2);
+            com.ccnrcom.rp.network.RpChannels.sendTo(
+                    p2,
+                    new com.ccnrcom.rp.network.RpPackets.RulesStateS2C(
+                            experience.rulesPayload().toString()));
         }
     }
 

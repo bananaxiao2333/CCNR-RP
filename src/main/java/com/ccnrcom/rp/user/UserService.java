@@ -6,19 +6,21 @@ package com.ccnrcom.rp.user;
 
 import com.ccnrcom.rp.CCNRRPMod;
 import com.ccnrcom.rp.config.CCNRRPConfig;
+import com.ccnrcom.rp.experience.XpChangeList.XpChange;
 import com.ccnrcom.rp.status.CharacterStatus;
 import com.ccnrcom.rp.util.JsonUtil;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
- * 用户体系（P9，v2：删除角色实体后为唯一身份）。
- * 一个玩家 UUID = 一个用户；在场/阴间/观察状态、当前职位、复活冷却、执勤时长、任务与疏散裁定全部挂在用户上。
- * 等级/经验随用户走。创建角色（多角色库）已删除——玩家直接选职位部署。
- * 持久化：world/ccnr_rp/user_profiles.json（原子写）。
+ * 用户体系（P9 v2，v2.18.0 经验系统 v3）：一个玩家 UUID = 一个用户；在场/阴间/观察状态、
+ * 当前职位、复活冷却、执勤时长（本回合存活秒数）、待结算经验变化列表全部挂在用户上。
+ * 等级/经验随用户走。持久化：world/ccnr_rp/user_profiles.json（version 3，原子写）。
  */
 public final class UserService {
 
@@ -32,8 +34,11 @@ public final class UserService {
             String factionId,
             long cooldownUntil,
             long dutySeconds,
-            Map<String, Integer> tasks,
-            String evacuation) {
+            List<XpChange> pendingXp) {
+
+        public UserProfile {
+            pendingXp = pendingXp == null ? List.of() : List.copyOf(pendingXp);
+        }
 
         public UserProfile withXp(long newXp) {
             return new UserProfile(
@@ -45,36 +50,17 @@ public final class UserService {
                     factionId,
                     cooldownUntil,
                     dutySeconds,
-                    tasks,
-                    evacuation);
+                    pendingXp);
         }
 
         public UserProfile withLastCreate(long at) {
             return new UserProfile(
-                    xp,
-                    at,
-                    anySupportRevive,
-                    status,
-                    professionId,
-                    factionId,
-                    cooldownUntil,
-                    dutySeconds,
-                    tasks,
-                    evacuation);
+                    xp, at, anySupportRevive, status, professionId, factionId, cooldownUntil, dutySeconds, pendingXp);
         }
 
         public UserProfile withAnySupport(boolean on) {
             return new UserProfile(
-                    xp,
-                    lastCreateAt,
-                    on,
-                    status,
-                    professionId,
-                    factionId,
-                    cooldownUntil,
-                    dutySeconds,
-                    tasks,
-                    evacuation);
+                    xp, lastCreateAt, on, status, professionId, factionId, cooldownUntil, dutySeconds, pendingXp);
         }
 
         public UserProfile withStatus(CharacterStatus newStatus) {
@@ -87,8 +73,7 @@ public final class UserService {
                     factionId,
                     cooldownUntil,
                     dutySeconds,
-                    tasks,
-                    evacuation);
+                    pendingXp);
         }
 
         public UserProfile withRole(String newProfessionId, String newFactionId) {
@@ -101,8 +86,7 @@ public final class UserService {
                     newFactionId,
                     cooldownUntil,
                     dutySeconds,
-                    tasks,
-                    evacuation);
+                    pendingXp);
         }
 
         public UserProfile withCooldown(long cooldown) {
@@ -115,13 +99,12 @@ public final class UserService {
                     factionId,
                     cooldown,
                     dutySeconds,
-                    tasks,
-                    evacuation);
+                    pendingXp);
         }
 
         public UserProfile withXpDuty(long newXp, long newDutySeconds) {
             return new UserProfile(
-                    newXp,
+                    xp,
                     lastCreateAt,
                     anySupportRevive,
                     status,
@@ -129,11 +112,10 @@ public final class UserService {
                     factionId,
                     cooldownUntil,
                     newDutySeconds,
-                    tasks,
-                    evacuation);
+                    pendingXp);
         }
 
-        public UserProfile withEvacuation(String newEvacuation) {
+        public UserProfile withPendingXp(List<XpChange> newPending) {
             return new UserProfile(
                     xp,
                     lastCreateAt,
@@ -143,8 +125,7 @@ public final class UserService {
                     factionId,
                     cooldownUntil,
                     dutySeconds,
-                    tasks,
-                    newEvacuation);
+                    newPending);
         }
     }
 
@@ -164,11 +145,25 @@ public final class UserService {
             if (root.has("users")) {
                 root.getAsJsonObject("users").entrySet().forEach(e -> {
                     JsonObject o = e.getValue().getAsJsonObject();
-                    Map<String, Integer> tasks = new LinkedHashMap<>();
-                    if (o.has("tasks") && o.get("tasks").isJsonObject()) {
-                        o.getAsJsonObject("tasks")
-                                .entrySet()
-                                .forEach(t -> tasks.put(t.getKey(), t.getValue().getAsInt()));
+                    List<XpChange> pending = new ArrayList<>();
+                    if (o.has("pendingXp") && o.get("pendingXp").isJsonArray()) {
+                        for (var el : o.getAsJsonArray("pendingXp")) {
+                            if (!el.isJsonObject()) {
+                                continue;
+                            }
+                            JsonObject c = el.getAsJsonObject();
+                            try {
+                                String ruleId =
+                                        c.has("ruleId") ? c.get("ruleId").getAsString() : "";
+                                String title = c.has("title") ? c.get("title").getAsString() : "";
+                                long value = c.has("value") ? c.get("value").getAsLong() : 0;
+                                if (!ruleId.isBlank()) {
+                                    pending.add(new XpChange(ruleId, title, value));
+                                }
+                            } catch (Exception ignored) {
+                                // 坏条目跳过（容错）
+                            }
+                        }
                     }
                     profiles.put(
                             e.getKey(),
@@ -182,8 +177,7 @@ public final class UserService {
                                     str(o, "factionId", ""),
                                     num(o, "cooldownUntil", 0),
                                     num(o, "dutySeconds", 0),
-                                    tasks,
-                                    str(o, "evacuation", "none")));
+                                    pending));
                 });
             }
         });
@@ -191,7 +185,7 @@ public final class UserService {
 
     public void save() {
         JsonObject root = new JsonObject();
-        root.addProperty("version", 2);
+        root.addProperty("version", 3);
         JsonObject users = new JsonObject();
         profiles.forEach((uuid, p) -> {
             JsonObject o = new JsonObject();
@@ -207,10 +201,15 @@ public final class UserService {
             }
             o.addProperty("cooldownUntil", p.cooldownUntil());
             o.addProperty("dutySeconds", p.dutySeconds());
-            JsonObject t = new JsonObject();
-            p.tasks().forEach((k, v) -> t.addProperty(k, v));
-            o.add("tasks", t);
-            o.addProperty("evacuation", p.evacuation() == null ? "none" : p.evacuation());
+            JsonArray pend = new JsonArray();
+            for (XpChange c : p.pendingXp()) {
+                JsonObject co = new JsonObject();
+                co.addProperty("ruleId", c.ruleId());
+                co.addProperty("title", c.title() == null ? "" : c.title());
+                co.addProperty("value", c.value());
+                pend.add(co);
+            }
+            o.add("pendingXp", pend);
             users.add(uuid, o);
         });
         root.add("users", users);
@@ -219,9 +218,7 @@ public final class UserService {
 
     private UserProfile profile(String playerUuid) {
         return profiles.computeIfAbsent(
-                playerUuid,
-                k -> new UserProfile(
-                        0, 0, false, CharacterStatus.OBSERVING, "", "", 0, 0, new LinkedHashMap<>(), "none"));
+                playerUuid, k -> new UserProfile(0, 0, false, CharacterStatus.OBSERVING, "", "", 0, 0, List.of()));
     }
 
     /** 是否已有用户档案（首次入服判定用；不惰性创建档案）。 */
@@ -235,7 +232,7 @@ public final class UserService {
         return profile(playerUuid).xp();
     }
 
-    /** 结算增益归入用户；支持负数（扣分）。返回新的用户总经验。 */
+    /** 结算增益归入用户；支持负数（扣分）。返回新的用户总经验（下限 0）。 */
     public long addXp(String playerUuid, long gain) {
         if (gain == 0) {
             return userXp(playerUuid);
@@ -249,6 +246,17 @@ public final class UserService {
     public int level(String playerUuid) {
         return new com.ccnrcom.rp.experience.LevelCurve(CCNRRPConfig.LEVEL_BASE.get(), CCNRRPConfig.LEVEL_POW.get())
                 .level(userXp(playerUuid));
+    }
+
+    // ---------- 待结算经验变化列表（经验系统 v3） ----------
+
+    public List<XpChange> pendingXp(String playerUuid) {
+        return profile(playerUuid).pendingXp();
+    }
+
+    public void setPendingXp(String playerUuid, List<XpChange> pending) {
+        UserProfile p = profile(playerUuid);
+        profiles.put(playerUuid, p.withPendingXp(pending));
     }
 
     // ---------- 状态（在场/阴间/观察） ----------
@@ -316,7 +324,7 @@ public final class UserService {
         return cooldownUntil(playerUuid) > System.currentTimeMillis();
     }
 
-    // ---------- 执勤 / 任务 / 疏散 ----------
+    // ---------- 执勤（本回合存活秒数） ----------
 
     public long dutySeconds(String playerUuid) {
         return profile(playerUuid).dutySeconds();
@@ -325,19 +333,6 @@ public final class UserService {
     public void setXpDuty(String playerUuid, long xp, long dutySeconds) {
         UserProfile p = profile(playerUuid);
         profiles.put(playerUuid, p.withXpDuty(xp, dutySeconds));
-    }
-
-    public Map<String, Integer> tasks(String playerUuid) {
-        return profile(playerUuid).tasks();
-    }
-
-    public String evacuation(String playerUuid) {
-        return profile(playerUuid).evacuation();
-    }
-
-    public void setEvacuation(String playerUuid, String evacuation) {
-        UserProfile p = profile(playerUuid);
-        profiles.put(playerUuid, p.withEvacuation(evacuation));
     }
 
     // ---------- 枚举（settleAll / 影响预检使用） ----------

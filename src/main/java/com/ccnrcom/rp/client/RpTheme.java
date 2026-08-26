@@ -44,6 +44,9 @@ public final class RpTheme {
     public static final int ACCENT_TEXT = 0xFF161616;
 
     // ---- 警示/选中：高饱和正红 + 红底白字 ----
+    /** 正面（加分/正常）绿色。 */
+    public static final int GREEN = 0xFF35E07A;
+
     public static final int RED = 0xFFFF3B30;
     public static final int RED_DIM = 0xFF8C2320;
     public static final int RED_BG = 0xFF6F1613;
