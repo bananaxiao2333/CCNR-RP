@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.14.4（修复 OGG 播放电流声：改用 Minecraft 原生 OggAudioStream 解码）
+- 2.14.3 内嵌的 jorbis（googlecode soundlibs 0.0.17.4 fork）解码立体声时左右声道塌缩为同一值（解码器 bug），
+  叠加字节序错配 → 播放电流声。
+- 改用 Minecraft 自带 com.mojang.blaze3d.audio.OggAudioStream（原生 STB Vorbis 解码，立体声/字节序由 getFormat 提供），
+  移除 jorbis 内嵌（build.gradle/OggPcm/libs）。播放逻辑（Clip/淡出）不变。
+- 构建：compileJava / spotlessCheck / test -PrunTests 全绿。
+
 ## 2.14.3（音乐格式全面切换 OGG：WAV 体积过大弃用）
 - 上传/存储/清单：config/ccnr_rp/audio/*.wav → *.ogg（OggS 魔数校验；AssetLibrary 清单同切 .ogg）。
 - 播放：javax.sound 不原生支持 OGG——内嵌 jorbis（纯 Java Vorbis 解码）转为 PCM 后走同一 Clip 播放
