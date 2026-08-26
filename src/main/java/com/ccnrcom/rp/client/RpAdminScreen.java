@@ -241,15 +241,16 @@ public class RpAdminScreen extends Screen {
         clearWidgets();
         rowBounds.clear();
         fieldLabels.clear();
-        if (tab == TAB_XP) {
-            rulesTab().rebuild(px1, py1, px2, py2);
-            return;
-        }
+        // 页签栏几何是所有页签共用的，必须先填充（render/鼠标分发都依赖 rowBounds 前 8 项）
         int tabW = Math.min(76, (px2 - px1 - 36) / 8);
         int tx = px1 + 12;
         for (int i = 0; i < TABS.length; i++) {
             int x = tx + i * (tabW + 4);
             rowBounds.add(new int[] {x, py1 + 42, x + tabW, py1 + 62});
+        }
+        if (tab == TAB_XP) {
+            rulesTab().rebuild(px1, py1, px2, py2);
+            return;
         }
         if (tab == TAB_SETTINGS) {
             // 开关行（settings.json 键，程序化生成）：按滚动偏移生成可见的开关行（数值行由输入框承载，不进 rowBounds）
