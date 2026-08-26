@@ -134,6 +134,66 @@ public final class CharacterService {
         svc.sendList(player);
     }
 
+    /**
+     * 处决转职部署（GUI 确认后）：玩家在场（ALIVE）时把旧角色处死（统一退场：状态→观察+复活冷却+遗体+死亡结算），
+     * 再延迟部署为选定职位（等遗体生成完再清背包/换职位，遗体保留旧职位名与旧背包）。
+     * 校验：素材同步 → 在场状态 → 职位存在 → 等级达标，然后交给 SpawnFramework.queueRedeploy 落地。
+     */
+    public static void onKillDeploy(ServerPlayer player, String professionId) {
+        if (player == null || professionId == null || professionId.isBlank()) {
+            return;
+        }
+        CharacterService svc = service();
+        String uuid = player.getUUID().toString();
+        if (!com.ccnrcom.rp.assets.AssetLibrary.isSynced(player)) {
+            svc.sendError(player, "ccnr_rp.gui.asset.syncing");
+            return;
+        }
+        if (CCNRRPMod.users == null) {
+            svc.sendError(player, "ccnr_rp.error.invalid_argument", "用户服务未就绪");
+            return;
+        }
+        if (CCNRRPMod.users.status(uuid) != CharacterStatus.ALIVE) {
+            svc.sendError(player, "ccnr_rp.spawn.error.alive_only");
+            return;
+        }
+        if (CCNRRPMod.factions == null) {
+            svc.sendError(player, "ccnr_rp.error.invalid_argument", "配置管理器未就绪");
+            return;
+        }
+        var def = CCNRRPMod.factions.findProfession(professionId).orElse(null);
+        if (def == null) {
+            svc.sendError(player, "ccnr_rp.character.error.profession", professionId);
+            return;
+        }
+        int required = com.ccnrcom.rp.faction.FactionProfessions.unlockLevel(def);
+        int userLevel = CCNRRPMod.users.level(uuid);
+        if (userLevel < required) {
+            svc.sendError(
+                    player,
+                    "ccnr_rp.spawn.error.level",
+                    com.ccnrcom.rp.faction.FactionProfessions.idsSafeName(def),
+                    String.valueOf(required),
+                    String.valueOf(userLevel));
+            return;
+        }
+        if (CCNRRPMod.spawnFramework == null) {
+            svc.sendError(player, "ccnr_rp.error.invalid_argument", "刷新框架未就绪");
+            return;
+        }
+        // 处死旧角色（统一退场：状态→观察+复活冷却+遗体+死亡结算；遗体 2 tick 后生成，复制当前背包与旧职位名）
+        com.ccnrcom.rp.status.StatusManager.retire(
+                uuid,
+                player,
+                "redeploy",
+                com.ccnrcom.rp.status.RetireFlag.of(com.ccnrcom.rp.status.RetireFlag.SPAWN_CORPSE));
+        // 延迟部署（等遗体生成完再清背包/换职位/传送）
+        CCNRRPMod.spawnFramework.queueRedeploy(player, professionId);
+        svc.sendError(
+                player, "ccnr_rp.spawn.redeploy.started", com.ccnrcom.rp.faction.FactionProfessions.idsSafeName(def));
+        svc.sendList(player);
+    }
+
     // ---------- 管理器（管理员）----------
 
     public static void onManagerRequest(ServerPlayer player) {

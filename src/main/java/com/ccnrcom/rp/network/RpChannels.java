@@ -92,6 +92,11 @@ public final class RpChannels {
                 .decoder(RpPackets.DeployPositionC2S::new)
                 .consumerNetworkThread(RpPackets.DeployPositionC2S::handle)
                 .add();
+        CHANNEL.messageBuilder(RpPackets.KillDeployC2S.class, id++, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(RpPackets.KillDeployC2S::encode)
+                .decoder(RpPackets.KillDeployC2S::new)
+                .consumerNetworkThread(RpPackets.KillDeployC2S::handle)
+                .add();
         CHANNEL.messageBuilder(RpPackets.ServerConfigSetC2S.class, id++, NetworkDirection.PLAY_TO_SERVER)
                 .encoder(RpPackets.ServerConfigSetC2S::encode)
                 .decoder(RpPackets.ServerConfigSetC2S::new)

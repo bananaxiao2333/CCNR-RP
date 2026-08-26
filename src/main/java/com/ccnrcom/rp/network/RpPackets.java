@@ -57,6 +57,30 @@ public final class RpPackets {
         }
     }
 
+    /** 处决转职部署（C2S）：玩家在场（ALIVE）确认后，服务端处死旧角色再部署为选定职位。 */
+    public static final class KillDeployC2S {
+        public final String professionId;
+
+        public KillDeployC2S(String professionId) {
+            this.professionId = professionId;
+        }
+
+        public KillDeployC2S(FriendlyByteBuf buf) {
+            this(buf.readUtf(64));
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(professionId, 64);
+        }
+
+        public static void handle(KillDeployC2S msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> com.ccnrcom.rp.character.CharacterService.onKillDeploy(
+                            ctx.get().getSender(), msg.professionId));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
     /** 音乐上传分包（管理员，存 config/ccnr_rp/audio/）。 */
     public static final class MusicUploadPartC2S {
         public final String name;
