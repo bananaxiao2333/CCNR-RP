@@ -971,6 +971,10 @@ public final class CharacterService {
         root.add("settings", st);
         root.addProperty("levelBase", com.ccnrcom.rp.config.CCNRRPConfig.LEVEL_BASE.get());
         root.addProperty("levelPow", com.ccnrcom.rp.config.CCNRRPConfig.LEVEL_POW.get());
+        // 玩家头顶悬浮标签配置（服务端权威：开关 + 徽章大小 + 高度）
+        root.addProperty("nametagEnabled", com.ccnrcom.rp.config.CCNRRPConfig.NAMETAG_ENABLED.get());
+        root.addProperty("nametagBadgeSize", com.ccnrcom.rp.config.CCNRRPConfig.NAMETAG_BADGE_SIZE.get());
+        root.addProperty("nametagOffset", com.ccnrcom.rp.config.CCNRRPConfig.NAMETAG_OFFSET.get());
         root.addProperty(
                 "admin",
                 com.ccnrcom.rp.util.Permissions.canAdmin(player, com.ccnrcom.rp.util.Permissions.ADMIN_FACTION));
