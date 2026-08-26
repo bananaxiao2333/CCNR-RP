@@ -11,6 +11,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import java.util.ArrayList;
 import java.util.List;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -210,8 +211,12 @@ public class RpAdminScreen extends Screen {
     /** 限制类型（部署人数上限规则）：GLOBAL=通用角色上限（职业无专属时兜底）/ FACTION=阵营上限 / PROFESSION=职业上限。 */
     private static final String[] LIMIT_TYPES = {"GLOBAL", "FACTION", "PROFESSION"};
 
+    /** 打开前的上层面板（K 面板）；关闭时返回。 */
+    private final Screen parent;
+
     public RpAdminScreen() {
         super(Component.translatable("ccnr_rp.gui.admin.title"));
+        this.parent = Minecraft.getInstance().screen;
     }
 
     public static void refreshIfOpen() {
@@ -1033,9 +1038,14 @@ public class RpAdminScreen extends Screen {
         // 部署点配置（P9）：弹出管理窗口（规则 + 坐标列表 + 一键添加当前坐标）
         addRenderableWidget(RpButton.secondary(
                 x, y + 28, w, 18, Component.literal("管理部署点…（规则 / 坐标 / 添加当前坐标）"), b -> openSpawnModal("faction")));
-        // 关系测定图（全屏）：阵营徽章 + 连线（白中立/红敌对/绿友好），可拖动缩放；打开时下层面板暂时隐藏
+        // 关系管理（全屏独立面板）：关系规则增删改 + 内部关系 + 测定图入口；打开时下层面板暂时隐藏，关闭返回
         addRenderableWidget(
-                RpButton.secondary(x, y + 50, w, 18, Component.translatable("ccnr_rp.gui.admin.graph.button"), b -> {
+                RpButton.secondary(x, y + 50, w, 18, Component.translatable("ccnr_rp.gui.admin.relation.button"), b -> {
+                    net.minecraft.client.Minecraft.getInstance().setScreen(new RelationManagerScreen());
+                }));
+        // 关系测定图（全屏）：阵营徽章 + 连线（白中立/红敌对/绿友好），可拖动缩放；关闭返回管理面板
+        addRenderableWidget(
+                RpButton.secondary(x, y + 72, w, 18, Component.translatable("ccnr_rp.gui.admin.graph.button"), b -> {
                     net.minecraft.client.Minecraft.getInstance().setScreen(new FactionGraphScreen());
                 }));
     }
@@ -3244,7 +3254,11 @@ public class RpAdminScreen extends Screen {
     @Override
     public void onClose() {
         open = null;
-        super.onClose();
+        if (parent != null) {
+            Minecraft.getInstance().setScreen(parent); // 返回上层（K 面板）；Esc/✕ 不直接回游戏
+        } else {
+            super.onClose();
+        }
     }
 
     @Override
