@@ -16,10 +16,10 @@ import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3f;
 
 /**
- * 玩家头顶标签（旁观者/观察者视角可见）：阵营徽章 + 职业名(阵营色) + 玩家名 + 等级。
- * 数据来自 PlayerTagsS2C 下发的 ClientCharacterState.playerTag(uuid)；非观察者视角或数据缺失时跳过。
+ * 玩家头顶标签（部署/存活视角可见）：阵营徽章 + 职业名(阵营色) + 玩家名 + 等级。
+ * 数据来自 PlayerTagsS2C 下发的 ClientCharacterState.playerTag(uuid)；旁观者模式或数据缺失时跳过。
  * 投影使用相机官方正交基（getLookVector/getUpVector/getLeftVector），像素缩放用 FOV 静态设置值；
- * 标签尺寸按透视距离缩放（远小近大，同原版名字牌），可见距离 64 格，稳定钉在玩家头顶不乱飘。
+ * 标签尺寸按透视距离缩放（远小近大，同原版名字牌），渲染距离跟随游戏设置，稳定钉在玩家头顶不乱飘。
  */
 public final class PlayerNametagRenderer {
 
@@ -28,14 +28,14 @@ public final class PlayerNametagRenderer {
 
     private PlayerNametagRenderer() {}
 
-    /** HUD 层渲染：旁观者视角下为每个其他玩家绘制头顶标签。 */
+    /** HUD 层渲染：部署（存活）视角下为每个其他玩家绘制头顶标签。 */
     public static void render(GuiGraphics gfx, int w, int h, float partialTick) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null || mc.getEntityRenderDispatcher().camera == null) {
             return;
         }
-        if (!isObserverView()) {
-            return;
+        if (!ClientCharacterState.isDeployed()) {
+            return; // 仅部署（存活）状态显示；旁观者模式不显示
         }
         Font font = mc.font;
         Camera cam = mc.gameRenderer.getMainCamera();
@@ -60,9 +60,9 @@ public final class PlayerNametagRenderer {
             if (cam.isDetached() || !isInView(mc, other)) {
                 continue;
             }
-            // 头顶位置（脚底上方一个身高 + 0.45），partialTick 插值避免移动滞后
+            // 头顶位置（脚底上方一个身高 + 0.9，标签整体上移不挡头），partialTick 插值避免移动滞后
             double tx = Mth.lerp(partialTick, other.xo, other.getX());
-            double ty = Mth.lerp(partialTick, other.yo, other.getY()) + other.getBbHeight() + 0.45;
+            double ty = Mth.lerp(partialTick, other.yo, other.getY()) + other.getBbHeight() + 0.9;
             double tz = Mth.lerp(partialTick, other.zo, other.getZ());
             double dx = tx - camPos.x;
             double dy = ty - camPos.y;
@@ -118,15 +118,6 @@ public final class PlayerNametagRenderer {
         gfx.fill(-w3 / 2 - 3, y3 - 2, w3 / 2 + 3, y3 + 10, 0x66000000);
         gfx.drawString(font, lv, -w3 / 2, y3, 0xFF3DD2FF, true);
         pose.popPose();
-    }
-
-    private static boolean isObserverView() {
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null) {
-            return false;
-        }
-        return ClientCharacterState.userStatus() == com.ccnrcom.rp.status.CharacterStatus.OBSERVING
-                && !ClientCharacterState.isDeployed();
     }
 
     /** 粗略可见性判断：与游戏渲染距离一致（人物在该距离内才渲染，标签随之显示/隐藏）。 */
