@@ -28,6 +28,47 @@ public final class CharacterService {
 
     private record MusicUpload(String name, byte[] parts, int received) {}
 
+    // ---- 头顶悬浮标签异步广播（独立线程构建 payload，回主线程发送；合并去重防高并发阻塞） ----
+
+    /** 标签广播专用线程（单线程串行构建，避免并发重复构建）。 */
+    private static final java.util.concurrent.ExecutorService TAG_BUILDER =
+            java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "ccnr-rp-nametag-broadcast");
+                t.setDaemon(true);
+                return t;
+            });
+
+    /** 待发送的标签 payload（构建完成待主线程发送；null=无待发）。 */
+    private volatile String pendingTagPayload;
+
+    /** 触发一次全服标签刷新（合并：构建中/待发中再触发则复用最近一次结果）。 */
+    public void refreshPlayerTags() {
+        TAG_BUILDER.execute(() -> {
+            try {
+                String payload = playerTagsJson().toString();
+                pendingTagPayload = payload;
+                if (server != null) {
+                    server.execute(this::flushTagPayload);
+                }
+            } catch (Exception ignored) {
+                // 构建失败丢弃本次刷新（下次状态变化会重试）
+            }
+        });
+    }
+
+    /** 主线程发送待发标签（每人一个包，payload 复用）。 */
+    private void flushTagPayload() {
+        String payload = pendingTagPayload;
+        if (payload == null || server == null) {
+            return;
+        }
+        pendingTagPayload = null;
+        for (net.minecraft.server.level.ServerPlayer p :
+                new java.util.ArrayList<>(server.getPlayerList().getPlayers())) {
+            RpChannels.sendTo(p, new RpPackets.PlayerTagsS2C(payload));
+        }
+    }
+
     public CharacterService(MinecraftServer server) {
         this.server = server;
     }
@@ -1032,15 +1073,11 @@ public final class CharacterService {
         }
     }
 
-    /** 广播全玩家头顶标签给所有在线玩家（登录/登出/部署变更后调用）。 */
+    /**
+     * 广播全玩家头顶标签给所有在线玩家（登录/登出/部署/死亡/复活等状态变化后调用）。
+     * 异步：独立线程构建 payload（人多时不阻塞主线程），构建完成后回主线程发送网络包。
+     */
     public void broadcastPlayerTags() {
-        if (server == null) {
-            return;
-        }
-        String payload = playerTagsJson().toString();
-        for (net.minecraft.server.level.ServerPlayer p :
-                new java.util.ArrayList<>(server.getPlayerList().getPlayers())) {
-            RpChannels.sendTo(p, new RpPackets.PlayerTagsS2C(payload));
-        }
+        refreshPlayerTags();
     }
 }

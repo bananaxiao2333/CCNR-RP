@@ -259,7 +259,18 @@ public final class UserService {
 
     public void setStatus(String playerUuid, CharacterStatus status) {
         UserProfile p = profile(playerUuid);
+        if (p.status() == status) {
+            return; // 幂等：无变化不触发刷新
+        }
         profiles.put(playerUuid, p.withStatus(status));
+        notifyNametagChanged();
+    }
+
+    /** 状态/职位变化 → 异步刷新全服头顶悬浮标签（死亡/复活/部署/换岗后其他玩家头顶立即更新）。 */
+    private static void notifyNametagChanged() {
+        if (CCNRRPMod.characters != null) {
+            CCNRRPMod.characters.broadcastPlayerTags();
+        }
     }
 
     public boolean isAlive(String playerUuid) {
@@ -282,7 +293,12 @@ public final class UserService {
 
     public void setRole(String playerUuid, String professionId, String factionId) {
         UserProfile p = profile(playerUuid);
+        if (java.util.Objects.equals(p.professionId(), professionId)
+                && java.util.Objects.equals(p.factionId(), factionId)) {
+            return; // 幂等：无变化不触发刷新
+        }
         profiles.put(playerUuid, p.withRole(professionId, factionId));
+        notifyNametagChanged();
     }
 
     // ---------- 复活冷却 ----------

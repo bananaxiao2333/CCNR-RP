@@ -3051,6 +3051,9 @@ public class RpAdminScreen extends Screen {
             case "evacStayBehindXp" -> "留守XP";
             case "base" -> "等级基数";
             case "pow" -> "等级指数";
+            case "enabled" -> "头顶标签开关";
+            case "badgeSize" -> "头顶标签徽章大小";
+            case "offset" -> "头顶标签高度(格)";
             default -> key;
         };
     }
