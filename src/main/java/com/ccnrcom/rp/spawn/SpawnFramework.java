@@ -721,6 +721,30 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
         // 职位定义缺失时按空阵营部署（保持原 deployAsPosition 行为：无装备、传送默认点；pick 波观察者可能无职位）
         String factionId = def == null ? "" : FactionProfessions.factionId(def);
         String displayName = def == null ? professionId : FactionProfessions.idsSafeName(def);
+        // 部署人数限制（全局性，统一入口检测；管理员刷人/强制征召用 LIMIT_SKIP 跳过）：
+        // 重新部署（玩家在场换岗）也检测——目标职业/阵营在职数按「不含本人」计算，避免换岗误判自占位。
+        boolean skipLimit = flags != null && flags.contains(DeployFlag.LIMIT_SKIP);
+        if (!skipLimit && !temp) {
+            boolean selfAlive = CCNRRPMod.users.isAlive(uuid);
+            int profCount = CCNRRPMod.users.aliveCountByProfession(professionId)
+                    - (selfAlive && professionId.equals(CCNRRPMod.users.professionId(uuid)) ? 1 : 0);
+            int facCount = CCNRRPMod.users.aliveCountByFaction(factionId)
+                    - (selfAlive && factionId.equals(CCNRRPMod.users.factionId(uuid)) ? 1 : 0);
+            var denial = com.ccnrcom.rp.spawn.DeployLimits.check(
+                    com.ccnrcom.rp.spawn.DeployLimits.parse(com.ccnrcom.rp.util.ConfigCrud.root("limits.json")),
+                    professionId,
+                    factionId,
+                    profCount,
+                    facCount);
+            if (denial.isPresent()) {
+                com.ccnrcom.rp.spawn.DeployLimits.Denial d = denial.get();
+                String targetName = "ccnr_rp.spawn.limit.profession_full".equals(d.key())
+                        ? displayName
+                        : factionDisplayName(d.target());
+                RpChannels.sendTo(player, new RpPackets.ErrorS2C(d.key(), targetName, String.valueOf(d.limit())));
+                return false;
+            }
+        }
         boolean cinematic = flags == null || !flags.contains(DeployFlag.SKIP_CINEMATIC);
         boolean musicOn = flags == null || !flags.contains(DeployFlag.NO_MUSIC);
         applyDeployCore(player, player.getName().getString(), professionId, factionId, "", wave, cinematic, musicOn);
@@ -976,8 +1000,8 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
                     cs.professionId(),
                     defaultConscriptWave(cs.id()),
                     temp
-                            ? DeployFlag.of(DeployFlag.FORCE_DEPLOY, DeployFlag.TEMP)
-                            : DeployFlag.of(DeployFlag.FORCE_DEPLOY));
+                            ? DeployFlag.of(DeployFlag.FORCE_DEPLOY, DeployFlag.TEMP, DeployFlag.LIMIT_SKIP)
+                            : DeployFlag.of(DeployFlag.FORCE_DEPLOY, DeployFlag.LIMIT_SKIP));
             if (!ok) {
                 // 部署失败（素材未同步/服务未就绪等）：清理征召登记，避免 pending/在场 状态卡死
                 com.ccnrcom.rp.sequence.SequenceEngine.removeConscript(csId);
@@ -1008,7 +1032,7 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
                 p,
                 cs.professionId(),
                 defaultConscriptWave(cs.id()),
-                DeployFlag.of(DeployFlag.FORCE_DEPLOY, DeployFlag.TEMP));
+                DeployFlag.of(DeployFlag.FORCE_DEPLOY, DeployFlag.TEMP, DeployFlag.LIMIT_SKIP));
     }
 
     /** 邀请作废（拒绝/超时）：临时征召兵直接消失（无角色库内容）。 */
@@ -1094,6 +1118,15 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
         for (ServerPlayer p : server.getPlayerList().getPlayers()) {
             RpChannels.sendTo(p, new RpPackets.ErrorS2C(key, args));
         }
+    }
+
+    /** 阵营显示名（无则回退 id）。 */
+    private String factionDisplayName(String factionId) {
+        if (CCNRRPMod.factions == null || factionId == null || factionId.isBlank()) {
+            return factionId == null ? "" : factionId;
+        }
+        var f = CCNRRPMod.factions.graph().factions().get(factionId);
+        return f != null && f.name() != null && !f.name().isBlank() ? f.name() : factionId;
     }
 
     /** 管理端手动召唤复活波（C2S，管理员权限校验）。 */

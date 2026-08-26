@@ -31,6 +31,7 @@ public class RpAdminScreen extends Screen {
     private static final int TAB_EVENT = 3;
     private static final int TAB_PHASE = 4;
     private static final int TAB_WAVE = 5;
+    private static final int TAB_LIMITS = 6;
 
     private int tab = TAB_SETTINGS;
     private int px1, py1, px2, py2;
@@ -44,6 +45,8 @@ public class RpAdminScreen extends Screen {
     private String selProfId = "";
     private String selFactionId = "";
     private String selSelId = "";
+    private String selLimitId = "";
+    private int limitTypeIdx = 0;
     private int factionIdx = 0;
     private int iconIdx = 0;
     private int tierIdx = 1;
@@ -157,8 +160,12 @@ public class RpAdminScreen extends Screen {
         "ccnr_rp.gui.admin.tab.faction",
         "ccnr_rp.gui.admin.tab.event",
         "ccnr_rp.gui.admin.tab.phase",
-        "ccnr_rp.gui.admin.tab.wave"
+        "ccnr_rp.gui.admin.tab.wave",
+        "ccnr_rp.gui.admin.tab.limits"
     };
+
+    /** 限制类型（部署人数上限规则）：GLOBAL=通用角色上限（职业无专属时兜底）/ FACTION=阵营上限 / PROFESSION=职业上限。 */
+    private static final String[] LIMIT_TYPES = {"GLOBAL", "FACTION", "PROFESSION"};
 
     public RpAdminScreen() {
         super(Component.translatable("ccnr_rp.gui.admin.title"));
@@ -195,10 +202,10 @@ public class RpAdminScreen extends Screen {
         clearWidgets();
         rowBounds.clear();
         fieldLabels.clear();
-        int tabW = Math.min(88, (px2 - px1 - 30) / 6);
+        int tabW = Math.min(80, (px2 - px1 - 36) / 7);
         int tx = px1 + 12;
-        for (int i = 0; i < 6; i++) {
-            int x = tx + i * (tabW + 6);
+        for (int i = 0; i < TABS.length; i++) {
+            int x = tx + i * (tabW + 4);
             rowBounds.add(new int[] {x, py1 + 42, x + tabW, py1 + 62});
         }
         if (tab == TAB_SETTINGS) {
@@ -242,6 +249,7 @@ public class RpAdminScreen extends Screen {
             case TAB_EVENT -> ClientCharacterState.managerEvents();
             case TAB_PHASE -> ClientCharacterState.managerPhases();
             case TAB_WAVE -> ClientCharacterState.managerWaves();
+            case TAB_LIMITS -> ClientCharacterState.deployLimits();
             default -> List.of();
         };
     }
@@ -251,6 +259,7 @@ public class RpAdminScreen extends Screen {
             case TAB_PROFESSION -> 20;
             case TAB_FACTION -> 22;
             case TAB_EVENT, TAB_PHASE, TAB_WAVE -> 20;
+            case TAB_LIMITS -> 20;
             default -> 0;
         };
     }
@@ -263,6 +272,7 @@ public class RpAdminScreen extends Screen {
             case TAB_EVENT -> buildEventForm();
             case TAB_PHASE -> buildPhaseForm();
             case TAB_WAVE -> buildWaveForm();
+            case TAB_LIMITS -> buildLimitsForm();
             default -> {}
         }
     }
@@ -388,6 +398,64 @@ public class RpAdminScreen extends Screen {
         actionRow(x, y, w, edit);
     }
 
+    /** 部署人数限制编辑器：规则 = 类型（GLOBAL/FACTION/PROFESSION）+ 目标（阵营/职业 id）+ 人数上限。 */
+    private void buildLimitsForm() {
+        int x = listX2 + 10;
+        int w = px2 - 12 - x;
+        int y = py1 + 76;
+        JsonObject r = selLimit();
+        String id = r == null ? "" : str(r, "id");
+        boolean edit = !id.isBlank();
+        // 类型循环按钮 + ID（仅编辑模式锁定）
+        addRenderableWidget(
+                RpButton.secondary(x, y, (w - 4) / 2, 18, Component.literal("类型: " + limitTypeLabel()), b -> {
+                    limitTypeIdx = (limitTypeIdx + 1) % LIMIT_TYPES.length;
+                    rebuild();
+                }));
+        idBox = mkBox(x + (w - 4) / 2 + 4, y, (w - 4) / 2, "ccnr_rp.gui.admin.field.id", id, edit);
+        y += 30;
+        // 目标（阵营/职业 id；GLOBAL 留空 = 通用兜底）
+        String target = r == null ? "" : str(r, "target", "");
+        nameBox = mkBox(x, y, w, "目标(阵营/职业 id；GLOBAL 留空=通用)", target, false);
+        y += 30;
+        // 人数上限
+        unlockLevelBox = mkBox(x, y, w, "人数上限 limit（0=不限）", r == null ? "" : num(r, "limit", 0), false);
+        y += 30;
+        addRenderableWidget(
+                RpButton.secondary(x, y, w, 18, Component.literal("说明：部署时职业超上限（或未配置职业规则时超通用上限）/ 阵营超上限 → 拒绝部署"), b -> {
+                    // 纯说明，无动作
+                }));
+        y += 26;
+        actionRow(x, y, w, edit);
+        // 快捷操作：清空全部限制
+        y += 26;
+        addRenderableWidget(RpButton.danger(x, y, w, 20, Component.literal("清空全部限制（删除所有规则）"), b -> {
+            for (JsonObject rule : ClientCharacterState.deployLimits()) {
+                JsonObject del = payload();
+                del.addProperty("id", str(rule, "id"));
+                requestCrud("limit", "delete", del);
+            }
+            notice = "已请求清空限制";
+        }));
+    }
+
+    private String limitTypeLabel() {
+        return switch (LIMIT_TYPES[limitTypeIdx]) {
+            case "GLOBAL" -> "通用角色上限（职业未配置时的兜底）";
+            case "FACTION" -> "阵营上限（该阵营在职总人数）";
+            default -> "职业上限（该职业在职人数）";
+        };
+    }
+
+    private JsonObject selLimit() {
+        for (JsonObject r : ClientCharacterState.deployLimits()) {
+            if (str(r, "id").equals(selLimitId)) {
+                return r;
+            }
+        }
+        return null;
+    }
+
     private void buildWaveForm() {
         int x = listX2 + 10;
         int w = px2 - 12 - x;
@@ -488,6 +556,7 @@ public class RpAdminScreen extends Screen {
             case TAB_EVENT -> "event";
             case TAB_PHASE -> "phase";
             case TAB_WAVE -> "wave";
+            case TAB_LIMITS -> "limit";
             default -> "";
         };
     }
@@ -589,6 +658,14 @@ public class RpAdminScreen extends Screen {
                 p.add("factionIds", csvArray(musicBox.getValue()));
                 p.addProperty("cmdcamScene", camSceneBox == null ? "" : camSceneBox.getValue());
                 addSequenceField(p, src);
+                yield p;
+            }
+            case TAB_LIMITS -> {
+                JsonObject p = payload();
+                p.addProperty("id", idBox.getValue());
+                p.addProperty("type", LIMIT_TYPES[limitTypeIdx]);
+                p.addProperty("target", nameBox == null ? "" : nameBox.getValue());
+                p.addProperty("limit", unlockLevelBox == null ? 0 : intOf(unlockLevelBox.getValue(), 0));
                 yield p;
             }
             default -> payload();
@@ -2000,7 +2077,7 @@ public class RpAdminScreen extends Screen {
             onClose();
             return true;
         }
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0; i < TABS.length; i++) {
             int[] b = rowBounds.get(i);
             if (mx >= b[0] && mx <= b[2] && my >= b[1] && my <= b[3]) {
                 tab = i;
@@ -2008,6 +2085,7 @@ public class RpAdminScreen extends Screen {
                 selProfId = "";
                 selFactionId = "";
                 selSelId = "";
+                selLimitId = "";
                 rebuild();
                 return true;
             }
@@ -2016,7 +2094,7 @@ public class RpAdminScreen extends Screen {
             notice = Component.translatable("ccnr_rp.gui.admin.no_perm").getString();
             return true;
         }
-        for (int i = 6; i < rowBounds.size(); i++) {
+        for (int i = TABS.length; i < rowBounds.size(); i++) {
             int[] b = rowBounds.get(i);
             if (mx >= b[0] && mx <= b[2] && my >= b[1] && my <= b[3]) {
                 if (tab == TAB_SETTINGS) {
@@ -2102,6 +2180,10 @@ public class RpAdminScreen extends Screen {
             selectFaction(item);
             return;
         }
+        if (tab == TAB_LIMITS) {
+            selectLimit(item);
+            return;
+        }
         selSelId = str(item, "id");
         if (tab == TAB_EVENT) {
             evState = !item.has("enabled") || item.get("enabled").getAsBoolean();
@@ -2162,6 +2244,18 @@ public class RpAdminScreen extends Screen {
             }
         }
         tierIdx = Math.max(0, Math.min(2, tierOf(f) - 1));
+        rebuild();
+    }
+
+    private void selectLimit(JsonObject r) {
+        selLimitId = str(r, "id");
+        String type = str(r, "type", "").toUpperCase(java.util.Locale.ROOT);
+        for (int i = 0; i < LIMIT_TYPES.length; i++) {
+            if (LIMIT_TYPES[i].equals(type)) {
+                limitTypeIdx = i;
+                break;
+            }
+        }
         rebuild();
     }
 
@@ -2290,7 +2384,7 @@ public class RpAdminScreen extends Screen {
                     true);
             g.fill(px1 + 8, py1 + 26, px2 - 8, py1 + 27, RpTheme.CYAN_DIM);
 
-            for (int i = 0; i < 6; i++) {
+            for (int i = 0; i < TABS.length; i++) {
                 int[] b = rowBounds.get(i);
                 boolean sel = tab == i;
                 boolean hov = mouseX >= b[0] && mouseX <= b[2] && mouseY >= b[1] && mouseY <= b[3];
@@ -2504,7 +2598,7 @@ public class RpAdminScreen extends Screen {
                 RpTheme.TEXT_DIM);
         for (int i = 0; i < items.size() && i < maxVisible; i++) {
             JsonObject item = items.get(off + i);
-            int[] b = rowBounds.get(6 + i);
+            int[] b = rowBounds.get(TABS.length + i);
             boolean sel = str(item, "id").equals(currentSelId());
             boolean hov = mouseX >= b[0] && mouseX <= b[2] && mouseY >= b[1] && mouseY <= b[3];
             if (sel) {
@@ -2523,14 +2617,18 @@ public class RpAdminScreen extends Screen {
                 RpIcons.factionBadge(g, b[0] + 16, b[1] + 11, 8, item, sel);
                 fx = b[0] + 28;
             }
-            g.drawString(
-                    font,
-                    str(item, "name").isBlank() ? str(item, "id") : str(item, "name"),
-                    fx,
-                    b[1] + 1,
-                    sel ? 0xFFFFFFFF : RpTheme.TEXT_PRIMARY,
-                    true);
+            String main = str(item, "name").isBlank() ? str(item, "id") : str(item, "name");
+            if (tab == TAB_LIMITS) {
+                // 限制行：主文案 = 类型 + 目标；右侧上限
+                main = str(item, "type", "") + (str(item, "target", "").isBlank() ? "" : " / " + str(item, "target"));
+            }
+            g.drawString(font, main, fx, b[1] + 1, sel ? 0xFFFFFFFF : RpTheme.TEXT_PRIMARY, true);
             g.drawString(font, str(item, "id"), fx, b[1] + 11, sel ? 0xFFFFFFFF : RpTheme.TEXT_DIM, true);
+            if (tab == TAB_LIMITS) {
+                String lim = "上限 " + num(item, "limit", 0);
+                g.drawString(
+                        font, lim, b[2] - 8 - font.width(lim), b[1] + 1, sel ? 0xFFFFFFFF : RpTheme.STATUS_ALIVE, true);
+            }
             // 职业缺装备设定 → 右侧小标记
             if (tab == TAB_PROFESSION && isProfessionLoadoutEmpty(item)) {
                 String warn = "缺装备";
@@ -2562,6 +2660,7 @@ public class RpAdminScreen extends Screen {
         return switch (tab) {
             case TAB_PROFESSION -> selProfId;
             case TAB_FACTION -> selFactionId;
+            case TAB_LIMITS -> selLimitId;
             default -> selSelId;
         };
     }
@@ -2696,7 +2795,7 @@ public class RpAdminScreen extends Screen {
         g.drawString(font, "职业(" + profs.size() + ")", listX1 + 4, listY1 - 4, RpTheme.TEXT_DIM);
         for (int i = 0; i < profs.size() && i < maxVisible; i++) {
             JsonObject p = profs.get(off + i);
-            int[] b = rowBounds.get(6 + i);
+            int[] b = rowBounds.get(TABS.length + i);
             boolean sel = str(p, "id").equals(selProfId);
             boolean hov = mouseX >= b[0] && mouseX <= b[2] && mouseY >= b[1] && mouseY <= b[3];
             if (sel) {
@@ -2723,7 +2822,7 @@ public class RpAdminScreen extends Screen {
         g.drawString(font, "阵营(" + facs.size() + ")", listX1 + 4, listY1 - 4, RpTheme.TEXT_DIM);
         for (int i = 0; i < facs.size(); i++) {
             JsonObject f = facs.get(i);
-            int[] b = rowBounds.get(6 + i);
+            int[] b = rowBounds.get(TABS.length + i);
             boolean sel = str(f, "id").equals(selFactionId);
             boolean hov = mouseX >= b[0] && mouseX <= b[2] && mouseY >= b[1] && mouseY <= b[3];
             if (sel) {

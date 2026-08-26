@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.17.0（部署人数限制：限制编辑器 + 选岗显示在职/上限 + 部署前统一检测）
+- 数据模型：新增 config/ccnr_rp/limits.json 规则列表（复用 ConfigCrud 管道），规则 = 类型 + 目标 + 人数上限：
+  GLOBAL（通用角色上限，职业未配置专属时兜底）/ FACTION（阵营上限）/ PROFESSION（职业上限）。
+- 部署检测（全局性，统一 deploy() 入口）：职业维度在职数 ≥ 上限，或阵营维度在职数 ≥ 上限 → 拒绝部署；
+  在职数 = 用户库 ALIVE 且职业/阵营匹配的用户（TEMP 征召不进库不占编制）；重新部署（在场换岗）目标维按「不含本人」计。
+- 系统强制操作跳过限制：管理员刷人 / 强制征召部署带新 DeployFlag.LIMIT_SKIP。
+- 管理面板：新增「限制」页（TAB_LIMITS），规则列表 + 表单（类型循环按钮 / 目标 id / 人数上限）+ 清空全部按钮。
+- K 面板选岗：中栏职位行显示在职/上限小标签（满员红色），右栏详情显示「在职 x/y 职业 · 阵营 a/b」，
+  空位不足部署按钮禁用并红字提示（服务端仍强校验）。
+- 服务端下发：CharacterListS2C 增加 limits 规则 + occupancy 在职统计（职业/阵营），客户端 ClientCharacterState 缓存供展示。
+- 测试：新增 DeployLimitsTest（规则解析/职业优先 GLOBAL 兜底/阵营专属/满员拒绝）；构建 compileJava / spotlessCheck /
+  test -PrunTests 全绿（83 tests）。
+- 文档：docs/09-spawn.md §4.0 部署人数限制（配置/检测/跳过/展示）。
+
 ## 2.16.0（职业复活点管理：每个职业可配置部署点，优先级 职业 > 阵营 > 世界复活点）
 - 数据模型：职业定义（factions.json professions[]）新增可选 `spawn` 字段（结构与阵营出生点一致：
   rule SPREAD/SINGLE + points[{x,y,z,dim}]），即职业专属部署点/复活点；未配置回退阵营部署点/世界复活点。
