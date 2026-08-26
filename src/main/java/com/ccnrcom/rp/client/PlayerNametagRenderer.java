@@ -28,14 +28,11 @@ public final class PlayerNametagRenderer {
 
     private PlayerNametagRenderer() {}
 
-    /** HUD 层渲染：部署（存活）视角下为每个其他玩家绘制头顶标签。 */
+    /** HUD 层渲染：为每个其他玩家绘制头顶标签（数据由服务端过滤，仅非观察者/已部署玩家）。 */
     public static void render(GuiGraphics gfx, int w, int h, float partialTick) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null || mc.getEntityRenderDispatcher().camera == null) {
             return;
-        }
-        if (!ClientCharacterState.isDeployed()) {
-            return; // 仅部署（存活）状态显示；旁观者模式不显示
         }
         Font font = mc.font;
         Camera cam = mc.gameRenderer.getMainCamera();
