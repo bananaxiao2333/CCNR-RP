@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.18.5（新增 /rp xp add 手动记分命令）
+- 新增命令 `/rp xp add <玩家> <数值> <标题>`（管理命令，OP≥2 或 ccnnrrp.admin.settle）：
+  向玩家待结算列表添加自定义记分项目（标题 + 数值，数值可为负），HUD 立即更新，
+  随下次结算（死亡退场或 /rp settle）计入累计 XP；同标题条目合并（数值相加、标题取后来者）。
+- 语言包：新增 ccnr_rp.xp.add.ok / add.invalid（zh/en 同步）；usage 键同步。
+- docs/06 §7.5 与 docs/10 命令表同步。
+- 构建：spotlessApply / build -PrunTests 全绿。
+
 ## 2.18.4（修复结算时机 + 结算动画放慢/死亡界面可见）
 - 修复：结算不再在「事件结束」与「游戏结束」时自动触发——结算仅发生在**死亡退场**
   （死亡/判死/退役/征召结束）与 **`/rp settle [player|all]`** 命令；待结算列表持续累积，

@@ -34,6 +34,19 @@ final class XpCommand {
                 .then(Commands.argument("player", StringArgumentType.word())
                         .suggests(RpSuggest.players())
                         .executes(ctx -> info(ctx.getSource(), StringArgumentType.getString(ctx, "player"), true)))
+                .then(Commands.literal("add")
+                        .requires(RpCommand.admin(Permissions.ADMIN_SETTLE))
+                        .then(Commands.argument("player", StringArgumentType.word())
+                                .suggests(RpSuggest.players())
+                                .then(Commands.argument(
+                                                "value", com.mojang.brigadier.arguments.IntegerArgumentType.integer())
+                                        .then(Commands.argument("title", StringArgumentType.greedyString())
+                                                .executes(ctx -> addScore(
+                                                        ctx.getSource(),
+                                                        StringArgumentType.getString(ctx, "player"),
+                                                        com.mojang.brigadier.arguments.IntegerArgumentType.getInteger(
+                                                                ctx, "value"),
+                                                        StringArgumentType.getString(ctx, "title")))))))
                 .build());
         rp.addChild(Commands.literal("level")
                 .executes(ctx -> RpCommand.usageHint(ctx.getSource(), "ccnr_rp.command.usage.xp"))
@@ -64,6 +77,26 @@ final class XpCommand {
                         String.valueOf(s.newXp()),
                         String.valueOf(s.newLevel())),
                 false);
+        return 1;
+    }
+
+    /** /rp xp add <玩家> <数值> <标题>：向玩家待结算列表添加自定义记分条目（数值可为负，标题可含空格）。 */
+    private static int addScore(CommandSourceStack source, String playerName, int value, String title) {
+        ServerPlayer target = source.getServer().getPlayerList().getPlayerByName(playerName);
+        if (target == null) {
+            source.sendSuccess(() -> Component.translatable("ccnr_rp.error.player_not_found", playerName), false);
+            return 0;
+        }
+        if (CCNRRPMod.experience == null || CCNRRPMod.users == null) {
+            return 0;
+        }
+        String err = CCNRRPMod.experience.addManualScore(target.getUUID().toString(), title, value);
+        if (!err.isEmpty()) {
+            source.sendSuccess(() -> Component.translatable(err, playerName), false);
+            return 0;
+        }
+        source.sendSuccess(
+                () -> Component.translatable("ccnr_rp.xp.add.ok", playerName, title, String.valueOf(value)), false);
         return 1;
     }
 
