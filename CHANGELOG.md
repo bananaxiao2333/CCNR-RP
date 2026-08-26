@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.17.3（管理面板补全增强：限制目标/刷新波职业与阵营/维度/设置职业/序列弹窗波与职业与阵营补全）
+- 限制页「目标」输入框补全：按当前类型（FACTION/PROFESSION）过滤对应阵营/职业，显示「名字(id)」，点击/回车填入原始 id；GLOBAL 无目标不触发。
+- 刷新波表单：维度（固定三主维度）、职业ID（逗号多值，追加/替换末尾词）、阵营ID（逗号多值）补全；
+  设置页「首次入服自动部署职业」补全职业 id。
+- 行为序列弹窗：WAVE 步骤「刷新波 ID」补全波 id；FORCE_PICK 步骤「职业ID(逗号)」「阵营ID」补全职业/阵营 id。
+- 通用补全引擎：SugSource 枚举 + resolveIdSugSource 按聚焦框推断数据源 + 统一渲染/点击/键盘（↑↓/Enter/Esc），
+  多值输入框用 applyIdSug 追加替换、单值框整体替换；补全下拉置顶渲染（widget 之后绘制）。
+- 构建：spotlessApply / clean build / test -PrunTests 全绿（83 tests）。
+
 ## 2.17.2（修复：管理面板输入补全框被其他控件遮挡，改为置顶渲染）
 - 根因：音乐补全 / CMDCam 场景补全的下拉框在 render() 中先于 super.render（widget 渲染：输入框/按钮）
   绘制，导致下拉框被输入框等 widget 盖住（补全内容显示不全/不可见）。
