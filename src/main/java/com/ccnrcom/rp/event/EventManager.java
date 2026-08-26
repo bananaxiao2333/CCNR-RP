@@ -274,7 +274,6 @@ public final class EventManager {
                         d.startSequence(),
                         d.notifyTitleKey(),
                         d.durationSeconds(),
-                        d.settleOnEnd(),
                         on ? EventState.SCHEDULED : EventState.SETTLED,
                         d.steps());
                 events.set(i, nd);
@@ -326,16 +325,10 @@ public final class EventManager {
         List<ServerPlayer> targets = onlinePlayers();
         targets.forEach(p -> RpChannels.sendTo(p, new RpPackets.ErrorS2C("ccnr_rp.event.ended", def.id())));
         broadcastState();
-        if (def.settleOnEnd() && CCNRRPMod.experience != null) {
-            CCNRRPMod.experience.settleAll(null);
-        }
     }
 
-    /** 游戏结束：全员结算（经验系统 v3：列表求和，可为负）+ game_end 动画钩子。 */
+    /** 游戏结束：game_end 动画钩子（经验不自动结算；结算仅死亡退场与 /rp settle 触发）。 */
     public void gameOver() {
-        if (CCNRRPMod.experience != null) {
-            CCNRRPMod.experience.settleAll(null);
-        }
         AnimationHooks.gameEnd(onlinePlayers());
     }
 

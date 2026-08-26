@@ -10,8 +10,7 @@
        {"type": "WAIT", "seconds": 5},
        {"type": "COMMAND", "command": "say [CCNR-RP] 撤离警报生效：前往疏散区，危险阶段开始"}
      ],
-     "durationSeconds": 0,
-     "settleOnEnd": true},
+     "durationSeconds": 0},
     {"id": "qdf_support", "enabled": true,
      "triggers": [{"type": "ON_PHASE_START", "phase": "danger"}],
      "sequence": [
@@ -21,7 +20,6 @@
        {"type": "FORCE_PICK", "faction": "qdf", "count": 5, "professions": "s4_guard,s3_special", "spawn": true},
        {"type": "WAVE", "wave": "qdf_reinforce"}
      ],
-     "durationSeconds": 0,
-     "settleOnEnd": true}
+     "durationSeconds": 0}
   ]
 }

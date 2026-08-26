@@ -112,7 +112,7 @@ CCNR 服务器 RolePlay 模组（Forge 1.20.1）。世界观为"量子科学"设
 | --- | --- |
 | 1 | LevelCurve（xpForLevel/level(xp) 纯类）|
 | 2 | 登记源：值班时间（tick 累加）、任务行为（markTask）、疏散方式 |
-| 3 | 结算器：/rp settle + 事件/游戏结束自动结算 + 幂等 |
+| 3 | 结算器：/rp settle + 死亡退场结算 + 幂等 |
 | 4 | 账本 xp_ledger.json + /rp xp/level/evac set |
 | 5 | 升级广播 + level_up 动画钩子 |
 | 6 | 曲线/加权/幂等单测 |

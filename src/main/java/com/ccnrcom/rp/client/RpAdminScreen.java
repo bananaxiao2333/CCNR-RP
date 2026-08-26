@@ -168,7 +168,6 @@ public class RpAdminScreen extends Screen {
     private final List<Object[]> fieldLabels = new ArrayList<>();
 
     private boolean evState = true;
-    private boolean endSettle = true;
     private int modeIdx = 0;
     private int deployIdx = 0;
     // 影响确认弹窗
@@ -400,19 +399,11 @@ public class RpAdminScreen extends Screen {
         idBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.id", id, edit);
         y += 30;
         boolean enabled = ev == null || !ev.has("enabled") || ev.get("enabled").getAsBoolean();
-        addRenderableWidget(
-                RpButton.secondary(x, y, (w - 4) / 2, 18, Component.literal("启用: " + (enabled ? "是" : "否")), b -> {
-                    evState = !evState;
-                    rebuild();
-                }));
+        addRenderableWidget(RpButton.secondary(x, y, w, 18, Component.literal("启用: " + (enabled ? "是" : "否")), b -> {
+            evState = !evState;
+            rebuild();
+        }));
         evState = enabled;
-        endSettle =
-                ev == null || !ev.has("settleOnEnd") || ev.get("settleOnEnd").getAsBoolean();
-        addRenderableWidget(RpButton.secondary(
-                x + (w - 4) / 2 + 4, y, (w - 4) / 2, 18, Component.literal("结束后结算: " + (endSettle ? "是" : "否")), b -> {
-                    endSettle = !endSettle;
-                    rebuild();
-                }));
         y += 30;
         fld3Box = mkBox(x, y, w, "时长(秒,0=事件持续时间)", ev == null ? "0" : num(ev, "durationSeconds", 0), false);
         y += 30;
@@ -629,7 +620,6 @@ public class RpAdminScreen extends Screen {
                     modeIdx = 0;
                     deployIdx = 0;
                     evState = true;
-                    endSettle = true;
                     rebuild();
                 }));
     }
@@ -681,9 +671,6 @@ public class RpAdminScreen extends Screen {
                             src.has("durationSeconds")
                                     ? src.get("durationSeconds").getAsInt()
                                     : parseInt(fld3Box));
-                    p.addProperty(
-                            "settleOnEnd",
-                            src.has("settleOnEnd") ? src.get("settleOnEnd").getAsBoolean() : endSettle);
                     if (src.has("triggers")) {
                         p.add("triggers", src.getAsJsonArray("triggers"));
                     }
@@ -696,7 +683,6 @@ public class RpAdminScreen extends Screen {
                 } else {
                     p.addProperty("enabled", evState);
                     p.addProperty("durationSeconds", parseInt(fld3Box));
-                    p.addProperty("settleOnEnd", endSettle);
                 }
                 addSequenceField(p, src);
                 yield p;
@@ -2338,7 +2324,6 @@ public class RpAdminScreen extends Screen {
         selSelId = str(item, "id");
         if (tab == TAB_EVENT) {
             evState = !item.has("enabled") || item.get("enabled").getAsBoolean();
-            endSettle = !item.has("settleOnEnd") || item.get("settleOnEnd").getAsBoolean();
         } else if (tab == TAB_WAVE) {
             String mode = str(item, "mode");
             // 兼容旧版持久化的 "RECRUIT"：映射到 RESURRECTION 索引，避免重存时静默变 SELF_DEPLOY

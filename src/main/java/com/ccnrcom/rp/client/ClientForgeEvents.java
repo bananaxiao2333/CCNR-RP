@@ -154,15 +154,22 @@ public final class ClientForgeEvents {
         return (int) Minecraft.getInstance().mouseHandler.ypos();
     }
 
-    /** 状态栏与事件横幅仅在「背包」（InventoryScreen）打开时绘制最上层；其余界面与正常游戏内不显示。 */
+    /**
+     * 状态栏与事件横幅仅在「背包」（InventoryScreen）打开时绘制最上层；其余界面与正常游戏内不显示。
+     * 经验结算 HUD 在「死亡界面」（DeathScreen）上绘制最上层——死亡结算动画发生在死亡瞬间，
+     * 此时 HUD 覆盖层被死亡界面遮挡不渲染，若不在界面之上绘制会显得「动画瞬间完成」。
+     */
     @SubscribeEvent
     public static void onScreenRender(net.minecraftforge.client.event.ScreenEvent.Render.Post event) {
-        if (!(event.getScreen() instanceof net.minecraft.client.gui.screens.inventory.InventoryScreen)) {
-            return;
+        if (event.getScreen() instanceof net.minecraft.client.gui.screens.inventory.InventoryScreen) {
+            StatusHud.render(event.getGuiGraphics(), event.getScreen().width, event.getScreen().height);
+            EventBanner.render(event.getGuiGraphics(), event.getScreen().width, event.getScreen().height);
+            // 背包右上角：已同意玩家列表（接受后不可取消）
+            RecruitOverlayHud.renderAcceptedList(
+                    event.getGuiGraphics(), event.getScreen().width, event.getScreen().height);
+        } else if (event.getScreen() instanceof net.minecraft.client.gui.screens.DeathScreen) {
+            // 死亡结算动画：逐项吸入放慢播放，结束后隐藏
+            XpHudOverlay.render(event.getGuiGraphics(), event.getScreen().width, event.getScreen().height);
         }
-        StatusHud.render(event.getGuiGraphics(), event.getScreen().width, event.getScreen().height);
-        EventBanner.render(event.getGuiGraphics(), event.getScreen().width, event.getScreen().height);
-        // 背包右上角：已同意玩家列表（接受后不可取消）
-        RecruitOverlayHud.renderAcceptedList(event.getGuiGraphics(), event.getScreen().width, event.getScreen().height);
     }
 }

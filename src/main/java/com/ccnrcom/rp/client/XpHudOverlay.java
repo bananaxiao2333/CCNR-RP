@@ -13,8 +13,9 @@ import net.minecraft.client.gui.GuiGraphics;
 /**
  * 经验 HUD（经验系统 v3）：右下角内收（不贴角）、水平居中、文字中心对齐。
  * 底部一行 = 白色经验数字（当前总经验）；其上 = 经验变化项目列（正=绿、负=红、带符号）。
- * 结算动画（纯视觉；服务端结算瞬时完成）：最底一项移入数字并消失 → 数字更新 →
- * 列表下移补齐 → 循环至全部吸入 → 数字停在新总值。ALIVE 时常驻显示，死亡结算动画结束后隐藏。
+ * 结算动画（纯视觉；服务端结算瞬时完成）：最底一项缓慢移入数字并消失 → 数字更新 →
+ * 列表下移补齐 → 停顿 → 循环至全部吸入 → 数字停在新总值。ALIVE 时常驻显示，
+ * 死亡结算动画期间（含死亡界面）仍可见，结束后隐藏。
  */
 public final class XpHudOverlay {
 
@@ -25,13 +26,17 @@ public final class XpHudOverlay {
 
     private static long total = 0;
 
-    /** 动画态：剩余待吸入项目 / 动画中数字 / 正在飞入的项目。 */
+    /** 动画态：剩余待吸入项目 / 动画中数字 / 正在飞入的项目 / 下一项允许起飞时刻。 */
     private static List<Item> animRemaining = List.of();
 
     private static long animTotal = 0;
     private static Item flying = null;
     private static long flyStart = 0;
-    private static final long FLY_MS = 320;
+    private static long nextFlyAt = 0;
+    /** 单项飞入时长（ms）：放慢，让结算过程看得清。 */
+    private static final long FLY_MS = 700;
+    /** 项目间停顿（ms）。 */
+    private static final long GAP_MS = 150;
 
     private static final int ROW_H = 15;
     private static final int NUM_H = 12;
@@ -76,6 +81,7 @@ public final class XpHudOverlay {
             return;
         }
         items = List.of(); // 动画期间空闲列表由动画状态接管
+        nextFlyAt = System.currentTimeMillis();
         startNextFly();
     }
 
@@ -105,17 +111,28 @@ public final class XpHudOverlay {
             return; // 仅 ALIVE 常驻；结算动画（死亡瞬间）期间仍可见
         }
         if (anim) {
-            float t = (float) (System.currentTimeMillis() - flyStart) / (float) FLY_MS;
-            if (t >= 1f && flying != null) {
-                animTotal = Math.max(0, animTotal + flying.value()); // 数字更新
-                startNextFly();
-                t = 0f;
+            long now = System.currentTimeMillis();
+            if (flying != null) {
+                float t = (float) (now - flyStart) / (float) FLY_MS;
+                if (t >= 1f) {
+                    animTotal = Math.max(0, animTotal + flying.value()); // 数字更新
+                    flying = null;
+                    nextFlyAt = now + GAP_MS; // 项目间停顿
+                    t = 1f;
+                }
+                drawAnim(g, w, h, Math.min(1f, t));
+                return;
             }
-            if (!animating()) {
+            if (animRemaining.isEmpty()) {
                 animTotal = total; // 全部吸入：数字停在终值
                 return; // 非存活：动画结束即隐藏
             }
-            drawAnim(g, w, h, t);
+            if (now >= nextFlyAt) {
+                startNextFly();
+                drawAnim(g, w, h, 0f);
+                return;
+            }
+            drawAnim(g, w, h, 1f); // 停顿：剩余项目静止在终位
             return;
         }
         drawIdle(g, w, h);
@@ -141,18 +158,20 @@ public final class XpHudOverlay {
         int cx = w - CX_INSET;
         int numTop = h - BOTTOM_INSET - NUM_H;
         int n = animRemaining.size();
+        // 缓动：先快后慢收尾（飞入/下移共用），停顿阶段 t=1 恒为静止
+        float e = t >= 1f ? 1f : t * (2f - t);
         // 剩余项目整体下移一格补齐空位
         for (int i = 0; i < n; i++) {
             if (n + 1 - i > MAX_ROWS) {
                 continue;
             }
-            int y = numTop - ROW_H * (n + 1 - i) + Math.round(t * ROW_H);
+            int y = numTop - ROW_H * (n + 1 - i) + Math.round(e * ROW_H);
             drawItem(g, animRemaining.get(i), cx, y, 255);
         }
         // 飞入项：从底部槽位移向数字行，渐隐消失
         if (flying != null) {
-            int y = numTop - ROW_H + Math.round(t * ROW_H);
-            int alpha = Math.max(0, Math.min(255, Math.round(255 * (1f - t))));
+            int y = numTop - ROW_H + Math.round(e * ROW_H);
+            int alpha = Math.max(0, Math.min(255, Math.round(255 * (1f - e))));
             drawItem(g, flying, cx, y, alpha);
         }
         g.drawCenteredString(

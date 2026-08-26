@@ -61,7 +61,6 @@ public final class EventModels {
             String startSequence,
             String notifyTitleKey,
             long durationSeconds,
-            boolean settleOnEnd,
             EventState state,
             List<JsonObject> steps) {
 
@@ -75,7 +74,6 @@ public final class EventModels {
                 String startSequence,
                 String notifyTitleKey,
                 long durationSeconds,
-                boolean settleOnEnd,
                 EventState state) {
             this(
                     id,
@@ -87,7 +85,6 @@ public final class EventModels {
                     startSequence,
                     notifyTitleKey,
                     durationSeconds,
-                    settleOnEnd,
                     state,
                     List.of());
         }
@@ -103,7 +100,6 @@ public final class EventModels {
                     startSequence,
                     notifyTitleKey,
                     durationSeconds,
-                    settleOnEnd,
                     s,
                     steps);
         }
@@ -275,7 +271,6 @@ public final class EventModels {
                 str(o, "startSequence", ""),
                 str(o, "notifyTitleKey", ""),
                 num(o, "durationSeconds", 0),
-                !o.has("settleOnEnd") || o.get("settleOnEnd").getAsBoolean(),
                 EventState.SCHEDULED,
                 parseSteps(o)));
     }
