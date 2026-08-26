@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.17.9（头顶标签：改为服务端过滤数据，仅下发非观察者（已部署）玩家；客户端直接渲染）
+- 修复 2.17.8 在客户端用 isDeployed() 门控导致旁观者视角完全看不到其他玩家标签。
+- 改为服务端过滤：CharacterService.playerTagsJson() 只下发 ALIVE（非观察者/已部署）玩家的
+  {name, professionId, factionId, level}，观察者（未部署）玩家不下发数据；
+  客户端 PlayerNametagRenderer 移除 isDeployed() 限制，收到什么渲染什么——已部署玩家标签始终可见。
+- 构建：spotlessApply / build / test -PrunTests 全绿；jar 已部署 .minecraft/mods/ccnr_rp-2.17.9.jar。
+
 ## 2.17.8（头顶标签：改为部署/存活视角显示，旁观者模式不显示；标签上移不挡头）
 - 显示条件反转：仅部署（ALIVE/存活在玩）状态显示其他玩家头顶标签，旁观者/观察者模式不显示（原为旁观者视角显示）。
 - 标签锚点上移（头顶上方 0.45 -> 0.9 格），三行标签不再遮挡玩家头部。

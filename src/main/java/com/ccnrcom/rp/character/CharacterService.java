@@ -988,13 +988,17 @@ public final class CharacterService {
         sendPlayerTags(player);
     }
 
-    /** 全玩家档案摘要（头顶标签用）：{uuid: {name, professionId, factionId, level}}。 */
+    /** 全玩家档案摘要（头顶标签用）：{uuid: {name, professionId, factionId, level}}。只下发非观察者（已部署）玩家。 */
     private JsonObject playerTagsJson() {
         JsonObject root = new JsonObject();
         if (CCNRRPMod.users == null) {
             return root;
         }
         for (String uid : CCNRRPMod.users.uuids()) {
+            // 观察者（未部署）玩家不下发头顶标签：客户端只显示非观察者玩家的阵营/职业/等级
+            if (CCNRRPMod.users.status(uid) != com.ccnrcom.rp.status.CharacterStatus.ALIVE) {
+                continue;
+            }
             JsonObject o = new JsonObject();
             o.addProperty("name", playerName(uid));
             o.addProperty("professionId", CCNRRPMod.users.professionId(uid));
