@@ -55,10 +55,15 @@ public final class RpRulesTab {
     private String draftValue = "";
     private String draftTitle = "";
     private EditBox idBox;
+    private EditBox eventBox;
     private EditBox condBox;
     private EditBox valueBox;
     private EditBox titleBox;
-    private boolean eventMenuOpen = false;
+    // 事件补全（参考限制页目标补全：文字输入 + 下拉候选）
+    private List<String> evSugItems = new ArrayList<>();
+    private int evSugIdx = -1;
+    private String lastEvQuery = null;
+    private final List<int[]> evSugBounds = new ArrayList<>();
 
     private int paramScroll = 0;
     private final List<int[]> paramBounds = new ArrayList<>();
@@ -114,7 +119,9 @@ public final class RpRulesTab {
         condBox = addBox(font, ex1 + 100, fy, ex2 - ex1 - 100);
         valueBox = addBox(font, ex1 + 100, fy + 24, ex2 - ex1 - 100);
         titleBox = addBox(font, ex1 + 100, fy + 48, ex2 - ex1 - 100);
-        idBox = addBox(font, ex1 + 100, ey1 + 22, Math.min(180, ex2 - ex1 - 100));
+        idBox = addBox(font, ex1 + 100, ey1 + 2, Math.min(180, ex2 - ex1 - 100));
+        eventBox = addBox(font, ex1 + 100, ey1 + 24, Math.min(180, ex2 - ex1 - 100));
+        eventBox.setMaxLength(64);
         syncBoxes();
     }
 
@@ -142,6 +149,9 @@ public final class RpRulesTab {
         valueBox.setValue(draftValue);
         titleBox.setValue(draftTitle);
         idBox.setValue(draftId);
+        if (eventBox != null) {
+            eventBox.setValue(eventId);
+        }
     }
 
     public void render(GuiGraphics g, int mx, int my) {
@@ -198,27 +208,6 @@ public final class RpRulesTab {
                 ex1,
                 ey1 + 26,
                 RpTheme.TEXT_SECONDARY);
-        int evX = ex1 + 100;
-        int evY = ey1 + 22;
-        int evW = Math.min(180, ex2 - ex1 - 100);
-        RpRoundRect.outlined(g, evX, evY, evX + evW, evY + 18, 3f, RpTheme.PANEL_BORDER_BRIGHT, RpTheme.PANEL_BG);
-        g.drawString(font, eventId, evX + 4, evY + 5, RpTheme.TEXT_PRIMARY);
-        g.drawString(font, "▼", evX + evW - 12, evY + 5, RpTheme.TEXT_DIM);
-        if (eventMenuOpen) {
-            List<EventDef> evs = ExperienceEventRegistry.EVENTS;
-            for (int i = 0; i < evs.size(); i++) {
-                int oy = evY + 20 + i * 16;
-                boolean ov = mx >= evX && mx <= evX + evW && my >= oy && my <= oy + 15;
-                g.fill(evX, oy, evX + evW, oy + 15, ov ? RpTheme.PANEL_BG_ALT : RpTheme.PANEL_BG);
-                g.drawString(
-                        font,
-                        evs.get(i).id() + (evs.get(i).id().equals(eventId) ? " ✓" : ""),
-                        evX + 4,
-                        oy + 3,
-                        evs.get(i).id().equals(eventId) ? RpTheme.CYAN : RpTheme.TEXT_PRIMARY);
-            }
-            btnBounds.add(new int[] {evX, evY + 20, evX + evW, evY + 20 + evs.size() * 16, -1});
-        }
         g.drawString(
                 font,
                 Component.translatable("ccnr_rp.xp.rules.condition").getString(),
@@ -241,18 +230,20 @@ public final class RpRulesTab {
         // 参数面板（限定高度可滚动）
         int paY = ey1 + 176;
         int paH = Math.min(110, py2 - 70 - paY);
+        String actEv = activeEventId();
         RpRoundRect.outlined(g, ex1, paY, rightX, paY + paH, 4f, RpTheme.PANEL_BORDER, RpTheme.PANEL_BG_EVEN);
         g.drawString(
                 font,
-                Component.translatable("ccnr_rp.xp.rules.params").getString() + " (" + eventId + ")",
+                Component.translatable("ccnr_rp.xp.rules.params").getString() + " (" + actEv + ")",
                 ex1 + 6,
                 paY + 4,
                 RpTheme.TEXT_DIM);
         paramBounds.clear();
-        EventDef def = ExperienceEventRegistry.byId(eventId).orElse(null);
+        EventDef def = ExperienceEventRegistry.byId(actEv).orElse(null);
         if (def != null) {
             int maxP = Math.max(1, (paH - 18) / 16);
             int off2 = Math.min(paramScroll, Math.max(0, def.params().size() - maxP));
+            int hintW = font.width("⇧ " + tr("ccnr_rp.xp.rules.insert"));
             for (int i = 0; i < def.params().size() && i < maxP; i++) {
                 Param p = def.params().get(off2 + i);
                 int py = paY + 20 + i * 16;
@@ -261,9 +252,12 @@ public final class RpRulesTab {
                     g.fill(ex1 + 2, py, rightX - 2, py + 15, RpTheme.PANEL_BG_ALT);
                 }
                 String type = p.type() == ExperienceEventRegistry.ParamType.LONG ? "LONG" : "STRING";
-                g.drawString(font, p.name(), ex1 + 8, py + 3, hov ? 0xFFFFFFFF : RpTheme.TEXT_PRIMARY);
-                g.drawString(font, "(" + type + ")", ex1 + 8 + font.width(p.name()) + 8, py + 3, RpTheme.TEXT_DIM);
-                g.drawString(font, "⇧ " + tr("ccnr_rp.xp.rules.insert"), rightX - 44, py + 3, RpTheme.CYAN);
+                // 名字按可用宽度裁剪，避免与右侧插入提示重叠
+                int nameMax = rightX - 44 - (ex1 + 8) - 8 - font.width("(" + type + ")");
+                String name = clip(font, p.name(), Math.max(30, nameMax));
+                g.drawString(font, name, ex1 + 8, py + 3, hov ? 0xFFFFFFFF : RpTheme.TEXT_PRIMARY);
+                g.drawString(font, "(" + type + ")", ex1 + 8 + font.width(name) + 8, py + 3, RpTheme.TEXT_DIM);
+                g.drawString(font, "⇧ " + tr("ccnr_rp.xp.rules.insert"), rightX - hintW, py + 3, RpTheme.CYAN);
                 paramBounds.add(new int[] {ex1, py, rightX, py + 15});
             }
         }
@@ -274,6 +268,47 @@ public final class RpRulesTab {
 
         if (!notice.isBlank() && System.currentTimeMillis() < noticeUntil) {
             g.drawCenteredString(font, notice, (px1 + px2) / 2, py2 - 18, RpTheme.RED_LINE);
+        }
+        renderEventSuggestions(g, mx, my);
+    }
+
+    /** 事件补全下拉（参考限制页目标补全）：事件输入框聚焦时按输入过滤注册表事件。 */
+    private void renderEventSuggestions(GuiGraphics g, int mx, int my) {
+        evSugBounds.clear();
+        if (eventBox == null || !eventBox.isFocused()) {
+            evSugItems = new ArrayList<>();
+            evSugIdx = -1;
+            lastEvQuery = null;
+            return;
+        }
+        String q = eventBox.getValue() == null ? "" : eventBox.getValue().toLowerCase(java.util.Locale.ROOT);
+        if (!q.equals(lastEvQuery)) {
+            lastEvQuery = q;
+            evSugIdx = -1;
+        }
+        evSugItems = new ArrayList<>();
+        for (EventDef d : ExperienceEventRegistry.EVENTS) {
+            if (q.isBlank() || d.id().toLowerCase(java.util.Locale.ROOT).contains(q)) {
+                evSugItems.add(d.id());
+            }
+        }
+        if (evSugIdx >= evSugItems.size()) {
+            evSugIdx = evSugItems.size() - 1;
+        }
+        if (evSugItems.isEmpty()) {
+            return;
+        }
+        var font = Minecraft.getInstance().font;
+        int sx = eventBox.getX();
+        int sy = eventBox.getY() + 20;
+        int sw = eventBox.getWidth();
+        int n = Math.min(6, evSugItems.size());
+        g.fill(sx - 1, sy - 1, sx + sw + 1, sy + n * 12 + 1, 0xE0323232);
+        g.fill(sx - 1, sy - 1, sx + sw + 1, sy, 0xFF5F5F5F);
+        for (int i = 0; i < n; i++) {
+            int yy = sy + i * 12;
+            g.drawString(font, evSugItems.get(i), sx + 4, yy + 2, RpTheme.CYAN, false);
+            evSugBounds.add(new int[] {sx, yy, sx + sw, yy + 12});
         }
     }
 
@@ -347,7 +382,7 @@ public final class RpRulesTab {
         }
         try {
             Expr e = ExprParser.parse(src);
-            Map<String, Kind> kinds = ExperienceEventRegistry.paramKinds(eventId);
+            Map<String, Kind> kinds = ExperienceEventRegistry.paramKinds(activeEventId());
             if (index == 0) {
                 ExprParser.expect(e, Kind.BOOL, kinds);
             } else if (index == 1) {
@@ -359,29 +394,68 @@ public final class RpRulesTab {
         }
     }
 
+    /** 键盘：事件补全候选上/下/回车/Esc（参考限制页目标补全）。 */
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (!evSugItems.isEmpty() && eventBox != null && eventBox.isFocused()) {
+            if (keyCode == 264) { // Down
+                evSugIdx = (evSugIdx + 1) % evSugItems.size();
+                return true;
+            }
+            if (keyCode == 265) { // Up
+                evSugIdx = (evSugIdx - 1 + evSugItems.size()) % evSugItems.size();
+                return true;
+            }
+            if (keyCode == 257 || keyCode == 335) { // Enter / Numpad Enter
+                if (evSugIdx >= 0 && evSugIdx < evSugItems.size()) {
+                    selectEvent(evSugItems.get(evSugIdx));
+                }
+                evSugIdx = -1;
+                return true;
+            }
+            if (keyCode == 256) { // Esc
+                evSugIdx = -1;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 选择事件：更新生效事件、输入框与参数面板滚动。 */
+    private void selectEvent(String id) {
+        eventId = id;
+        if (eventBox != null) {
+            eventBox.setValue(id);
+        }
+        paramScroll = 0;
+    }
+
+    /** 当前生效事件：输入框内容为合法事件时跟随输入，否则用最近选中的事件。 */
+    private String activeEventId() {
+        if (eventBox != null) {
+            String v = eventBox.getValue();
+            if (v != null && ExperienceEventRegistry.exists(v)) {
+                return v;
+            }
+        }
+        return eventId;
+    }
+
     public boolean mouseClicked(int mx, int my, int button) {
         if (button != 0) {
             return false;
         }
-        int evX = ex1 + 100;
-        int evY = ey1 + 22;
-        int evW = Math.min(180, ex2 - ex1 - 100);
-        if (eventMenuOpen) {
-            List<EventDef> evs = ExperienceEventRegistry.EVENTS;
-            for (int i = 0; i < evs.size(); i++) {
-                int oy = evY + 20 + i * 16;
-                if (mx >= evX && mx <= evX + evW && my >= oy && my <= oy + 15) {
-                    eventId = evs.get(i).id();
-                    eventMenuOpen = false;
+        // 事件补全候选点击（优先于其他交互）
+        if (!evSugBounds.isEmpty()) {
+            for (int i = 0; i < evSugBounds.size(); i++) {
+                int[] b = evSugBounds.get(i);
+                if (mx >= b[0] && mx <= b[2] && my >= b[1] && my <= b[3]) {
+                    if (i < evSugItems.size()) {
+                        selectEvent(evSugItems.get(i));
+                    }
+                    evSugIdx = -1;
                     return true;
                 }
             }
-            eventMenuOpen = false;
-            return true;
-        }
-        if (mx >= evX && mx <= evX + evW && my >= evY && my <= evY + 18) {
-            eventMenuOpen = true;
-            return true;
         }
         // 规则列表行
         int maxVisible = Math.max(1, (listY2 - listY1) / ROW_H);
@@ -486,7 +560,7 @@ public final class RpRulesTab {
         String cond = condBox == null ? "" : condBox.getValue();
         String value = valueBox == null ? "" : valueBox.getValue();
         String title = titleBox == null ? "" : titleBox.getValue();
-        Map<String, Object> sample = ExperienceEventRegistry.defaultSample(eventId);
+        Map<String, Object> sample = ExperienceEventRegistry.defaultSample(activeEventId());
         testLines.clear();
         if (cond.isBlank()) {
             testLines.add(tr("ccnr_rp.xp.rules.v.condAlways"));
@@ -528,7 +602,7 @@ public final class RpRulesTab {
         JsonObject rule = new JsonObject();
         rule.addProperty("id", idBox == null ? draftId : idBox.getValue());
         rule.addProperty("enabled", draftEnabled);
-        rule.addProperty("eventId", eventId);
+        rule.addProperty("eventId", activeEventId());
         rule.addProperty("conditionExpr", condBox == null ? draftCond : condBox.getValue());
         rule.addProperty("valueExpr", valueBox == null ? draftValue : valueBox.getValue());
         rule.addProperty("titleExpr", titleBox == null ? draftTitle : titleBox.getValue());
@@ -617,5 +691,24 @@ public final class RpRulesTab {
     /** 本地化文本（带参数）。 */
     private static String tr(String key, String arg) {
         return Component.translatable(key, arg).getString();
+    }
+
+    /** 按像素宽裁剪文本（超宽加省略号），避免行内重叠。 */
+    private static String clip(net.minecraft.client.gui.Font font, String s, int maxW) {
+        if (s == null) {
+            return "";
+        }
+        if (font.width(s) <= maxW) {
+            return s;
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < s.length(); i++) {
+            String t = sb.toString() + s.charAt(i);
+            if (font.width(t) > maxW - 8) {
+                break;
+            }
+            sb.append(s.charAt(i));
+        }
+        return sb + "...";
     }
 }

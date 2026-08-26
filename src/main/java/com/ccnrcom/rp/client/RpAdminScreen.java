@@ -2464,6 +2464,9 @@ public class RpAdminScreen extends Screen {
             closeSequenceModal();
             return true;
         }
+        if (tab == TAB_XP && rulesTab().keyPressed(keyCode, scanCode, modifiers)) {
+            return true; // 经验规则页签：事件补全候选上/下/回车/Esc
+        }
         if (!camSugItems.isEmpty() && camSugBox != null && camSugBox.isFocused()) {
             if (keyCode == 264) { // Down
                 camSugIdx = (camSugIdx + 1) % camSugItems.size();
