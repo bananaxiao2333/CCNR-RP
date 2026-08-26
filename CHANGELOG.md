@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.17.7（头顶标签：透视缩放远小近大 + 渲染距离跟随游戏设置）
+- 标签尺寸按透视距离缩放（6 格处 1.0，越远越小，同原版名字牌），整体缩放（徽章/文字/底衬）用 PoseStack scale。
+- 可见距离改为动态读取游戏渲染距离（GameRenderer.getRenderDistance）：人物在渲染距离内才显示标签，超出不渲染，与实体渲染一致。
+- 构建：spotlessApply / build / test -PrunTests 全绿；jar 已部署 .minecraft/mods/ccnr_rp-2.17.7.jar。
+
 ## 2.17.6（修复：2.17.5 误把 partialTick 当 FOV 传入 getProjectionMatrix，头顶标签完全不可见）
 - 根因：GameRenderer.getProjectionMatrix(double) 的参数是 FOV 度数（内部 x0.017453292 转弧度后 setPerspective），
   2.17.5 误传 partialTick（0~1 小数），FOV 变成约 0.5 度，投影尺度异常放大，标签全部被视口剔除 → 旁观者视角完全看不到头顶标签。
