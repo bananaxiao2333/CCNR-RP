@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.18.17（精简默认配置为样板）
+
+- **默认配置精简为样板**：factions.json 由 8 阵营/28 职业 → **3 阵营/4 职业**（行政总部/麦迪逊/QDF，图标改用内置向量 shield/claw/cross，不再引用已删除的内嵌图片）+ 1 组 + 2 关系；
+  phases.json → 2 阶段（prep/danger）；events.json → 1 事件（evac_alert）；animations.json → 3 序列（spawn_intro/player_death/event_start_alarm）；
+  spawn_waves.json 保持 2 波。默认配置总大小 ~16KB → ~4.9KB。
+- 修复原默认配置悬空引用：evac_alert 的 hooks.spawnWave 原指向不存在的 wave_qdf_reinforce → 改为 general_reinforce。
+- 阵营图标方案同步：默认配置 img: 引用全部移除（上一版已删内嵌图片），改用向量图形；docs 同步样例数量说明。
+- 构建：spotlessApply / build -PrunTests 全绿。
+
 ## 2.18.16（移除内嵌多媒体资源，jar 瘦身）
 
 - **删除打包进 jar 的多媒体资源**：7 张阵营图标（textures/faction/*.png）、界面背景 logo（textures/gui/bg_logo.png，代码无引用）、

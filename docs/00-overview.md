@@ -52,7 +52,7 @@ CCNR 服务器 RolePlay 模组（Forge 1.20.1）。世界观为"量子科学"设
 | `world/ccnr_rp/skins/<charId>.png` | 角色皮肤 | 否 |
 | `config/ccnr_rp/skins-cache/（客户端）` | 皮肤缓存 | 否 |
 
-- 启动时若 `config/ccnr_rp/*.json` 缺失，从 `assets/ccnr_rp/defaults/*` 写入默认版本（含《职位划分》示例阵营/职业）。
+- 启动时若 `config/ccnr_rp/*.json` 缺失，从 `assets/ccnr_rp/defaults/*` 写入精简样板默认版本（3 个样例阵营 + 4 个样例职业，供开箱演示与改造）。
 - 所有运行时 JSON 采用"临时文件 + rename"原子写；解析失败写日志错误并跳过该文件，服务不崩溃。
 
 ## 5. 大任务 → 小任务分解（WBS 总表）
