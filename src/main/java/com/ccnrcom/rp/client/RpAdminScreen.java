@@ -107,6 +107,24 @@ public class RpAdminScreen extends Screen {
     private int spCancelX1, spCancelY1, spCancelX2, spCancelY2;
     private final List<int[]> spRemoveBounds = new ArrayList<>();
 
+    // 无线电编辑器（阵营/职业共用弹窗）：speaker + 多句 text/wait 列表（入场动画播完 action bar 打字机播放）
+    private boolean radioModalOpen = false;
+    private String radioModalKind = "faction"; // faction|profession
+    private String radioModalTarget = "";
+    private String radioSpeaker = "指挥官";
+    private final List<String> radioLines = new ArrayList<>(); // 每句文本
+    private final List<String> radioWaits = new ArrayList<>(); // 每句停留秒数
+    private boolean radioDisabled = false; // 职业：禁用无线电开关
+    private int radioScroll = 0;
+    private int rdX1, rdY1, rdX2, rdY2;
+    private int rdAddX1, rdAddY1, rdAddX2, rdAddY2;
+    private int rdSaveX1, rdSaveY1, rdSaveX2, rdSaveY2;
+    private int rdCancelX1, rdCancelY1, rdCancelX2, rdCancelY2;
+    private int rdToggleX1, rdToggleY1, rdToggleX2, rdToggleY2;
+    private final List<int[]> rdDelBounds = new ArrayList<>();
+    private EditBox radioSpeakerBox;
+    private final List<Object[]> radioTextEdits = new ArrayList<>();
+
     // 行为序列编辑器（流程编辑器，P1.4）：弹窗管理 WAIT/WAVE/COMMAND/FORCE_PICK 步骤（仿出生点弹窗）
     private boolean seqModalOpen = false;
     private String seqModalTitle = "";
@@ -908,6 +926,10 @@ public class RpAdminScreen extends Screen {
         camSceneBox = mkBox(
                 x, y, w, "ccnr_rp.gui.admin.field.cam_scene", prof == null ? "" : str(prof, "cmdcamScene"), false);
         y += 30;
+        // 无线电管理（职业级；优先级 职业 > 阵营，radioDisabled 可禁用该职业无线电）
+        addRenderableWidget(RpButton.secondary(
+                x, y, w, 18, Component.literal("无线电管理…（职业优先于阵营 / 可禁用）"), b -> openRadioModal("profession")));
+        y += 30;
         int bw3 = Math.max(60, w / 4);
         addRenderableWidget(RpButton.primary(
                 x, y, bw3, 20, Component.translatable("ccnr_rp.gui.admin.crud.save"), b -> saveProfession(edit)));
@@ -1026,6 +1048,10 @@ public class RpAdminScreen extends Screen {
         // CMDCam 出场场景（可选）：部署入场电影播完黑屏转场播放该摄像机场景
         camSceneBox =
                 mkBox(x, y, w, "ccnr_rp.gui.admin.field.cam_scene", fac == null ? "" : str(fac, "cmdcamScene"), false);
+        y += 30;
+        // 无线电管理（阵营级：入场动画播完 action bar 打字机播放）
+        addRenderableWidget(RpButton.secondary(
+                x, y, w, 18, Component.literal("无线电管理…（入场动画后 action bar 播放）"), b -> openRadioModal("faction")));
         y += 30;
         int bw3 = Math.max(60, w / 4);
         addRenderableWidget(RpButton.primary(
@@ -1291,6 +1317,309 @@ public class RpAdminScreen extends Screen {
             }
         }
         return false;
+    }
+
+    // ---------- 无线电编辑器（阵营/职业共用弹窗：speaker + 多句 text/wait；职业另有禁用开关） ----------
+
+    /** 打开无线电管理弹窗：kind=faction|profession，从当前选中条目载入配置到工作副本。 */
+    private void openRadioModal(String kind) {
+        JsonObject target = "profession".equals(kind) ? selProf() : selFaction();
+        if (target == null || str(target, "id").isBlank()) {
+            notice = "请先在左侧选择" + ("profession".equals(kind) ? "职业" : "阵营");
+            return;
+        }
+        radioModalKind = kind;
+        radioModalTarget = str(target, "id");
+        radioLines.clear();
+        radioWaits.clear();
+        radioSpeaker = "指挥官";
+        radioDisabled = false;
+        if (target.has("radio") && target.get("radio").isJsonObject()) {
+            JsonObject r = target.getAsJsonObject("radio");
+            radioSpeaker = str(r, "speaker", "指挥官");
+            if (r.has("lines") && r.get("lines").isJsonArray()) {
+                for (com.google.gson.JsonElement e : r.getAsJsonArray("lines")) {
+                    if (!e.isJsonObject()) {
+                        continue;
+                    }
+                    JsonObject o = e.getAsJsonObject();
+                    radioLines.add(str(o, "text", ""));
+                    radioWaits.add(
+                            o.has("wait") && o.get("wait").isJsonPrimitive()
+                                    ? String.valueOf(o.get("wait").getAsDouble())
+                                    : "1.5");
+                }
+            }
+        }
+        if (radioLines.isEmpty()) {
+            radioLines.add("");
+            radioWaits.add("1.5");
+        }
+        radioDisabled = "profession".equals(kind)
+                && target.has("radioDisabled")
+                && target.get("radioDisabled").getAsBoolean();
+        radioScroll = 0;
+        notice = "";
+        radioModalOpen = true;
+    }
+
+    /** 发送无线电配置到服务端（写 faction/profession radio 字段），成功后关闭弹窗。 */
+    private void saveRadioModal() {
+        if (radioModalTarget.isBlank()) {
+            notice = "请先选择目标";
+            return;
+        }
+        com.google.gson.JsonObject radio = new com.google.gson.JsonObject();
+        radio.addProperty("speaker", radioSpeaker.isBlank() ? "指挥官" : radioSpeaker);
+        com.google.gson.JsonArray lines = new com.google.gson.JsonArray();
+        for (int i = 0; i < radioLines.size(); i++) {
+            String text = radioLines.get(i);
+            if (text == null || text.isBlank()) {
+                continue;
+            }
+            com.google.gson.JsonObject o = new com.google.gson.JsonObject();
+            o.addProperty("text", text);
+            double wait = 1.5;
+            try {
+                wait = Math.max(0, Double.parseDouble(radioWaits.get(i)));
+            } catch (Exception ignored) {
+                // 非法数值用默认 1.5s
+            }
+            o.addProperty("wait", wait);
+            lines.add(o);
+        }
+        radio.add("lines", lines);
+        com.google.gson.JsonObject payload = new com.google.gson.JsonObject();
+        payload.addProperty("id", radioModalTarget);
+        payload.add("radio", radio);
+        if ("profession".equals(radioModalKind)) {
+            payload.addProperty("radioDisabled", radioDisabled);
+        }
+        RpChannels.sendToServer(new RpPackets.ManagerCrudC2S(
+                "profession".equals(radioModalKind) ? "radio-profession" : "radio-faction",
+                "update",
+                payload.toString()));
+        radioModalOpen = false;
+    }
+
+    /** 渲染无线电管理弹窗（每帧；按钮手动绘制，命中在 radioModalClick）。 */
+    private void renderRadioModal(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+        // 每帧重建输入框前先移除上一帧注册的 radio 弹窗专属 widget（防 widget 累积/重复命中）
+        if (radioSpeakerBox != null) {
+            removeWidget(radioSpeakerBox);
+            radioSpeakerBox = null;
+        }
+        for (Object[] e : radioTextEdits) {
+            removeWidget((EditBox) e[0]);
+            removeWidget((EditBox) e[1]);
+        }
+        radioTextEdits.clear();
+        g.fill(0, 0, width, height, 0xA6000000);
+        int w = Math.min(560, width - 40);
+        int h = Math.min(420, height - 40);
+        int x1 = (width - w) / 2;
+        int y1 = (height - h) / 2;
+        rdX1 = x1;
+        rdY1 = y1;
+        rdX2 = x1 + w;
+        rdY2 = y1 + h;
+        RpTheme.terminalPanel(g, x1, y1, x1 + w, y1 + h, RpTheme.RADIUS_LARGE);
+        g.drawString(
+                font,
+                ("profession".equals(radioModalKind) ? "无线电管理（职业）— " : "无线电管理（阵营）— ") + radioModalTarget,
+                x1 + 14,
+                y1 + 10,
+                RpTheme.CYAN,
+                true);
+        g.fill(x1 + 8, y1 + 26, x1 + w - 8, y1 + 27, RpTheme.CYAN_DIM);
+
+        int cx = x1 + 14;
+        int cw = x1 + w - 14;
+        int cy = y1 + 38;
+        int bw = Math.max(64, (cw - cx - 12) / 4);
+        int border = RpTheme.PANEL_BORDER;
+        int borderHover = RpTheme.PANEL_BORDER_BRIGHT;
+        // 说话人（阵营色渲染前缀）
+        g.drawString(font, "说话人（阵营色）:", cx, cy, RpTheme.TEXT_DIM);
+        radioSpeakerBox = mkBox(cx + 120, cy, cw - cx - 120, "", radioSpeaker, false);
+        radioSpeakerBox.render(g, mouseX, mouseY, partialTick);
+        cy += 30;
+        // 添加句子
+        rdAddX1 = cx;
+        rdAddY1 = cy;
+        rdAddX2 = cx + bw;
+        rdAddY2 = cy + 18;
+        RpButton.draw(
+                g,
+                rdAddX1,
+                rdAddY1,
+                rdAddX2,
+                rdAddY2,
+                "+ 添加句子",
+                inRect(mouseX, mouseY, rdAddX1, rdAddY1, rdAddX2, rdAddY2) ? borderHover : border,
+                false);
+        // 职业：禁用无线电开关
+        if ("profession".equals(radioModalKind)) {
+            rdToggleX1 = rdAddX2 + 4;
+            rdToggleY1 = cy;
+            rdToggleX2 = rdToggleX1 + bw * 2;
+            rdToggleY2 = cy + 18;
+            RpButton.draw(
+                    g,
+                    rdToggleX1,
+                    rdToggleY1,
+                    rdToggleX2,
+                    rdToggleY2,
+                    "禁用无线电: " + (radioDisabled ? "开" : "关"),
+                    inRect(mouseX, mouseY, rdToggleX1, rdToggleY1, rdToggleX2, rdToggleY2) ? borderHover : border,
+                    radioDisabled);
+        }
+        // 保存
+        rdSaveX1 = ("profession".equals(radioModalKind) ? rdToggleX2 : rdAddX2) + 4;
+        rdSaveY1 = cy;
+        rdSaveX2 = rdSaveX1 + bw;
+        rdSaveY2 = cy + 18;
+        RpButton.draw(
+                g,
+                rdSaveX1,
+                rdSaveY1,
+                rdSaveX2,
+                rdSaveY2,
+                "保存",
+                inRect(mouseX, mouseY, rdSaveX1, rdSaveY1, rdSaveX2, rdSaveY2) ? borderHover : border,
+                true);
+        // 关闭
+        rdCancelX1 = rdSaveX2 + 4;
+        rdCancelY1 = cy;
+        rdCancelX2 = rdCancelX1 + bw;
+        rdCancelY2 = cy + 18;
+        RpButton.draw(
+                g,
+                rdCancelX1,
+                rdCancelY1,
+                rdCancelX2,
+                rdCancelY2,
+                "关闭",
+                inRect(mouseX, mouseY, rdCancelX1, rdCancelY1, rdCancelX2, rdCancelY2) ? borderHover : border,
+                false);
+        cy += 26;
+
+        g.drawString(font, "提示：每句打字完成后停留 wait 秒（上一句保持），再播下一句；格式「说话人：内容」。", cx, cy, RpTheme.TEXT_DIM);
+        cy += 16;
+
+        // 句子列表（滚动，行高 22）：文本 + 停留秒数 + 删除
+        int listTop = cy + 4;
+        int listBottom = rdY2 - 20;
+        int maxVis = Math.max(1, (listBottom - listTop) / 22);
+        int off = Math.min(radioScroll, Math.max(0, radioLines.size() - maxVis));
+        rdDelBounds.clear();
+        int ry = listTop;
+        for (int i = 0; i < maxVis; i++) {
+            int idx = off + i;
+            if (idx >= radioLines.size()) {
+                break;
+            }
+            RpRoundRect.outlined(
+                    g,
+                    cx,
+                    ry,
+                    cw - 48,
+                    ry + 20,
+                    6f,
+                    inRect(mouseX, mouseY, cx, ry, cw - 48, ry + 20) ? borderHover : border,
+                    idx % 2 == 0 ? RpTheme.PANEL_BG : RpTheme.PANEL_BG_EVEN);
+            g.drawString(font, "[" + idx + "] " + radioLines.get(idx), cx + 6, ry + 5, RpTheme.TEXT_PRIMARY);
+            int rbX = cw - 44;
+            rdDelBounds.add(new int[] {rbX, ry, rbX + 40, ry + 18, idx});
+            RpButton.draw(
+                    g,
+                    rbX,
+                    ry + 1,
+                    rbX + 40,
+                    ry + 19,
+                    "删",
+                    inRect(mouseX, mouseY, rbX, ry + 1, rbX + 40, ry + 19) ? borderHover : border,
+                    false);
+            ry += 22;
+        }
+        if (radioLines.isEmpty()) {
+            g.drawString(font, "（空：点「+ 添加句子」开始）", cx, listTop + 4, RpTheme.TEXT_DIM);
+        }
+        RpScrollbar.draw(g, cw - 8, listTop, listBottom, radioLines.size(), maxVis, off);
+
+        // 底部编辑区：每句 text + wait 输入框（手动渲染在弹窗之上；点击/键盘经 radioModalClick 路由）
+        radioTextEdits.clear();
+        int ey = listBottom + 6;
+        int editW = Math.max(100, (cw - cx - 12) / 2);
+        int maxEdits = Math.max(1, Math.min(radioLines.size(), (rdY2 - ey - 8) / 24));
+        int editStart = Math.max(0, radioLines.size() - maxEdits);
+        for (int i = editStart; i < radioLines.size(); i++) {
+            g.drawString(font, "句" + i, cx, ey + 3, RpTheme.TEXT_DIM);
+            EditBox tb = mkBox(cx + 26, ey, editW, "", radioLines.get(i), false);
+            EditBox wb = mkBox(
+                    cx + 26 + editW + 8, ey, Math.max(56, cw - cx - 26 - editW - 8), "", radioWaits.get(i), false);
+            tb.render(g, mouseX, mouseY, partialTick);
+            wb.render(g, mouseX, mouseY, partialTick);
+            radioTextEdits.add(new Object[] {tb, wb, i});
+            ey += 24;
+        }
+    }
+
+    /** 无线电弹窗命中（在 mouseClicked 顶部调用，弹窗期间吞掉底层点击）。 */
+    private boolean radioModalClick(double mx, double my, int button) {
+        if (inRect((int) mx, (int) my, rdAddX1, rdAddY1, rdAddX2, rdAddY2)) {
+            radioLines.add("");
+            radioWaits.add("1.5");
+            radioScroll = radioLines.size();
+            return true;
+        }
+        if (inRect((int) mx, (int) my, rdSaveX1, rdSaveY1, rdSaveX2, rdSaveY2)) {
+            collectRadioFields();
+            saveRadioModal();
+            return true;
+        }
+        if (inRect((int) mx, (int) my, rdCancelX1, rdCancelY1, rdCancelX2, rdCancelY2)) {
+            radioModalOpen = false;
+            return true;
+        }
+        if ("profession".equals(radioModalKind)
+                && inRect((int) mx, (int) my, rdToggleX1, rdToggleY1, rdToggleX2, rdToggleY2)) {
+            radioDisabled = !radioDisabled;
+            return true;
+        }
+        for (int[] b : rdDelBounds) {
+            if (inRect((int) mx, (int) my, b[0], b[1], b[2], b[3])) {
+                int idx = b.length > 4 ? b[4] : -1;
+                if (idx >= 0 && idx < radioLines.size()) {
+                    radioLines.remove(idx);
+                    radioWaits.remove(idx);
+                }
+                return true;
+            }
+        }
+        collectRadioFields();
+        for (Object[] e : radioTextEdits) {
+            EditBox tb = (EditBox) e[0];
+            EditBox wb = (EditBox) e[1];
+            if (tb.mouseClicked(mx, my, button) || wb.mouseClicked(mx, my, button)) {
+                setFocused(tb.mouseClicked(mx, my, button) ? tb : wb);
+                return true;
+            }
+        }
+        return true;
+    }
+
+    private void collectRadioFields() {
+        for (Object[] e : radioTextEdits) {
+            int i = (Integer) e[2];
+            if (i < radioLines.size()) {
+                radioLines.set(i, ((EditBox) e[0]).getValue());
+                radioWaits.set(i, ((EditBox) e[1]).getValue());
+            }
+        }
+        if (radioSpeakerBox != null) {
+            radioSpeaker = radioSpeakerBox.getValue();
+        }
     }
 
     // ---------- 行为序列编辑器（流程编辑器，仿出生点弹窗） ----------
@@ -2178,6 +2507,10 @@ public class RpAdminScreen extends Screen {
             }
             return true;
         }
+        if (radioModalOpen) {
+            radioModalClick(mx, my, button); // 无线电编辑弹窗：命中按钮/输入框处理，未命中也不放行到底层
+            return true;
+        }
         if (seqModalOpen) {
             sequenceModalClick(mx, my, button); // 流程编辑器弹窗：命中按钮/输入框处理，未命中也不放行到底层
             return true;
@@ -2447,6 +2780,15 @@ public class RpAdminScreen extends Screen {
             }
             return true;
         }
+        if (radioModalOpen) {
+            // 无线电编辑器：句子列表区滚动
+            if (mouseY >= rdY1 + 60 && mouseY <= rdY2 - 24) {
+                int maxVis = Math.max(1, (rdY2 - 24 - rdY1 - 60) / 22);
+                radioScroll =
+                        (int) Math.max(0, Math.min(radioScroll - delta / 8, Math.max(0, radioLines.size() - maxVis)));
+            }
+            return true;
+        }
         if (impactOpen || spawnModalOpen) {
             return true; // 弹窗打开时不滚动底层列表
         }
@@ -2683,6 +3025,9 @@ public class RpAdminScreen extends Screen {
         }
         if (spawnModalOpen) {
             renderSpawnModal(g, mouseX, mouseY);
+        }
+        if (radioModalOpen) {
+            renderRadioModal(g, mouseX, mouseY, partialTick);
         }
         if (seqModalOpen) {
             renderSequenceModal(g, mouseX, mouseY, partialTick);

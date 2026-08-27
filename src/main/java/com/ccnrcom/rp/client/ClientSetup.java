@@ -81,5 +81,7 @@ public final class ClientSetup {
         // 击杀友好提示（左下角 toast，约 6s；服务端开关控制是否发包）
         event.registerAboveAll(
                 "ccnr_rp_kill_friendly", (gui, gfx, partial, w, h) -> KillFriendlyNoticeHud.render(gfx, w, h));
+        // 入场无线电（action bar 打字机逐句展示，入场动画播完后播放）
+        event.registerAboveAll("ccnr_rp_radio", (gui, gfx, partial, w, h) -> RadioPlayer.render(gfx, w, h));
     }
 }

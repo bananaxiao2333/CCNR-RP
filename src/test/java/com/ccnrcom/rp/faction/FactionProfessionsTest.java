@@ -5,6 +5,7 @@
 package com.ccnrcom.rp.faction;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -20,13 +21,14 @@ class FactionProfessionsTest {
     void upsertWritesAndReadsCmdcamScene() {
         JsonObject root = new JsonObject();
         List<String> errors = FactionProfessions.upsert(
-                root, "medic", "军医", "a", false, 0, null, "", "", "intro_cam", id -> id.equals("a"));
+                root, "medic", "军医", "a", false, 0, null, "", "", "intro_cam", null, false, id -> id.equals("a"));
         assertTrue(errors.isEmpty(), () -> errors.toString());
         JsonObject def = FactionProfessions.find(root, "medic").orElseThrow();
         assertEquals("intro_cam", FactionProfessions.cmdcamScene(def));
 
         // 空串 → 移除字段，回读为空
-        FactionProfessions.upsert(root, "medic", "军医", "a", false, 0, null, "", "", "", id -> id.equals("a"));
+        FactionProfessions.upsert(
+                root, "medic", "军医", "a", false, 0, null, "", "", "", null, false, id -> id.equals("a"));
         def = FactionProfessions.find(root, "medic").orElseThrow();
         assertEquals("", FactionProfessions.cmdcamScene(def));
     }
@@ -65,5 +67,30 @@ class FactionProfessionsTest {
         noSpawn.addProperty("id", "medic");
         assertNull(FactionProfessions.spawn(noSpawn));
         assertNull(FactionProfessions.spawn(null));
+    }
+
+    @Test
+    void radioUpsertWritesAndReads() {
+        JsonObject root = new JsonObject();
+        JsonObject radio = new JsonObject();
+        radio.addProperty("speaker", "指挥官");
+        JsonArray lines = new JsonArray();
+        JsonObject l1 = new JsonObject();
+        l1.addProperty("text", "欢迎");
+        l1.addProperty("wait", 2.0);
+        lines.add(l1);
+        radio.add("lines", lines);
+        List<String> errors = FactionProfessions.upsert(
+                root, "medic", "军医", "a", false, 0, null, "", "", "", radio, true, id -> id.equals("a"));
+        assertTrue(errors.isEmpty(), () -> errors.toString());
+        JsonObject def = FactionProfessions.find(root, "medic").orElseThrow();
+        assertTrue(FactionProfessions.hasRadioLines(FactionProfessions.radio(def)));
+        assertTrue(FactionProfessions.radioDisabled(def));
+        FactionProfessions.upsert(
+                root, "medic", "军医", "a", false, 0, null, "", "", "", new JsonObject(), true, id -> id.equals("a"));
+        def = FactionProfessions.find(root, "medic").orElseThrow();
+        assertNull(FactionProfessions.radio(def));
+        assertFalse(FactionProfessions.hasRadioLines(null));
+        assertFalse(FactionProfessions.radioDisabled(new JsonObject()));
     }
 }

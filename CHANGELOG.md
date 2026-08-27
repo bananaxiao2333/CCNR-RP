@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.18.22（无线电管理：阵营/职业入场无线电，action bar 打字机逐句播放）
+
+- **无线电管理（阵营 + 职业）**：管理面板阵营/职业表单新增「无线电管理…」弹窗——配置说话人
+  （默认「指挥官」，按阵营颜色渲染）+ 多句无线电文本，每句可配打字完成后停留秒数（wait，停留期间
+  上一句保持完整显示）。
+- **入场播放**：部署入场动画播完（CinematicS2C 载荷带 radio 字段）后，客户端 action bar 打字机
+  逐句展示「说话人：内容」；全部播完自动消失；登出/重复部署清理。
+- **优先级**：职业无线电 > 阵营无线电；职业新增「禁用无线电」开关（radioDisabled=true 时该职业
+  不播任何无线电，含阵营默认）。
+- 服务端：factions.json 阵营/职业 radio 字段读写（FactionProfessions/FactionManager）+ 部署时
+  解析注入阵营色；管理面板 CRUD 新增 radio-faction/radio-profession 操作；sendList 下发 radio 配置。
+- 测试：FactionProfessionsTest 新增无线电 upsert/回读/清空/禁用用例。
+- 构建：spotlessApply / build -PrunTests 全绿。
+
 ## 2.18.21（队友击杀聊天红字 + 死亡通知：死者聊天显示被谁以什么击杀）
 
 - **队友击杀聊天红字**：击杀者击杀友好阵营玩家时，击杀者本地聊天红字提示「你击杀了队友！」

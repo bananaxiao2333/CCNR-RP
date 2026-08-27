@@ -24,6 +24,7 @@ public final class ClientForgeEvents {
         ClientAnimationPlayer.tick();
         CameraEffect.tick();
         CinematicController.tickLanding(); // 部署落位：HUD 电影 + CMDCam 场景全部播完才发 DeployLandC2S
+        RadioPlayer.tick(); // 入场无线电：打字机逐句推进（动画播完开始，句间停留）
         ClientAssetCache.tick(); // 素材下载请求超时看门狗（防卡死）
         RecruitOverlayHud.prune(); // 过期邀请清理（防残留弹窗死锁）
         tickObserverActionbar(); // 观察者常驻提示（观察中，按键部署）
@@ -122,6 +123,7 @@ public final class ClientForgeEvents {
         RecruitOverlayHud.clear();
         DeployNoticeBanner.clear();
         KillFriendlyNoticeHud.clear();
+        RadioPlayer.clear();
         ClientCharacterState.resetForJoin();
     }
 
