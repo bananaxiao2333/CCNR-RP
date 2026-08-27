@@ -40,7 +40,7 @@
   "ccnr_rp.gui.admin.graph.neutral": "Neutral",
   "ccnr_rp.gui.admin.graph.hostile": "Hostile",
   "ccnr_rp.gui.admin.graph.friendly": "Friendly",
-  "ccnr_rp.gui.admin.graph.hint": "Left-drag to pan · Scroll to zoom · Esc to close",
+  "ccnr_rp.gui.admin.graph.hint": "Left-drag to pan · Scroll to zoom · Hover a badge to focus its relations · Esc to close",
   "ccnr_rp.faction.relation.saved": "Relation saved",
   "ccnr_rp.gui.admin.relation.button": "Relation manager… (rules / internal / graph)",
   "ccnr_rp.gui.admin.relation.title": "Relation Manager",

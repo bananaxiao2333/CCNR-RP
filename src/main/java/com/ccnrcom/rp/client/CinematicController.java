@@ -4,6 +4,7 @@
  */
 package com.ccnrcom.rp.client;
 
+import com.ccnrcom.rp.faction.RelationType;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import java.util.ArrayList;
@@ -116,31 +117,84 @@ public final class CinematicController {
         return str(data, "professionName");
     }
 
-    private static List<String> lines() {
-        List<String> out = new ArrayList<>();
-        out.add("项目名字：" + str(data, "name"));
-        out.add("项目阵营：" + str(data, "factionName"));
-        out.add("阵营关系：" + relationsText());
-        out.add("项目简历：" + str(data, "background"));
+    /** 一行中的着色片段：text 片段文本，key 颜色键（0=副标题灰 / 1=敌对红 / 2=友好绿 / 3=中立白）。 */
+    private record Seg(String text, int key) {}
+
+    /** 四行副标题（分段着色：阵营关系按关系类型着色，其余整行副标题色）。 */
+    private static List<List<Seg>> segLines() {
+        List<List<Seg>> out = new ArrayList<>();
+        out.add(List.of(new Seg("项目名字：" + str(data, "name"), 0)));
+        out.add(List.of(new Seg("项目阵营：" + str(data, "factionName"), 0)));
+        List<Seg> rel = new ArrayList<>();
+        rel.add(new Seg("阵营关系：", 0));
+        if (data.has("relations") && data.get("relations").isJsonArray()) {
+            boolean first = true;
+            for (JsonElement e : data.getAsJsonArray("relations")) {
+                JsonObject o = e.getAsJsonObject();
+                if (!first) {
+                    rel.add(new Seg(" · ", 0));
+                }
+                first = false;
+                rel.add(new Seg(
+                        str(o, "name") + " "
+                                + Component.translatable("ccnr_rp.relation." + str(o, "type"))
+                                        .getString(),
+                        relationKey(str(o, "type"))));
+            }
+        }
+        if (rel.size() == 1) {
+            rel.add(new Seg("—", 0));
+        }
+        out.add(rel);
+        out.add(List.of(new Seg("项目简历：" + str(data, "background"), 0)));
         return out;
     }
 
-    private static String relationsText() {
-        if (!data.has("relations") || !data.get("relations").isJsonArray()) {
-            return "—";
+    /** 关系类型 → 着色键（敌对红 / 友好绿 / 中立白）。 */
+    private static int relationKey(String type) {
+        RelationType t = RelationType.parse(type);
+        if (t == RelationType.HOSTILE) {
+            return 1;
         }
-        StringBuilder sb = new StringBuilder();
-        for (JsonElement e : data.getAsJsonArray("relations")) {
-            JsonObject o = e.getAsJsonObject();
-            if (sb.length() > 0) {
-                sb.append(" · ");
+        if (t == RelationType.FRIENDLY) {
+            return 2;
+        }
+        return 3;
+    }
+
+    /** 逐行拼接全文（打字进度/时长按整行字符推进，换行只是视觉分行）。 */
+    private static List<String> lineTexts(List<List<Seg>> segLines) {
+        List<String> out = new ArrayList<>();
+        for (List<Seg> line : segLines) {
+            StringBuilder sb = new StringBuilder();
+            for (Seg s : line) {
+                sb.append(s.text);
             }
-            sb.append(str(o, "name"))
-                    .append(" ")
-                    .append(Component.translatable("ccnr_rp.relation." + str(o, "type"))
-                            .getString());
+            out.add(sb.toString());
         }
-        return sb.length() == 0 ? "—" : sb.toString();
+        return out;
+    }
+
+    /** 贪心按像素宽度换行：返回每行 [start,end) 字符区间（相对整行文本）。 */
+    private static List<int[]> wrapRanges(String text, int maxW) {
+        var font = Minecraft.getInstance().font;
+        List<int[]> out = new ArrayList<>();
+        int start = 0;
+        while (start < text.length()) {
+            int end = start;
+            int width = 0;
+            while (end < text.length()) {
+                int cw = font.width(String.valueOf(text.charAt(end)));
+                if (width + cw > maxW && end > start) {
+                    break;
+                }
+                width += cw;
+                end++;
+            }
+            out.add(new int[] {start, end});
+            start = end;
+        }
+        return out;
     }
 
     private static String str(JsonObject o, String key) {
@@ -166,10 +220,11 @@ public final class CinematicController {
         }
         long now = t();
         String title = titleText();
-        List<String> lines = lines();
+        List<List<Seg>> segLines = segLines();
+        List<String> texts = lineTexts(segLines);
 
         // 总时长：标题 + 全部行 + 停留 + 黑屏渐退 + 等待 + 文字渐退
-        long typeEnd = T_BLACK_HOLD + T_ICON_HOLD + (long) title.length() * T_TYPE_MS + totalType(lines) + T_AFTER_ALL;
+        long typeEnd = T_BLACK_HOLD + T_ICON_HOLD + (long) title.length() * T_TYPE_MS + totalType(texts) + T_AFTER_ALL;
         long blackEnd = typeEnd + T_BLACK_FADE;
         long textEnd = blackEnd + T_TEXT_WAIT + T_TEXT_FADE;
 
@@ -216,23 +271,35 @@ public final class CinematicController {
             }
         }
 
-        // 副标题：四行（逐行打字）
+        // 副标题：逐行打字（行宽不足时自动换行；阵营关系按类型着色）
         long titleStart = T_BLACK_HOLD + T_ICON_HOLD;
+        float lineScale = 1.4f;
+        int maxW = Math.max(80, (int) ((w - 40) / lineScale));
+        int[] rowCounts = new int[texts.size()];
+        for (int i = 0; i < texts.size(); i++) {
+            rowCounts[i] = wrapRanges(texts.get(i), maxW).size();
+        }
         long lineStart = titleStart + (long) title.length() * T_TYPE_MS + T_LINE_GAP;
         int ly = (int) (h * 0.57);
-        float lineScale = 1.4f;
-        for (int i = 0; i < lines.size(); i++) {
-            String line = lines.get(i);
-            int c = typedCount(line, lineStart, now);
+        int[] segColors = {
+            cs,
+            RpTheme.alphaBlend(RpTheme.RED, ta),
+            RpTheme.alphaBlend(RpTheme.GREEN, ta),
+            RpTheme.alphaBlend(0xFFFFFFFF, ta),
+        };
+        for (int i = 0; i < segLines.size(); i++) {
+            String text = texts.get(i);
+            int c = typedCount(text, lineStart, now);
             if (c > 0) {
-                g.pose().pushPose();
-                g.pose().translate(w / 2f, ly + 6f, 0f);
-                g.pose().scale(lineScale, lineScale, 1f);
-                g.drawCenteredString(Minecraft.getInstance().font, line.substring(0, c), 0, 0, cs);
-                g.pose().popPose();
+                String typed = text.substring(0, c);
+                int ry = ly;
+                for (int[] range : wrapRanges(typed, maxW)) {
+                    renderRow(g, w, ry, typed, range[0], range[1], segLines.get(i), segColors, lineScale);
+                    ry += ROW_H;
+                }
             }
-            ly += 21;
-            lineStart += (long) line.length() * T_TYPE_MS + T_LINE_GAP;
+            ly += rowCounts[i] * ROW_H;
+            lineStart += (long) text.length() * T_TYPE_MS + T_LINE_GAP;
         }
 
         // 主标题：职业（打字）——屏幕正中央，绘于最上层（徽标位置不变）
@@ -246,6 +313,38 @@ public final class CinematicController {
             g.drawCenteredString(Minecraft.getInstance().font, typed, 0, 0, cy);
             g.pose().popPose();
         }
+    }
+
+    /** 副标题每行（视觉行）间距（未缩放坐标）。 */
+    private static final int ROW_H = 21;
+
+    /**
+     * 绘制副标题一行：按片段着色、整行居中。range 为 [start,end) 字符区间（相对整行文本，
+     * 只取已打字前缀内的部分）。
+     */
+    private static void renderRow(
+            GuiGraphics g, int w, int y, String typed, int s, int e, List<Seg> segs, int[] segColors, float scale) {
+        var font = Minecraft.getInstance().font;
+        String row = typed.substring(s, e);
+        int rowW = font.width(row);
+        g.pose().pushPose();
+        g.pose().translate(w / 2f, y + 6f, 0f);
+        g.pose().scale(scale, scale, 1f);
+        int x = -rowW / 2;
+        int off = 0;
+        for (Seg seg : segs) {
+            int segStart = off;
+            int segEnd = off + seg.text.length();
+            int ss = Math.max(s, segStart);
+            int ee = Math.min(e, segEnd);
+            if (ss < ee) {
+                String part = typed.substring(ss, ee);
+                g.drawString(font, part, x, 0, segColors[seg.key]);
+                x += font.width(part);
+            }
+            off = segEnd;
+        }
+        g.pose().popPose();
     }
 
     private static long totalType(List<String> lines) {

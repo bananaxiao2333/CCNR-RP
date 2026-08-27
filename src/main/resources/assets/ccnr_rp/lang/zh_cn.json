@@ -40,7 +40,7 @@
   "ccnr_rp.gui.admin.graph.neutral": "中立",
   "ccnr_rp.gui.admin.graph.hostile": "敌对",
   "ccnr_rp.gui.admin.graph.friendly": "友好",
-  "ccnr_rp.gui.admin.graph.hint": "左键拖动平移 · 滚轮缩放 · Esc 关闭",
+  "ccnr_rp.gui.admin.graph.hint": "左键拖动平移 · 滚轮缩放 · 悬停图标高亮该阵营关系 · Esc 关闭",
   "ccnr_rp.faction.relation.saved": "关系已保存",
   "ccnr_rp.gui.admin.relation.button": "关系管理…（规则增删改 / 内部关系 / 测定图）",
   "ccnr_rp.gui.admin.relation.title": "关系管理",
