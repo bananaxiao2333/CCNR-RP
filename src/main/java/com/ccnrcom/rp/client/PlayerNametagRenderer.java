@@ -23,8 +23,10 @@ import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 
 /**
- * 玩家头顶悬浮标签（世界空间 billboard，客户端本地渲染）：阵营徽章（最顶一行）+ 职业名(阵营色) + 玩家名 + 等级。
+ * 玩家头顶悬浮标签（世界空间 billboard，客户端本地渲染）：第一行「阵营图标（左）+ 职业名（右，阵营色）」，
+ * 第二行「血量 / 血量上限」。玩家名由原版名字牌显示，本标签整体上移一个文本行高，不与系统名称标签重叠。
  * 数据来自 PlayerTagsS2C 下发的 ClientCharacterState.playerTag(uuid)；服务端已过滤，仅非观察者（已部署）玩家有数据。
+ * 血量读取实体同步数据 getHealth()/getMaxHealth()，仅本地展示、不回传服务端。
  * 渲染方式仿原版名字牌：在实体头顶上方 mulPose(cameraOrientation) 使其始终面向相机 + scale(-0.025,-0.025,0.025)。
  * 徽章矢量图形用扫描线填充（同 RpIcons 视觉），img: 图片徽章用纹理 quad 绘制。只有本地客户端渲染，其他玩家看不到。
  * 可配置项（服务端权威，随 CharacterListS2C 同步）：enabled 总开关 / badgeSize 徽章大小 / offset 标签高度。
@@ -32,24 +34,26 @@ import org.joml.Quaternionf;
 public final class PlayerNametagRenderer {
 
     // ---- 布局（世界单位；scale 0.025 下 1 单位 ≈ 0.025 格）----
-    /** 徽章中心相对标签顶部的 Y 偏移（负=向上）。 */
-    private static final int BADGE_Y = -22;
-    /** 职业名行 Y（标签顶部下方）。 */
-    private static final int LINE_PROFESSION_Y = -8;
-    /** 玩家名行 Y。 */
-    private static final int LINE_NAME_Y = 4;
-    /** 等级行 Y。 */
-    private static final int LINE_LEVEL_Y = 16;
+    /** 一个文本行高（行距）。 */
+    private static final int LINE_HEIGHT = 12;
+    /** 行1（阵营图标 + 职业名）文字顶部 Y（负=向上；较旧版职业名行整体上移一个行高，为原版玩家名标签让位）。 */
+    private static final int LINE_MAIN_Y = -20;
+    /** 行2（血量 / 血量上限）文字顶部 Y。 */
+    private static final int LINE_HP_Y = LINE_MAIN_Y + LINE_HEIGHT;
+    /** 行1 中阵营图标与职业名文字的间距。 */
+    private static final int ICON_TEXT_GAP = 3;
 
     // ---- 缩放（仿原版名字牌）----
     /** 世界缩放（原版名字牌同款：文字/几何整体缩放，远小近大）。 */
     private static final float TAG_SCALE = -0.025F;
 
     // ---- 颜色（复用 RpTheme；避免散落魔法数字）----
-    /** 等级文字（青）。 */
-    private static final int COLOR_LEVEL = RpTheme.CYAN;
     /** 玩家名（白）。 */
     private static final int COLOR_NAME = 0xFFFFFFFF;
+    /** 血量心形（红；文字颜色按 RGB 使用，高位 alpha 被忽略）。 */
+    private static final int COLOR_HEART = 0xFFFF5555;
+    /** 血量分隔符（灰）。 */
+    private static final int COLOR_HP_DIVIDER = 0xFFAAAAAA;
     /** 徽章盘底色（深灰）。 */
     private static final int COLOR_BADGE_DISC = 0xFF2E2E2E;
     /** 徽章图形挖空色（深蓝黑）。 */
@@ -104,26 +108,79 @@ public final class PlayerNametagRenderer {
             poseStack.mulPose(camRot);
             poseStack.scale(TAG_SCALE, TAG_SCALE, -TAG_SCALE);
             Matrix4f matrix = poseStack.last().pose();
-            drawTag(font, matrix, buffer, tag);
+            drawTag(font, matrix, buffer, tag, other.getHealth(), other.getMaxHealth());
             poseStack.popPose();
         }
     }
 
     private static void drawTag(
-            Font font, Matrix4f matrix, MultiBufferSource buffer, ClientCharacterState.PlayerTag tag) {
+            Font font,
+            Matrix4f matrix,
+            MultiBufferSource buffer,
+            ClientCharacterState.PlayerTag tag,
+            float hp,
+            float maxHp) {
         int badgeR = ClientCharacterState.nametagBadgeSize();
-        // 徽章最顶一行（badgeSize=0 不画），往下职业/玩家/等级
-        if (badgeR > 0) {
-            drawBadge(matrix, buffer, 0, BADGE_Y, badgeR, tag.factionId());
-        }
         int factionColor = factionColor(tag.factionId());
-        String profession = professionDisplay(tag.professionId());
-        Component line1 = Component.literal(profession).withStyle(s -> s.withColor(factionColor));
-        Component line2 = Component.literal(tag.name());
-        Component line3 = Component.literal("Lv." + tag.level()).withStyle(s -> s.withColor(COLOR_LEVEL));
-        drawCentered(font, matrix, buffer, line1, LINE_PROFESSION_Y);
-        drawCentered(font, matrix, buffer, line2, LINE_NAME_Y);
-        drawCentered(font, matrix, buffer, line3, LINE_LEVEL_Y);
+        Component line1 =
+                Component.literal(professionDisplay(tag.professionId())).withStyle(s -> s.withColor(factionColor));
+        // 行1：阵营图标（左）+ 职业名（右）；行2：血量 / 血量上限
+        drawMainLine(font, matrix, buffer, line1, LINE_MAIN_Y, badgeR, tag.factionId(), factionColor);
+        drawCentered(font, matrix, buffer, healthComponent(hp, maxHp), LINE_HP_Y);
+    }
+
+    /** 行1：阵营图标在左、职业名在右，整行水平居中（badgeSize=0 时仅职业名居中）。 */
+    private static void drawMainLine(
+            Font font,
+            Matrix4f matrix,
+            MultiBufferSource buffer,
+            Component text,
+            float y,
+            int badgeR,
+            String factionId,
+            int factionColor) {
+        if (badgeR <= 0) {
+            drawCentered(font, matrix, buffer, text, y);
+            return;
+        }
+        float textW = font.width(text);
+        float totalW = badgeR * 2 + ICON_TEXT_GAP + textW;
+        float left = -totalW / 2.0F;
+        float cy = y + 4.5F; // 文字行垂直中心（行高 9）
+        // 整行半透明底衬（覆盖图标 + 文字），与其余文字行底衬视觉一致
+        rectFill(
+                matrix,
+                buffer,
+                Math.round(left) - 2,
+                Math.round(cy) - badgeR - 1,
+                Math.round(left + totalW) + 2,
+                Math.round(cy) + badgeR + 1,
+                COLOR_LINE_BG);
+        // 阵营图标（左）
+        drawBadge(matrix, buffer, Math.round(left) + badgeR, Math.round(cy), badgeR, factionId);
+        // 职业名（右）
+        font.drawInBatch(
+                text,
+                left + badgeR * 2 + ICON_TEXT_GAP,
+                y,
+                factionColor,
+                false,
+                matrix,
+                buffer,
+                net.minecraft.client.gui.Font.DisplayMode.NORMAL,
+                0,
+                LightTexture.FULL_BRIGHT);
+    }
+
+    /** 血量行文字：❤ 当前 / 上限（心形红、数字白、分隔灰）。 */
+    private static Component healthComponent(float hp, float maxHp) {
+        int cur = Math.max(0, Math.round(hp));
+        int max = Math.max(0, Math.round(maxHp));
+        return Component.literal("\u2764 ")
+                .withStyle(s -> s.withColor(COLOR_HEART))
+                .append(Component.literal(String.valueOf(cur)).withStyle(s -> s.withColor(COLOR_NAME)))
+                .append(Component.literal(" / ").withStyle(s -> s.withColor(COLOR_HP_DIVIDER)))
+                .append(Component.literal(String.valueOf(max)).withStyle(s -> s.withColor(COLOR_NAME)));
     }
 
     /** 徽章（世界空间）：环(等级色) + 盘(深色) + 图形(img 图片或矢量扫描线) + 右下角等级刻度。 */
