@@ -2866,7 +2866,11 @@ public class RpAdminScreen extends Screen {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        // Esc：先关弹窗返回上层表单（部署点/无线电/流程编辑器），而不是关闭整个管理面板
+        // Esc：先关弹窗返回上层表单（影响确认/部署点/无线电/流程编辑器），而不是关闭整个管理面板
+        if (impactOpen && keyCode == 256) {
+            impactOpen = false; // Esc = 取消（等同「否」），不执行 CRUD
+            return true;
+        }
         if (spawnModalOpen && keyCode == 256) {
             spawnModalOpen = false;
             return true;
