@@ -222,6 +222,12 @@ public class RpAdminScreen extends Screen {
     private int mX1, mY1, mX2, mY2;
     private int okX1, okY1, okX2, okY2;
     private int noX1, noY1, noX2, noY2;
+    // 保存装备二次确认弹窗（仿影响确认：手动绘制、无 widget；docs/01 §10 登记）
+    private boolean saveLoadoutOpen = false;
+    private String saveLoadoutTarget = ""; // 待确认的职业 id（确认后才发包）
+    private int slX1, slY1, slX2, slY2;
+    private int slOkX1, slOkY1, slOkX2, slOkY2;
+    private int slNoX1, slNoY1, slNoX2, slNoY2;
     private String pendingKind = "";
     private String pendingAction = "";
     private JsonObject pendingPayload;
@@ -991,7 +997,9 @@ public class RpAdminScreen extends Screen {
                                 notice = "请先在左侧选择职业";
                                 return;
                             }
-                            RpChannels.sendToServer(new RpPackets.AdminProfessionSaveFullC2S(selProfId));
+                            // 二次确认：覆盖职业装备前先征询（弹窗行为同影响确认，docs/01 §10）
+                            saveLoadoutTarget = selProfId;
+                            saveLoadoutOpen = true;
                         }),
                         new ActButton("职业复活点", 1, () -> openSpawnModal("profession"))));
         y += 26;
@@ -2691,6 +2699,18 @@ public class RpAdminScreen extends Screen {
             }
             return true;
         }
+        if (saveLoadoutOpen) {
+            if (mx >= slOkX1 && mx <= slOkX2 && my >= slOkY1 && my <= slOkY2) {
+                saveLoadoutOpen = false;
+                RpChannels.sendToServer(new RpPackets.AdminProfessionSaveFullC2S(saveLoadoutTarget));
+                return true;
+            }
+            if (mx >= slNoX1 && mx <= slNoX2 && my >= slNoY1 && my <= slNoY2) {
+                saveLoadoutOpen = false;
+                return true;
+            }
+            return true; // 未命中也不放行到底层
+        }
         if (radioModalOpen) {
             radioModalClick(mx, my, button); // 无线电编辑弹窗：命中按钮/输入框处理，未命中也不放行到底层
             return true;
@@ -2990,7 +3010,7 @@ public class RpAdminScreen extends Screen {
             }
             return true;
         }
-        if (impactOpen || spawnModalOpen) {
+        if (impactOpen || spawnModalOpen || saveLoadoutOpen) {
             return true; // 弹窗打开时不滚动底层列表
         }
         if (tab == TAB_XP) {
@@ -3023,6 +3043,10 @@ public class RpAdminScreen extends Screen {
         // Esc：先关弹窗返回上层表单（影响确认/部署点/无线电/流程编辑器），而不是关闭整个管理面板
         if (impactOpen && keyCode == 256) {
             impactOpen = false; // Esc = 取消（等同「否」），不执行 CRUD
+            return true;
+        }
+        if (saveLoadoutOpen && keyCode == 256) {
+            saveLoadoutOpen = false; // Esc = 取消（等同「否」），不发保存包
             return true;
         }
         if (spawnModalOpen && keyCode == 256) {
@@ -3136,7 +3160,7 @@ public class RpAdminScreen extends Screen {
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         renderBackground(g);
         // 模态（弹窗）打开时，仅保留深色背景 + 弹窗本身，彻底隐藏下层管理界面
-        boolean modal = impactOpen || spawnModalOpen || seqModalOpen || radioModalOpen;
+        boolean modal = impactOpen || spawnModalOpen || seqModalOpen || radioModalOpen || saveLoadoutOpen;
         if (!modal) {
             RpTheme.terminalPanel(g, px1, py1, px2, py2, RpTheme.RADIUS_LARGE);
             g.drawString(
@@ -3236,6 +3260,9 @@ public class RpAdminScreen extends Screen {
         }
         if (impactOpen) {
             renderImpactModal(g, mouseX, mouseY);
+        }
+        if (saveLoadoutOpen) {
+            renderSaveLoadoutModal(g, mouseX, mouseY);
         }
         if (spawnModalOpen) {
             renderSpawnModal(g, mouseX, mouseY);
@@ -3561,6 +3588,88 @@ public class RpAdminScreen extends Screen {
                 noX2,
                 noY2,
                 Component.translatable("ccnr_rp.gui.admin.impact.cancel").getString(),
+                hNo ? RpTheme.RED : RpTheme.TEXT_SECONDARY,
+                false);
+    }
+
+    /** 保存装备二次确认弹窗：覆盖职业装备前征询（隐藏下层 / Esc=取消不发包；手动绘制无 widget，docs/01 §10）。 */
+    private void renderSaveLoadoutModal(GuiGraphics g, int mouseX, int mouseY) {
+        g.fill(0, 0, width, height, 0xAA000000);
+        int w = Math.min(520, width - 80);
+        int h = 96 + 3 * 12 + 40;
+        slX1 = (width - w) / 2;
+        slY1 = (height - h) / 2;
+        slX2 = slX1 + w;
+        slY2 = slY1 + h;
+        RpTheme.terminalPanel(g, slX1, slY1, slX2, slY2, RpTheme.RADIUS_LARGE);
+        g.drawString(
+                font,
+                Component.translatable("ccnr_rp.gui.admin.save_loadout.title")
+                        .getString()
+                        .toUpperCase(java.util.Locale.ROOT),
+                slX1 + 14,
+                slY1 + 10,
+                RpTheme.RED_LINE,
+                true);
+        g.fill(slX1 + 8, slY1 + 28, slX2 - 8, slY1 + 29, RpTheme.CYAN_DIM);
+        String targetName = saveLoadoutTarget;
+        for (JsonObject p : ClientCharacterState.professions()) {
+            if (str(p, "id").equals(saveLoadoutTarget)) {
+                String n = str(p, "name");
+                targetName = n.isBlank() ? saveLoadoutTarget : n + " (" + saveLoadoutTarget + ")";
+                break;
+            }
+        }
+        int y = slY1 + 38;
+        g.drawString(
+                font,
+                Component.translatable("ccnr_rp.gui.admin.save_loadout.hint").getString(),
+                slX1 + 14,
+                y,
+                RpTheme.TEXT_DIM);
+        y += 14;
+        g.drawString(
+                font,
+                Component.translatable("ccnr_rp.gui.admin.save_loadout.target", targetName)
+                        .getString(),
+                slX1 + 14,
+                y,
+                RpTheme.TEXT_PRIMARY);
+        y += 14;
+        g.drawString(
+                font,
+                Component.translatable("ccnr_rp.gui.admin.save_loadout.warn").getString(),
+                slX1 + 14,
+                y,
+                RpTheme.RED_LINE);
+        int bw = Math.max(90, (w - 48) / 2);
+        int by = slY2 - 34;
+        slOkX1 = slX1 + 14;
+        slOkY1 = by;
+        slOkX2 = slOkX1 + bw;
+        slOkY2 = by + 20;
+        slNoX1 = slX2 - 14 - bw;
+        slNoY1 = by;
+        slNoX2 = slX2 - 14;
+        slNoY2 = by + 20;
+        boolean hOk = mouseX >= slOkX1 && mouseX <= slOkX2 && mouseY >= slOkY1 && mouseY <= slOkY2;
+        boolean hNo = mouseX >= slNoX1 && mouseX <= slNoX2 && mouseY >= slNoY1 && mouseY <= slNoY2;
+        RpButton.draw(
+                g,
+                slOkX1,
+                slOkY1,
+                slOkX2,
+                slOkY2,
+                Component.translatable("ccnr_rp.gui.admin.save_loadout.confirm").getString(),
+                hOk ? RpTheme.RED : RpTheme.CYAN,
+                true);
+        RpButton.draw(
+                g,
+                slNoX1,
+                slNoY1,
+                slNoX2,
+                slNoY2,
+                Component.translatable("ccnr_rp.gui.admin.save_loadout.cancel").getString(),
                 hNo ? RpTheme.RED : RpTheme.TEXT_SECONDARY,
                 false);
     }
