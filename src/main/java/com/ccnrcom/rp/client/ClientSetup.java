@@ -78,5 +78,8 @@ public final class ClientSetup {
         // 部署完成常驻横幅（顶部居中，30s）
         event.registerAboveAll(
                 "ccnr_rp_deploy_notice", (gui, gfx, partial, w, h) -> DeployNoticeBanner.render(gfx, w, h));
+        // 击杀友好提示（左下角 toast，约 6s；服务端开关控制是否发包）
+        event.registerAboveAll(
+                "ccnr_rp_kill_friendly", (gui, gfx, partial, w, h) -> KillFriendlyNoticeHud.render(gfx, w, h));
     }
 }

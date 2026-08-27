@@ -245,8 +245,28 @@ public final class ExperienceService {
         params.put("victimUuid", vu);
         params.put("victimProfessionId", vu.isEmpty() || !users.hasProfile(vu) ? "" : str(users.professionId(vu)));
         params.put("victimFactionId", vu.isEmpty() || !users.hasProfile(vu) ? "" : str(users.factionId(vu)));
+        // 击杀者 ↔ 被击杀者的阵营关系（hostile/neutral/friendly；任一方无阵营/未知返回空串）
+        String victimFaction = vu.isEmpty() || !users.hasProfile(vu) ? "" : str(users.factionId(vu));
+        params.put(
+                "victimRelation",
+                relationName(
+                        CCNRRPMod.factions == null ? null : CCNRRPMod.factions.graph(),
+                        str(users.factionId(killerUuid)),
+                        victimFaction));
         if (applyEvent("character_kill", params, killerUuid)) {
             users.save();
+        }
+    }
+
+    /** 两阵营间生效关系的小写名（hostile/neutral/friendly）；任一方为空/未知返回空串（纯静态，可脱机单测）。 */
+    public static String relationName(com.ccnrcom.rp.faction.FactionGraph graph, String factionA, String factionB) {
+        if (graph == null || factionA == null || factionA.isBlank() || factionB == null || factionB.isBlank()) {
+            return "";
+        }
+        try {
+            return graph.resolve(factionA, factionB).name().toLowerCase(java.util.Locale.ROOT);
+        } catch (IllegalArgumentException e) {
+            return ""; // 未知阵营：按无关系处理
         }
     }
 

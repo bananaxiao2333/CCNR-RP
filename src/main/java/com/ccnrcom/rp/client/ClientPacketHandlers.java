@@ -64,6 +64,11 @@ public final class ClientPacketHandlers {
         ClientCharacterState.setConscript(payload);
     }
 
+    /** 击杀友好提示：击杀者击杀友好阵营玩家 → 左下角弹出提示（阵营/职业/玩家名/UUID）。 */
+    public static void onKillFriendlyNotice(RpPackets.KillFriendlyNoticeS2C msg) {
+        KillFriendlyNoticeHud.show(msg.victimName, msg.victimUuid, msg.victimFactionId, msg.victimProfessionId);
+    }
+
     /** 部署完成通知：显示常驻「已部署」横幅，并清空侧面/背包邀请面板、关闭邀请弹窗（已部署不再保留待处理邀请）。 */
     public static void onDeployNotice(String professionName, String factionId) {
         DeployNoticeBanner.show(professionName, factionId);

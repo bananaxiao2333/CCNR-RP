@@ -962,6 +962,41 @@ public final class RpPackets {
         }
     }
 
+    /** 击杀友好提示（S2C，击杀者定向）：击杀者击杀友好阵营玩家时发送，客户端左下角弹出提示。 */
+    public static final class KillFriendlyNoticeS2C {
+        public final String victimName;
+        public final String victimUuid;
+        public final String victimFactionId;
+        public final String victimProfessionId;
+
+        public KillFriendlyNoticeS2C(
+                String victimName, String victimUuid, String victimFactionId, String victimProfessionId) {
+            this.victimName = victimName == null ? "" : victimName;
+            this.victimUuid = victimUuid == null ? "" : victimUuid;
+            this.victimFactionId = victimFactionId == null ? "" : victimFactionId;
+            this.victimProfessionId = victimProfessionId == null ? "" : victimProfessionId;
+        }
+
+        public KillFriendlyNoticeS2C(FriendlyByteBuf buf) {
+            this(buf.readUtf(64), buf.readUtf(64), buf.readUtf(64), buf.readUtf(64));
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(victimName, 64);
+            buf.writeUtf(victimUuid, 64);
+            buf.writeUtf(victimFactionId, 64);
+            buf.writeUtf(victimProfessionId, 64);
+        }
+
+        public static void handle(KillFriendlyNoticeS2C msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(
+                            net.minecraftforge.api.distmarker.Dist.CLIENT,
+                            () -> () -> com.ccnrcom.rp.client.ClientPacketHandlers.onKillFriendlyNotice(msg)));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
     /** 部署完成通知（S2C，部署者定向）：部署成功后发送，客户端显示常驻「已部署」横幅（30s）。 */
     public static final class DeployNoticeS2C {
         public final String professionName;

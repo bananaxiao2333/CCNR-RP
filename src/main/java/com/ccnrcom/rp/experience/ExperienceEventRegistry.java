@@ -50,7 +50,8 @@ public final class ExperienceEventRegistry {
                             new Param("victimName", ParamType.STRING),
                             new Param("victimUuid", ParamType.STRING),
                             new Param("victimProfessionId", ParamType.STRING),
-                            new Param("victimFactionId", ParamType.STRING))),
+                            new Param("victimFactionId", ParamType.STRING),
+                            new Param("victimRelation", ParamType.STRING))),
             new EventDef(
                     "character_death",
                     List.of(

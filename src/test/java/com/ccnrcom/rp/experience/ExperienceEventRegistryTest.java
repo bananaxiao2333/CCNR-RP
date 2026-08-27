@@ -47,4 +47,14 @@ class ExperienceEventRegistryTest {
         Map<String, Object> alive = ExperienceEventRegistry.defaultSample("character_alive");
         assertEquals(60L, alive.get("intervalSeconds"));
     }
+
+    @Test
+    void killEventHasVictimRelationParam() {
+        EventDef d = ExperienceEventRegistry.byId("character_kill").orElseThrow();
+        List<String> names =
+                d.params().stream().map(ExperienceEventRegistry.Param::name).toList();
+        assertTrue(names.contains("victimRelation"));
+        Map<String, Kind> kinds = ExperienceEventRegistry.paramKinds("character_kill");
+        assertEquals(Kind.STR, kinds.get("victimRelation"));
+    }
 }
