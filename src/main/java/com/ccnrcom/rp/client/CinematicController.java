@@ -15,17 +15,16 @@ import net.minecraft.network.chat.Component;
 
 /**
  * 部署入场电影（客户端）：
- * 全屏黑 1s → 突然阵营徽章图标，停留 3s → 主标题打字显示职业 → 副标题逐行打字（项目名字/项目阵营/阵营关系/项目简历）
- * → 全部完成停留 3s → 黑屏渐退 1.6s → 文字与图标在 2s 后开始缓慢淡出。
+ * 全屏黑 0.5s → 突然阵营徽章图标，停留 3s → 主标题打字显示职业 → 副标题逐行打字（项目名字/项目阵营/阵营关系/项目简历）
+ * → 打字完成后不额外停留，直接黑屏渐退 1.6s → 文字与图标在 2s 后开始缓慢淡出（打完即进入淡出，无 3s 停顿）。
  */
 public final class CinematicController {
 
     // 时间轴（ms）
-    private static final long T_BLACK_HOLD = 1000;
+    private static final long T_BLACK_HOLD = 500; // 开场全屏黑停留（已缩短）
     private static final long T_ICON_HOLD = 3000;
     private static final long T_TYPE_MS = 45; // 每字
     private static final long T_LINE_GAP = 250;
-    private static final long T_AFTER_ALL = 3000;
     private static final long T_BLACK_FADE = 1600;
     private static final long T_TEXT_WAIT = 2000;
     private static final long T_TEXT_FADE = 2000;
@@ -234,8 +233,8 @@ public final class CinematicController {
         List<List<Seg>> segLines = segLines();
         List<String> texts = lineTexts(segLines);
 
-        // 总时长：标题 + 全部行 + 停留 + 黑屏渐退 + 等待 + 文字渐退
-        long typeEnd = T_BLACK_HOLD + T_ICON_HOLD + (long) title.length() * T_TYPE_MS + totalType(texts) + T_AFTER_ALL;
+        // 总时长：标题 + 全部行 + 黑屏渐退 + 等待 + 文字渐退（打完即开始淡出，无额外停留）
+        long typeEnd = T_BLACK_HOLD + T_ICON_HOLD + (long) title.length() * T_TYPE_MS + totalType(texts);
         long blackEnd = typeEnd + T_BLACK_FADE;
         long textEnd = blackEnd + T_TEXT_WAIT + T_TEXT_FADE;
 
