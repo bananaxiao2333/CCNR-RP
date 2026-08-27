@@ -1431,7 +1431,7 @@ public class RpAdminScreen extends Screen {
                 "profession".equals(radioModalKind) ? "radio-profession" : "radio-faction",
                 "update",
                 payload.toString()));
-        radioModalOpen = false;
+        closeRadioModal();
     }
 
     /** 渲染无线电管理弹窗（每帧；按钮手动绘制，命中在 radioModalClick）。 */
@@ -1611,7 +1611,7 @@ public class RpAdminScreen extends Screen {
             return true;
         }
         if (inRect((int) mx, (int) my, rdCancelX1, rdCancelY1, rdCancelX2, rdCancelY2)) {
-            radioModalOpen = false;
+            closeRadioModal();
             return true;
         }
         if ("profession".equals(radioModalKind)
@@ -1652,6 +1652,21 @@ public class RpAdminScreen extends Screen {
         if (radioSpeakerBox != null) {
             radioSpeaker = radioSpeakerBox.getValue();
         }
+    }
+
+    /** 关闭无线电编辑弹窗并清理其专属输入框 widget（等价于行为序列弹窗的 closeSequenceModal）。 */
+    private void closeRadioModal() {
+        if (radioSpeakerBox != null) {
+            removeWidget(radioSpeakerBox);
+            radioSpeakerBox = null;
+        }
+        for (Object[] e : radioTextEdits) {
+            removeWidget((EditBox) e[0]);
+            removeWidget((EditBox) e[1]);
+        }
+        radioTextEdits.clear();
+        setFocused(null);
+        radioModalOpen = false;
     }
 
     // ---------- 行为序列编辑器（流程编辑器，仿出生点弹窗） ----------
@@ -2851,9 +2866,13 @@ public class RpAdminScreen extends Screen {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        // Esc：先关弹窗返回上层表单（无线电/流程编辑器），而不是关闭整个管理面板
+        // Esc：先关弹窗返回上层表单（部署点/无线电/流程编辑器），而不是关闭整个管理面板
+        if (spawnModalOpen && keyCode == 256) {
+            spawnModalOpen = false;
+            return true;
+        }
         if (radioModalOpen && keyCode == 256) {
-            radioModalOpen = false;
+            closeRadioModal();
             return true;
         }
         if (seqModalOpen && keyCode == 256) {
@@ -2959,7 +2978,7 @@ public class RpAdminScreen extends Screen {
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         renderBackground(g);
         // 模态（弹窗）打开时，仅保留深色背景 + 弹窗本身，彻底隐藏下层管理界面
-        boolean modal = impactOpen || spawnModalOpen || seqModalOpen;
+        boolean modal = impactOpen || spawnModalOpen || seqModalOpen || radioModalOpen;
         if (!modal) {
             RpTheme.terminalPanel(g, px1, py1, px2, py2, RpTheme.RADIUS_LARGE);
             g.drawString(
