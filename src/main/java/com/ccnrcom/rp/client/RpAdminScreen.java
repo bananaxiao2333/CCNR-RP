@@ -192,11 +192,9 @@ public class RpAdminScreen extends Screen {
     private String pendingAction = "";
     private JsonObject pendingPayload;
 
-    private static final String[] ICONS = {
-        "hex", "shield", "claw", "storm", "eye", "target", "cross", "gear", "img:admin_hq", "img:madison"
-    };
+    private static final String[] ICONS = {"hex", "shield", "claw", "storm", "eye", "target", "cross", "gear"};
 
-    /** 图标可选值 = 内嵌向量/图片 + 服务器素材库图标（img: 中央下发），去重保序。 */
+    /** 图标可选值 = 内置向量图形 + 服务器素材库图标（img: 中央下发），去重保序。 */
     private static java.util.List<String> iconOptions() {
         java.util.List<String> out = new java.util.ArrayList<>(java.util.List.of(ICONS));
         for (String s : ClientAssetCache.iconNames()) {

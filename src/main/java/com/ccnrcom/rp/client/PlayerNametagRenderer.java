@@ -64,8 +64,6 @@ public final class PlayerNametagRenderer {
     private static final int BADGE_DEFAULT_TIER = 2;
     /** 徽章默认图形（hex）。 */
     private static final String BADGE_DEFAULT_ICON = "hex";
-    /** 图片徽章默认纹理边长（像素，未加载服务器素材时）。 */
-    private static final int IMAGE_DEFAULT_SIZE = 512;
 
     private PlayerNametagRenderer() {}
 
@@ -155,7 +153,7 @@ public final class PlayerNametagRenderer {
         rectFill(matrix, buffer, cx + r - n - 1, cy + r - n - 1, cx + r, cy + r, ring);
     }
 
-    /** 图片徽章：底色盘 + 方形纹理（img:<名>，服务器下发或内嵌回退）。 */
+    /** 图片徽章：底色盘 + 方形纹理（img:<名>，服务器素材库下发，无内嵌回退）。 */
     private static void drawImageBadge(
             Matrix4f matrix, MultiBufferSource buffer, int cx, int cy, int r, String fileName, int color) {
         try {
@@ -163,12 +161,10 @@ public final class PlayerNametagRenderer {
                 return;
             }
             ResourceLocation loc = ClientAssetCache.serverIcon(fileName);
-            int tw = IMAGE_DEFAULT_SIZE;
             if (loc == null) {
-                loc = new ResourceLocation("ccnr_rp", "textures/faction/" + fileName + ".png");
-            } else {
-                tw = ClientAssetCache.iconSize(fileName);
+                return;
             }
+            int tw = ClientAssetCache.iconSize(fileName);
             Minecraft.getInstance().getTextureManager().getTexture(loc);
             circleFill(matrix, buffer, cx, cy, r, color);
             int s = r * 2;

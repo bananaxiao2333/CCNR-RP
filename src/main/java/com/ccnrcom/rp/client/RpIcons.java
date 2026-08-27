@@ -165,7 +165,7 @@ public final class RpIcons {
         glyph(g, x1 + 2, y1 + 2, Math.max(4, size - 4), name, color, 0xE62F2F2F);
     }
 
-    /** 在盒子内画多边形图标（16 单位盒映射）；img:<名> 时绘制图片徽章（assets/ccnr_rp/textures/faction/<名>.png）。 */
+    /** 在盒子内画多边形图标（16 单位盒映射）；img:<名> 时绘制服务器下发的图片徽章。 */
     private static void polygon(GuiGraphics g, int cx, int cy, int r, String name, int color, int punchColor) {
         if (name != null && name.startsWith("img:")) {
             drawImageBadge(g, cx, cy, r, name.substring(4), color);
@@ -184,15 +184,12 @@ public final class RpIcons {
             if (fileName == null || !fileName.matches("[A-Za-z0-9_-]+")) {
                 return;
             }
-            // 服务器素材优先：img:<名> 由服务器下发（config/ccnr_rp/textures/），客户端缓存后使用；
-            // 未下载/未配置时回退 jar 内嵌图标。
+            // img:<名> 图标由服务器素材库下发（config/ccnr_rp/textures/），客户端缓存后使用；未就绪时仅画底盘。
             net.minecraft.resources.ResourceLocation loc = ClientAssetCache.serverIcon(fileName);
-            int tw = 512;
             if (loc == null) {
-                loc = new net.minecraft.resources.ResourceLocation("ccnr_rp", "textures/faction/" + fileName + ".png");
-            } else {
-                tw = ClientAssetCache.iconSize(fileName);
+                return;
             }
+            int tw = ClientAssetCache.iconSize(fileName);
             // 触发纹理注册加载
             net.minecraft.client.Minecraft.getInstance().getTextureManager().getTexture(loc);
             int th = tw;
