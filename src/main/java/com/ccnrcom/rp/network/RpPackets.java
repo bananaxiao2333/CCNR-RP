@@ -460,6 +460,39 @@ public final class RpPackets {
         }
     }
 
+    /** 管理端操作：传送到指定部署点/复活点坐标（C2S，管理员；复活点管理每行「传送」按钮）。 */
+    public static final class AdminTeleportC2S {
+        public final double x;
+        public final double y;
+        public final double z;
+        public final String dim;
+
+        public AdminTeleportC2S(double x, double y, double z, String dim) {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.dim = dim;
+        }
+
+        public AdminTeleportC2S(FriendlyByteBuf buf) {
+            this(buf.readDouble(), buf.readDouble(), buf.readDouble(), buf.readUtf(64));
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeDouble(x);
+            buf.writeDouble(y);
+            buf.writeDouble(z);
+            buf.writeUtf(dim, 64);
+        }
+
+        public static void handle(AdminTeleportC2S msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> com.ccnrcom.rp.character.CharacterService.onAdminTeleport(
+                            ctx.get().getSender(), msg.x, msg.y, msg.z, msg.dim));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
     /** 管理端操作：手动触发事件（C2S，管理员）。 */
     public static final class AdminEventTriggerC2S {
         public final String eventId;

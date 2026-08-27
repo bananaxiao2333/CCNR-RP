@@ -167,6 +167,11 @@ public final class RpChannels {
                 .decoder(RpPackets.AdminProfessionSpawnC2S::new)
                 .consumerNetworkThread(RpPackets.AdminProfessionSpawnC2S::handle)
                 .add();
+        CHANNEL.messageBuilder(RpPackets.AdminTeleportC2S.class, id++, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(RpPackets.AdminTeleportC2S::encode)
+                .decoder(RpPackets.AdminTeleportC2S::new)
+                .consumerNetworkThread(RpPackets.AdminTeleportC2S::handle)
+                .add();
         CHANNEL.messageBuilder(RpPackets.AdminEventTriggerC2S.class, id++, NetworkDirection.PLAY_TO_SERVER)
                 .encoder(RpPackets.AdminEventTriggerC2S::encode)
                 .decoder(RpPackets.AdminEventTriggerC2S::new)

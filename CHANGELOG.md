@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.18.35（保存装备不再吞基础配置 + 复活点管理传送按钮）
+
+- **保存装备（loadout）单字段接管**：`/rp profession save` 与管理面板「保存装备」此前走全量 upsert（空串覆盖
+  music/profile/cmdcamScene、false 覆盖 radioDisabled），**每次保存装备都会把音乐、项目简历、CMDCam 场景、
+  无线电禁用开关吞掉**。现新增 `FactionManager.setProfessionLoadout`：只替换职业的 `loadout` 字段，
+  其余基础配置原样保留（与部署点管理同款「单字段全量接管」）；`/rp profession create` 增加已存在校验，
+  防对已有职业的误覆盖。
+- **复活点/部署点管理每行「传送」按钮**：弹窗内每个出生点行新增「传送」按钮，点击直接传送到该坐标
+  （按维度解析 Level 跨维传送），便于管理员就地检查部署点/复活点。
+- 新增 `AdminTeleportC2S` 包 + 服务端 `onAdminTeleport`（权限校验后传送）。
+- 测试：FactionManagerSaveTest 新增 setProfessionLoadout 保留基础字段 / 未知 id 拒绝两路径。
+- 构建：spotlessApply / build -PrunTests / test -PrunTests 全绿。
+
 ## 2.18.34（人物 3D 立绘/预览 XYZ 锁定：移除鼠标追踪）
 
 - **所有人物立体展示取消鼠标追踪**：K 面板 3D 预览、招募弹窗立绘、右侧悬浮招募卡与已同意列表的立绘

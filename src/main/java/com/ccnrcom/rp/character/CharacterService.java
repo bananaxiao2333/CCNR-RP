@@ -934,13 +934,8 @@ public final class CharacterService {
             return;
         }
         com.google.gson.JsonObject loadout = com.ccnrcom.rp.profession.LoadoutManager.capture(player, true);
-        var errors = mgr.upsertProfession(
-                professionId,
-                com.ccnrcom.rp.faction.FactionProfessions.idsSafeName(def),
-                com.ccnrcom.rp.faction.FactionProfessions.factionId(def),
-                com.ccnrcom.rp.faction.FactionProfessions.selfDeploy(def),
-                com.ccnrcom.rp.faction.FactionProfessions.unlockLevel(def),
-                loadout);
+        // 只更新 loadout 字段（单字段接管）：不触碰音乐/项目简历/CMDCam 场景/无线电等基础配置
+        var errors = mgr.setProfessionLoadout(professionId, loadout);
         if (!errors.isEmpty()) {
             service().sendError(player, "ccnr_rp.profession.error.config", String.join("; ", errors));
             return;
@@ -1027,6 +1022,26 @@ public final class CharacterService {
         }
         service().broadcastToAll(); // 职业部署点属配置数据：全服客户端镜像即时刷新（异步）
         service().sendError(player, "ccnr_rp.gui.admin.spawn.saved", professionId, String.valueOf(pts.size()));
+    }
+
+    /** 管理端操作「传送到部署点/复活点」（复活点管理每行「传送」按钮）：按维度解析 Level 后传送，便于就地检查。 */
+    public static void onAdminTeleport(ServerPlayer player, double x, double y, double z, String dim) {
+        if (player == null) {
+            return;
+        }
+        if (!com.ccnrcom.rp.util.Permissions.canAdmin(player, com.ccnrcom.rp.util.Permissions.ADMIN_FACTION)) {
+            service().sendError(player, "ccnr_rp.command.no_permission");
+            return;
+        }
+        net.minecraft.resources.ResourceLocation dimLoc = net.minecraft.resources.ResourceLocation.tryParse(dim);
+        net.minecraft.server.level.ServerLevel level = dimLoc == null
+                ? null
+                : player.server.getLevel(net.minecraft.resources.ResourceKey.create(
+                        net.minecraft.core.registries.Registries.DIMENSION, dimLoc));
+        if (level == null) {
+            level = player.server.overworld();
+        }
+        player.teleportTo(level, x + 0.5, y, z + 0.5, 0, 0);
     }
 
     // ---------- 音乐管理（管理员上传） ----------

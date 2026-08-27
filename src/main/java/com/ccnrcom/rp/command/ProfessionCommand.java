@@ -104,6 +104,10 @@ final class ProfessionCommand {
             return 0;
         }
         String displayName = (name == null || name.isBlank()) ? id : name;
+        if (mgr.findProfession(id).isPresent()) {
+            source.sendSuccess(() -> Component.translatable("ccnr_rp.profession.error.config", "职业已存在: " + id), false);
+            return 0;
+        }
         List<String> errors = mgr.upsertProfession(id, displayName, factionId, selfDeploy, 0, null);
         if (!errors.isEmpty()) {
             source.sendSuccess(
@@ -125,13 +129,8 @@ final class ProfessionCommand {
             return 0;
         }
         JsonObject loadout = LoadoutManager.capture(player, full);
-        List<String> errors = mgr.upsertProfession(
-                id,
-                FactionProfessions.idsSafeName(def),
-                FactionProfessions.factionId(def),
-                FactionProfessions.selfDeploy(def),
-                FactionProfessions.unlockLevel(def),
-                loadout);
+        // 只更新 loadout 字段（单字段接管）：不触碰音乐/项目简历/CMDCam 场景/无线电等基础配置
+        List<String> errors = mgr.setProfessionLoadout(id, loadout);
         if (!errors.isEmpty()) {
             source.sendSuccess(
                     () -> Component.translatable("ccnr_rp.profession.error.config", String.join("; ", errors)), false);

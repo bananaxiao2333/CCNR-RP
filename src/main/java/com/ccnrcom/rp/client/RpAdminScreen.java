@@ -106,6 +106,8 @@ public class RpAdminScreen extends Screen {
     private int spSaveX1, spSaveY1, spSaveX2, spSaveY2;
     private int spCancelX1, spCancelY1, spCancelX2, spCancelY2;
     private final List<int[]> spRemoveBounds = new ArrayList<>();
+    /** 部署点弹窗每行「传送」按钮矩形（渲染与点击共用）。 */
+    private final List<int[]> spTeleportBounds = new ArrayList<>();
 
     // 无线电编辑器（阵营/职业共用弹窗）：speaker + 多句 text/wait 列表（入场动画播完 action bar 打字机播放）
     private boolean radioModalOpen = false;
@@ -1135,6 +1137,7 @@ public class RpAdminScreen extends Screen {
         spawnDims.clear();
         spawnRowBounds.clear();
         spawnRowTexts.clear();
+        spTeleportBounds.clear();
         spawnRule = "SPREAD";
         if (fac == null || !fac.has("spawn") || !fac.get("spawn").isJsonObject()) {
             return;
@@ -1307,6 +1310,7 @@ public class RpAdminScreen extends Screen {
         ry += 16;
 
         spRemoveBounds.clear();
+        spTeleportBounds.clear();
         for (int i = 0; i < spawnPts.size(); i++) {
             double[] p = spawnPts.get(i);
             g.drawString(
@@ -1316,6 +1320,18 @@ public class RpAdminScreen extends Screen {
                     ry + 3,
                     RpTheme.TEXT_PRIMARY);
             int rbX = x1 + w - 14 - 48;
+            // 每行「传送」按钮：直接传送到该坐标（就地检查出生点/复活点）
+            int tpX = rbX - 48 - 4;
+            spTeleportBounds.add(new int[] {tpX, ry, tpX + 48, ry + 16});
+            RpButton.draw(
+                    g,
+                    tpX,
+                    ry,
+                    tpX + 48,
+                    ry + 16,
+                    "传送",
+                    inRect(mouseX, mouseY, tpX, ry, tpX + 48, ry + 16) ? borderHover : border,
+                    false);
             spRemoveBounds.add(new int[] {rbX, ry, rbX + 48, ry + 16});
             RpButton.draw(
                     g,
@@ -1361,6 +1377,16 @@ public class RpAdminScreen extends Screen {
                 if (i < spawnPts.size()) {
                     spawnPts.remove(i);
                     spawnDims.remove(i);
+                }
+                return true;
+            }
+        }
+        for (int i = 0; i < spTeleportBounds.size(); i++) {
+            int[] tb = spTeleportBounds.get(i);
+            if (inRect((int) mx, (int) my, tb[0], tb[1], tb[2], tb[3])) {
+                if (i < spawnPts.size()) {
+                    double[] p = spawnPts.get(i);
+                    RpChannels.sendToServer(new RpPackets.AdminTeleportC2S(p[0], p[1], p[2], spawnDims.get(i)));
                 }
                 return true;
             }
