@@ -7,9 +7,11 @@ package com.ccnrcom.rp.client;
 import com.ccnrcom.rp.faction.RelationType;
 import com.google.gson.JsonObject;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -97,6 +99,23 @@ public final class FactionGraphScreen extends Screen {
         return null;
     }
 
+    /** 鼠标所在的节点（徽章圆内，含少量余量）；不在任何节点上返回 null。 */
+    private Node hoveredNode(double mouseX, double mouseY) {
+        int cx = width / 2;
+        int cy = height / 2;
+        for (Node n : nodes) {
+            int x = cx + (int) Math.round(offsetX + n.x() * scale);
+            int y = cy + (int) Math.round(offsetY + n.y() * scale);
+            int r = Math.max(10, (int) Math.round(14 * scale));
+            double dx = mouseX - x;
+            double dy = mouseY - y;
+            if (dx * dx + dy * dy <= (r + 4.0) * (r + 4.0)) {
+                return n;
+            }
+        }
+        return null;
+    }
+
     // ---------- 拖动 / 缩放 ----------
 
     @Override
@@ -164,14 +183,33 @@ public final class FactionGraphScreen extends Screen {
         int cx = width / 2;
         int cy = height / 2;
 
-        // 连线（画在节点下层）
+        // 悬停高亮：鼠标放在某阵营图标上时，保留该阵营 + 其连线 + 直接相连阵营（连线/图标），其余全部变暗
+        Node hover = hoveredNode(mouseX, mouseY);
+        Set<String> keep = new HashSet<>();
+        if (hover != null) {
+            keep.add(str(hover.faction(), "id"));
+            for (String[] e : edges) {
+                if (e[0].equals(str(hover.faction(), "id")) || e[1].equals(str(hover.faction(), "id"))) {
+                    keep.add(e[0]);
+                    keep.add(e[1]);
+                }
+            }
+        }
+
+        // 连线（画在节点下层）：悬停时只保留与悬停阵营相连的边
         for (String[] e : edges) {
             Node na = nodeOf(e[0]);
             Node nb = nodeOf(e[1]);
             if (na == null || nb == null) {
                 continue;
             }
+            boolean dim = hover != null
+                    && !e[0].equals(str(hover.faction(), "id"))
+                    && !e[1].equals(str(hover.faction(), "id"));
             int color = edgeColor(e[2]);
+            if (dim) {
+                color = (color & 0x00FFFFFF) | 0x32000000; // 低透明度 → 变暗
+            }
             int x1 = cx + (int) Math.round(offsetX + na.x() * scale);
             int y1 = cy + (int) Math.round(offsetY + na.y() * scale);
             int x2 = cx + (int) Math.round(offsetX + nb.x() * scale);
@@ -179,17 +217,21 @@ public final class FactionGraphScreen extends Screen {
             drawLine(g, x1, y1, x2, y2, color);
         }
 
-        // 节点：徽章 + 名称
+        // 节点：徽章 + 名称（悬停时保留悬停阵营与直接相连阵营，其余盖半透明深色罩变暗）
         for (Node n : nodes) {
             int x = cx + (int) Math.round(offsetX + n.x() * scale);
             int y = cy + (int) Math.round(offsetY + n.y() * scale);
             int r = Math.max(10, (int) Math.round(14 * scale));
+            boolean dim = hover != null && !keep.contains(str(n.faction(), "id"));
             RpIcons.factionBadge(g, x, y, r, n.faction(), false);
+            if (dim) {
+                RpIcons.circle(g, x, y, r + 1, 0xA80E1014);
+            }
             String name = str(n.faction(), "name");
             if (name.isBlank()) {
                 name = str(n.faction(), "id");
             }
-            g.drawCenteredString(font, Component.literal(name), x, y + r + 3, RpTheme.TEXT_PRIMARY);
+            g.drawCenteredString(font, Component.literal(name), x, y + r + 3, dim ? 0xFF565B62 : RpTheme.TEXT_PRIMARY);
         }
 
         // 图例 + 操作提示（左上角）
