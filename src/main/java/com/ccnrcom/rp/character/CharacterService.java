@@ -1043,6 +1043,8 @@ public final class CharacterService {
         root.addProperty("nametagEnabled", com.ccnrcom.rp.config.CCNRRPConfig.NAMETAG_ENABLED.get());
         root.addProperty("nametagBadgeSize", com.ccnrcom.rp.config.CCNRRPConfig.NAMETAG_BADGE_SIZE.get());
         root.addProperty("nametagOffset", com.ccnrcom.rp.config.CCNRRPConfig.NAMETAG_OFFSET.get());
+        // 击杀友好提示距聊天区上方的额外间距（服务端权威，客户端遵从）
+        root.addProperty("killNoticeOffset", com.ccnrcom.rp.config.CCNRRPConfig.KILL_NOTICE_OFFSET.get());
         root.addProperty(
                 "admin",
                 com.ccnrcom.rp.util.Permissions.canAdmin(player, com.ccnrcom.rp.util.Permissions.ADMIN_FACTION));

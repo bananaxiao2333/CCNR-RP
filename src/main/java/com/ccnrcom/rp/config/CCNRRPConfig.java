@@ -37,6 +37,8 @@ public final class CCNRRPConfig {
     public static final ConfigValue<Double> NAMETAG_OFFSET;
     /** 击杀友好玩家时左下角提示（可配置开关；false=关闭提示）。 */
     public static final ConfigValue<Boolean> KILL_FRIENDLY_NOTICE;
+    /** 击杀友好提示距聊天区上方的额外间距（像素；锚点=聊天区底部+聊天区高度+本数值）。 */
+    public static final ConfigValue<Integer> KILL_NOTICE_OFFSET;
 
     static {
         ForgeConfigSpec.Builder b = new ForgeConfigSpec.Builder();
@@ -65,6 +67,7 @@ public final class CCNRRPConfig {
         b.pop();
         b.push("kill");
         KILL_FRIENDLY_NOTICE = b.comment("击杀友好玩家时左下角提示（false=关闭）").define("friendlyNotice", true);
+        KILL_NOTICE_OFFSET = b.comment("击杀友好提示距聊天区上方的额外间距（像素）").define("noticeOffset", 4);
         b.pop();
         SPEC = b.build();
     }
@@ -87,7 +90,8 @@ public final class CCNRRPConfig {
                 "enabled",
                 "badgeSize",
                 "offset",
-                "friendlyNotice");
+                "friendlyNotice",
+                "noticeOffset");
     }
 
     /** 当前所有 serverconfig 值（key → 数值），供管理面板展示。 */
@@ -105,6 +109,7 @@ public final class CCNRRPConfig {
         o.addProperty("badgeSize", NAMETAG_BADGE_SIZE.get());
         o.addProperty("offset", NAMETAG_OFFSET.get());
         o.addProperty("friendlyNotice", KILL_FRIENDLY_NOTICE.get());
+        o.addProperty("noticeOffset", KILL_NOTICE_OFFSET.get());
         return o;
     }
 
@@ -124,6 +129,7 @@ public final class CCNRRPConfig {
                 case "badgeSize" -> NAMETAG_BADGE_SIZE.set(Integer.parseInt(value.trim()));
                 case "offset" -> NAMETAG_OFFSET.set(Double.parseDouble(value.trim()));
                 case "friendlyNotice" -> KILL_FRIENDLY_NOTICE.set(Boolean.parseBoolean(value.trim()));
+                case "noticeOffset" -> KILL_NOTICE_OFFSET.set(Integer.parseInt(value.trim()));
                 default -> {
                     return java.util.List.of("未知配置项: " + key);
                 }

@@ -76,6 +76,10 @@ public final class PlayerNametagRenderer {
         if (!ClientCharacterState.nametagEnabled()) {
             return; // 服务端配置：头顶悬浮标签总开关关闭
         }
+        // 仅旁观者模式（观察者视角）渲染头顶标记：非旁观者（在场/普通玩家）不渲染，避免信息暴露
+        if (mc.gameMode == null || mc.gameMode.getPlayerMode() != net.minecraft.world.level.GameType.SPECTATOR) {
+            return;
+        }
         Font font = mc.font;
         Vec3 camPos = cam.getPosition();
         Quaternionf camRot = mc.getEntityRenderDispatcher().cameraOrientation();
