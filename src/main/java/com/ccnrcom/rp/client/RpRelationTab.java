@@ -39,6 +39,19 @@ public final class RpRelationTab {
     private String notice = "";
     private long noticeUntil = 0;
 
+    // 阵营下拉注入（from/to 各一）：下拉选阵营，注入按钮把 id 追加到对应输入框（逗号分隔、去重）
+    private boolean fromDdOpen = false;
+    private boolean toDdOpen = false;
+    private int fromDdIdx = 0;
+    private int toDdIdx = 0;
+    private int fromDdScroll = 0;
+    private int toDdScroll = 0;
+    private int ddW = 0;
+    private static final int DD_H = 16;
+    private static final int DD_ITEM_H = 14;
+    private static final int DD_MAX_VISIBLE = 8;
+    private static final int INJECT_W = 52;
+
     public RpRelationTab(RpAdminScreen screen) {
         this.screen = screen;
     }
@@ -56,22 +69,32 @@ public final class RpRelationTab {
         listY2 = py2 - 60;
         int ex = listX2 + 16;
         int ew = px2 - ex - 12;
+        // 阵营下拉宽度（留出注入按钮空间）
+        ddW = Math.max(60, Math.min(ew - INJECT_W - 6, ew * 55 / 100));
         if (fromBox == null) {
-            fromBox = new EditBox(Minecraft.getInstance().font, ex, listY1 + 18, ew, 18, Component.literal("from"));
+            fromBox = new EditBox(Minecraft.getInstance().font, ex, listY1 + 38, ew, 18, Component.literal("from"));
             fromBox.setMaxLength(256);
-            toBox = new EditBox(Minecraft.getInstance().font, ex, listY1 + 52, ew, 18, Component.literal("to"));
+            toBox = new EditBox(Minecraft.getInstance().font, ex, listY1 + 94, ew, 18, Component.literal("to"));
             toBox.setMaxLength(256);
         } else {
             fromBox.setX(ex);
             fromBox.setWidth(ew);
-            fromBox.setY(listY1 + 18);
+            fromBox.setY(listY1 + 38);
             toBox.setX(ex);
             toBox.setWidth(ew);
-            toBox.setY(listY1 + 52);
+            toBox.setY(listY1 + 94);
         }
         // rebuild 会先 clearWidgets 清空全部控件，输入框必须每次重新注册，否则不渲染也不接收输入
         screen.addXpWidget(fromBox);
         screen.addXpWidget(toBox);
+        // 重建收起下拉弹层并钳制选中下标
+        fromDdOpen = false;
+        toDdOpen = false;
+        fromDdScroll = 0;
+        toDdScroll = 0;
+        int facSize = ClientCharacterState.factions().size();
+        fromDdIdx = facSize == 0 ? -1 : Math.min(fromDdIdx, facSize - 1);
+        toDdIdx = facSize == 0 ? -1 : Math.min(toDdIdx, facSize - 1);
         // 数据刷新等触发的重建保留已选规则的编辑内容；无选中则复位
         if (selIndex >= 0 && selIndex < rules().size()) {
             loadEditor(selIndex);
@@ -85,8 +108,8 @@ public final class RpRelationTab {
     }
 
     private int editorY() {
-        // 类型三选：位于 to 输入框（listY1+52..70）下方
-        return listY1 + 78;
+        // 类型三选：位于 to 输入框（listY1+94..112）下方
+        return listY1 + 118;
     }
 
     private int actionY() {
@@ -203,6 +226,26 @@ public final class RpRelationTab {
     }
 
     public void mouseScrolled(int mouseX, int mouseY, double delta) {
+        // 阵营下拉弹层：弹层内滚轮滚动选项
+        int ex = editorX();
+        List<JsonObject> facs = ClientCharacterState.factions();
+        int maxScroll = Math.max(0, facs.size() - DD_MAX_VISIBLE);
+        if (fromDdOpen
+                && mouseX >= ex
+                && mouseX <= ex + ddW
+                && mouseY >= ddPopupTop(true)
+                && mouseY <= ddPopupTop(true) + ddPopupH(true)) {
+            fromDdScroll = (int) Math.max(0, Math.min(fromDdScroll + (delta > 0 ? -1 : 1), maxScroll));
+            return;
+        }
+        if (toDdOpen
+                && mouseX >= ex
+                && mouseX <= ex + ddW
+                && mouseY >= ddPopupTop(false)
+                && mouseY <= ddPopupTop(false) + ddPopupH(false)) {
+            toDdScroll = (int) Math.max(0, Math.min(toDdScroll + (delta > 0 ? -1 : 1), maxScroll));
+            return;
+        }
         if (mouseX >= listX1 && mouseX <= listX2 && mouseY >= listY1 && mouseY <= listY2) {
             int max = Math.max(0, rules().size() - Math.max(1, (listY2 - listY1) / ROW_H));
             if (delta > 0) {
@@ -215,6 +258,133 @@ public final class RpRelationTab {
 
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         return false;
+    }
+
+    // ---------- 阵营下拉注入 ----------
+
+    /** 下拉本体 y。 */
+    private int ddY(boolean isFrom) {
+        return listY1 + (isFrom ? 16 : 72);
+    }
+
+    /** 弹层顶部 y。 */
+    private int ddPopupTop(boolean isFrom) {
+        return ddY(isFrom) + DD_H + 2;
+    }
+
+    /** 弹层可见高度（最多 DD_MAX_VISIBLE 项）。 */
+    private int ddPopupH(boolean isFrom) {
+        int n = ClientCharacterState.factions().size();
+        return Math.min(n, DD_MAX_VISIBLE) * DD_ITEM_H + 2;
+    }
+
+    /** 弹层第 i 项 y 起点（含滚动偏移）。 */
+    private int ddPopupItemY(boolean isFrom, int i) {
+        int scroll = isFrom ? fromDdScroll : toDdScroll;
+        return ddPopupTop(isFrom) + 1 + (i - scroll) * DD_ITEM_H;
+    }
+
+    /**
+     * 阵营下拉与注入按钮命中（须在 RpAdminScreen 的 super.mouseClicked / widget 分发**之前**调用：
+     * 弹层展开时会盖住 from/to 输入框等控件，必须先命中弹层项/下拉/注入按钮）。
+     */
+    public boolean mouseClickedOverlay(int mx, int my, int button) {
+        if (button != 0) {
+            return false;
+        }
+        int ex = editorX();
+        List<JsonObject> facs = ClientCharacterState.factions();
+        // 弹层项（展开时优先，弹层盖住下方控件）
+        if (fromDdOpen) {
+            for (int i = fromDdScroll; i < facs.size() && i < fromDdScroll + DD_MAX_VISIBLE; i++) {
+                int y1 = ddPopupItemY(true, i);
+                if (mx >= ex && mx <= ex + ddW && my >= y1 && my <= y1 + DD_ITEM_H) {
+                    fromDdIdx = i;
+                    fromDdOpen = false;
+                    return true;
+                }
+            }
+        }
+        if (toDdOpen) {
+            for (int i = toDdScroll; i < facs.size() && i < toDdScroll + DD_MAX_VISIBLE; i++) {
+                int y1 = ddPopupItemY(false, i);
+                if (mx >= ex && mx <= ex + ddW && my >= y1 && my <= y1 + DD_ITEM_H) {
+                    toDdIdx = i;
+                    toDdOpen = false;
+                    return true;
+                }
+            }
+        }
+        // 下拉本体：点击切换展开
+        if (mx >= ex && mx <= ex + ddW && my >= ddY(true) && my <= ddY(true) + DD_H) {
+            if (!facs.isEmpty()) {
+                fromDdOpen = !fromDdOpen;
+                toDdOpen = false;
+            }
+            return true;
+        }
+        if (mx >= ex && mx <= ex + ddW && my >= ddY(false) && my <= ddY(false) + DD_H) {
+            if (!facs.isEmpty()) {
+                toDdOpen = !toDdOpen;
+                fromDdOpen = false;
+            }
+            return true;
+        }
+        // 注入按钮：把下拉选中的阵营 id 追加到对应输入框
+        if (mx >= ex + ddW + 6 && mx <= ex + ddW + 6 + INJECT_W && my >= ddY(true) && my <= ddY(true) + DD_H) {
+            injectFaction(true);
+            return true;
+        }
+        if (mx >= ex + ddW + 6 && mx <= ex + ddW + 6 + INJECT_W && my >= ddY(false) && my <= ddY(false) + DD_H) {
+            injectFaction(false);
+            return true;
+        }
+        // 点击弹层外：收起弹层并放行到底层控件
+        if (fromDdOpen || toDdOpen) {
+            fromDdOpen = false;
+            toDdOpen = false;
+            return false;
+        }
+        return false;
+    }
+
+    /** 把下拉选中的阵营 id 追加到对应输入框（逗号分隔、去重）。 */
+    private void injectFaction(boolean isFrom) {
+        List<JsonObject> facs = ClientCharacterState.factions();
+        int idx = isFrom ? fromDdIdx : toDdIdx;
+        if (facs.isEmpty() || idx < 0 || idx >= facs.size()) {
+            return;
+        }
+        String id = str(facs.get(idx), "id", "");
+        if (id.isBlank()) {
+            return;
+        }
+        EditBox box = isFrom ? fromBox : toBox;
+        List<String> cur = new ArrayList<>();
+        for (String s : box.getValue().split(",")) {
+            if (!s.isBlank()) {
+                String t = s.trim();
+                if (!cur.contains(t)) {
+                    cur.add(t);
+                }
+            }
+        }
+        if (!cur.contains(id)) {
+            cur.add(id);
+        }
+        box.setValue(String.join(", ", cur));
+        if (isFrom) {
+            fromDdOpen = false;
+        } else {
+            toDdOpen = false;
+        }
+    }
+
+    /** 下拉项显示名：名字(id)，名字缺失时用 id。 */
+    private static String facLabel(JsonObject f) {
+        String name = str(f, "name", "");
+        String id = str(f, "id", "");
+        return name.isBlank() ? id : name + " (" + id + ")";
     }
 
     // ---------- 编辑动作 ----------
@@ -363,7 +533,10 @@ public final class RpRelationTab {
                 listY1 + 4,
                 RpTheme.TEXT_SECONDARY);
         g.drawString(
-                font, Component.translatable("ccnr_rp.gui.admin.relation.to"), ex, listY1 + 38, RpTheme.TEXT_SECONDARY);
+                font, Component.translatable("ccnr_rp.gui.admin.relation.to"), ex, listY1 + 60, RpTheme.TEXT_SECONDARY);
+        // 阵营下拉 + 注入按钮（from/to 各一）
+        drawDropdown(g, mx, my, true);
+        drawDropdown(g, mx, my, false);
         // 类型三选按钮
         int bw = 54;
         for (int i = 0; i < 3; i++) {
@@ -436,8 +609,91 @@ public final class RpRelationTab {
         }
         g.drawString(font, Component.translatable("ccnr_rp.gui.admin.relation.hint"), ex, py2 - 40, RpTheme.TEXT_DIM);
         // 输入框背景（EditBox 自身绘制，此处仅补充面板底色一致性）
-        g.fill(ex - 1, listY1 + 17, ex + (px2 - ex - 12) + 1, listY1 + 37, 0x99383838);
-        g.fill(ex - 1, listY1 + 51, ex + (px2 - ex - 12) + 1, listY1 + 71, 0x99383838);
+        g.fill(ex - 1, listY1 + 37, ex + (px2 - ex - 12) + 1, listY1 + 57, 0x99383838);
+        g.fill(ex - 1, listY1 + 93, ex + (px2 - ex - 12) + 1, listY1 + 113, 0x99383838);
+    }
+
+    // ---------- 阵营下拉渲染 ----------
+
+    /** 下拉弹层（在 widget 渲染之后调用，弹层盖住输入框等控件）。 */
+    public void renderOverlay(GuiGraphics g, int mx, int my) {
+        if (fromDdOpen) {
+            drawPopup(g, mx, my, true);
+        }
+        if (toDdOpen) {
+            drawPopup(g, mx, my, false);
+        }
+    }
+
+    private void drawDropdown(GuiGraphics g, int mx, int my, boolean isFrom) {
+        var font = Minecraft.getInstance().font;
+        int ex = editorX();
+        int y = ddY(isFrom);
+        boolean open = isFrom ? fromDdOpen : toDdOpen;
+        int idx = isFrom ? fromDdIdx : toDdIdx;
+        boolean hov = mx >= ex && mx <= ex + ddW && my >= y && my <= y + DD_H;
+        RpRoundRect.outlined(
+                g,
+                ex,
+                y,
+                ex + ddW,
+                y + DD_H,
+                3f,
+                open || hov ? RpTheme.PANEL_BORDER_BRIGHT : RpTheme.PANEL_BORDER,
+                open ? 0xA83A3F4A : RpTheme.PANEL_BG_ALT);
+        List<JsonObject> facs = ClientCharacterState.factions();
+        String label = facs.isEmpty() || idx < 0 || idx >= facs.size()
+                ? tr("ccnr_rp.gui.admin.relation.pick_faction")
+                : facLabel(facs.get(idx));
+        g.drawString(
+                font,
+                Component.literal(clip(font, label, ddW - 18)),
+                ex + 4,
+                y + 3,
+                facs.isEmpty() || idx < 0 || idx >= facs.size() ? RpTheme.TEXT_DIM : RpTheme.TEXT_PRIMARY);
+        // 下拉箭头（小三角）
+        int cx = ex + ddW - 8;
+        int cy = y + DD_H / 2;
+        g.fill(cx - 3, cy - 1, cx + 4, cy, RpTheme.TEXT_SECONDARY);
+        g.fill(cx - 2, cy, cx + 3, cy + 1, RpTheme.TEXT_SECONDARY);
+        g.fill(cx - 1, cy + 1, cx + 2, cy + 2, RpTheme.TEXT_SECONDARY);
+        // 注入按钮
+        RpButton.draw(
+                g,
+                ex + ddW + 6,
+                y,
+                ex + ddW + 6 + INJECT_W,
+                y + DD_H,
+                tr("ccnr_rp.gui.admin.relation.inject"),
+                RpTheme.CYAN_DIM,
+                true);
+    }
+
+    private void drawPopup(GuiGraphics g, int mx, int my, boolean isFrom) {
+        var font = Minecraft.getInstance().font;
+        int ex = editorX();
+        List<JsonObject> facs = ClientCharacterState.factions();
+        int top = ddPopupTop(isFrom);
+        int h = ddPopupH(isFrom);
+        int scroll = isFrom ? fromDdScroll : toDdScroll;
+        int cur = isFrom ? fromDdIdx : toDdIdx;
+        RpRoundRect.outlined(g, ex, top, ex + ddW, top + h, 4f, RpTheme.PANEL_BORDER_BRIGHT, 0xF01B1E23);
+        g.enableScissor(ex, top, ex + ddW, top + h);
+        for (int i = scroll; i < facs.size() && i < scroll + DD_MAX_VISIBLE; i++) {
+            int y1 = ddPopupItemY(isFrom, i);
+            int y2 = y1 + DD_ITEM_H;
+            boolean hov = mx >= ex && mx <= ex + ddW && my >= y1 && my <= y2;
+            if (hov) {
+                g.fill(ex + 1, y1, ex + ddW - 1, y2, RpTheme.PANEL_BG_ALT);
+            }
+            g.drawString(
+                    font,
+                    Component.literal(clip(font, facLabel(facs.get(i)), ddW - 10)),
+                    ex + 5,
+                    y1 + 3,
+                    i == cur ? RpTheme.CYAN : (hov ? 0xFFFFFFFF : RpTheme.TEXT_PRIMARY));
+        }
+        g.disableScissor();
     }
 
     private static String tr(String key) {
