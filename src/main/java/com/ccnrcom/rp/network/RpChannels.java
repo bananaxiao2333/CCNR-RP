@@ -222,6 +222,11 @@ public final class RpChannels {
                 .decoder(RpPackets.KillFriendlyNoticeS2C::new)
                 .consumerNetworkThread(RpPackets.KillFriendlyNoticeS2C::handle)
                 .add();
+        CHANNEL.messageBuilder(RpPackets.DeathNoticeS2C.class, id++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(RpPackets.DeathNoticeS2C::encode)
+                .decoder(RpPackets.DeathNoticeS2C::new)
+                .consumerNetworkThread(RpPackets.DeathNoticeS2C::handle)
+                .add();
         CHANNEL.messageBuilder(RpPackets.XpListS2C.class, id++, NetworkDirection.PLAY_TO_CLIENT)
                 .encoder(RpPackets.XpListS2C::encode)
                 .decoder(RpPackets.XpListS2C::new)

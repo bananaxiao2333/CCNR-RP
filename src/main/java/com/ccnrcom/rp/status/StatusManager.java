@@ -157,32 +157,58 @@ public final class StatusManager {
                 && CCNRRPMod.users.isAlive(attacker.getUUID().toString())) {
             CCNRRPMod.experience.emitKill(attacker.getUUID().toString(), attacker, player);
         }
-        // 击杀友好提示（可配置开关，serverconfig kill.friendlyNotice）：击杀者击杀友好阵营玩家 → 左下角提示
-        // （载荷：被击杀者玩家名/UUID/阵营/职业）。关闭开关时不计算不发包；未知阵营跳过提示，不打断主流程。
-        if (CCNRRPConfig.KILL_FRIENDLY_NOTICE.get()
-                && killer instanceof net.minecraft.server.level.ServerPlayer attacker
+        // 击杀信息（死亡通知 + 友好提示共用）：击杀者↔被击杀者双方阵营与生效关系。
+        // 仅双方均为正式用户且有档案/阵营时计算；未知阵营 try/catch 按无关系处理，不打断主流程。
+        String killerFaction = "";
+        String victimFaction = "";
+        com.ccnrcom.rp.faction.RelationType relation = null;
+        if (killer instanceof net.minecraft.server.level.ServerPlayer attacker
                 && !attacker.getUUID().equals(player.getUUID())
                 && CCNRRPMod.users != null
                 && CCNRRPMod.users.hasProfile(player.getUUID().toString())
+                && CCNRRPMod.users.hasProfile(attacker.getUUID().toString())
                 && CCNRRPMod.factions != null) {
             String kf = CCNRRPMod.users.factionId(attacker.getUUID().toString());
             String vf = CCNRRPMod.users.factionId(player.getUUID().toString());
             if (!kf.isBlank() && !vf.isBlank()) {
                 try {
-                    if (CCNRRPMod.factions.graph().resolve(kf, vf) == com.ccnrcom.rp.faction.RelationType.FRIENDLY) {
-                        RpChannels.sendTo(
-                                attacker,
-                                new RpPackets.KillFriendlyNoticeS2C(
-                                        player.getName().getString(),
-                                        player.getUUID().toString(),
-                                        vf,
-                                        CCNRRPMod.users.professionId(
-                                                player.getUUID().toString())));
-                    }
+                    relation = CCNRRPMod.factions.graph().resolve(kf, vf);
+                    killerFaction = kf;
+                    victimFaction = vf;
                 } catch (IllegalArgumentException ignored) {
-                    // 未知阵营：跳过提示（关系图 resolve 对未知 id 抛异常）
+                    // 未知阵营：按无关系处理
                 }
             }
+        }
+        // 死亡通知（发给死者）：本地聊天显示被谁以什么击杀 + 击杀者阵营（阵营色）/名字（关系色）
+        // + 队友击杀追加举报提示。载荷：击杀者名/阵营/关系/武器/环境伤害源。
+        // 武器取击杀者主手物品显示名；环境伤害（无击杀实体）用伤害源 msgId（客户端本地化）。
+        String weapon = killer instanceof net.minecraft.world.entity.LivingEntity le
+                        && !le.getMainHandItem().isEmpty()
+                ? le.getMainHandItem().getHoverName().getString()
+                : "";
+        String envMsgId = killer == null ? event.getSource().getMsgId() : "";
+        String killerName = killer == null ? "" : killer.getName().getString();
+        RpChannels.sendTo(
+                player,
+                new RpPackets.DeathNoticeS2C(
+                        killerName,
+                        killerFaction,
+                        relation == null ? "" : relation.name().toLowerCase(java.util.Locale.ROOT),
+                        weapon,
+                        envMsgId));
+        // 击杀友好提示（可配置开关，serverconfig kill.friendlyNotice）：击杀者击杀友好阵营玩家 → 击杀者聊天红字 + 左下角提示
+        // （载荷：被击杀者玩家名/UUID/阵营/职业）。关闭开关时不计算不发包。
+        if (CCNRRPConfig.KILL_FRIENDLY_NOTICE.get()
+                && relation == com.ccnrcom.rp.faction.RelationType.FRIENDLY
+                && killer instanceof net.minecraft.server.level.ServerPlayer attacker) {
+            RpChannels.sendTo(
+                    attacker,
+                    new RpPackets.KillFriendlyNoticeS2C(
+                            player.getName().getString(),
+                            player.getUUID().toString(),
+                            victimFaction,
+                            CCNRRPMod.users.professionId(player.getUUID().toString())));
         }
         // 统一：清除客户端征召身份（幂等）。
         // 注意：不在死亡瞬间切旁观者——否则打断原版掉落与 Corpse 尸体生成；重生时由 onPlayerRespawn 切旁观并传回尸体旁。
