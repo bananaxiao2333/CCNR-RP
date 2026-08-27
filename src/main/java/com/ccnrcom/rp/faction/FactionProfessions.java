@@ -233,6 +233,50 @@ public final class FactionProfessions {
         return out;
     }
 
+    /** 管理面板职业表单保存的完整参数（resolveSave 输出，可直接喂 upsert）。 */
+    public record ProfessionSave(
+            String id,
+            String name,
+            String factionId,
+            boolean selfDeploy,
+            int unlockLevel,
+            JsonObject loadout,
+            String music,
+            String profile,
+            String cmdcamScene,
+            JsonObject radio,
+            boolean radioDisabled) {}
+
+    /**
+     * 解析管理面板职业表单的保存参数：payload（表单输出）未携带的字段从现有定义继承——
+     * 自部署开关 / 装备 loadout / 无线电禁用不在表单内，缺省继承原值，防止保存把原数据清空
+     * （保存 = 表单输出覆盖到原数据上，而不是整条重建）。existing 为 null（新建）时
+     * loadout 返回 null（upsert 落空装备），开关回退 false。
+     */
+    public static ProfessionSave resolveSave(JsonObject payload, JsonObject existing) {
+        boolean selfDeploy = payload.has("selfDeploy")
+                ? payload.get("selfDeploy").getAsBoolean()
+                : existing != null && selfDeploy(existing);
+        JsonObject loadout = existing != null ? loadout(existing) : null;
+        JsonObject radio =
+                payload.has("radio") && payload.get("radio").isJsonObject() ? payload.getAsJsonObject("radio") : null;
+        boolean radioDisabled = payload.has("radioDisabled")
+                ? payload.get("radioDisabled").getAsBoolean()
+                : existing != null && radioDisabled(existing);
+        return new ProfessionSave(
+                str(payload, "id", ""),
+                str(payload, "name", existing == null ? str(payload, "id", "") : str(existing, "name", "")),
+                str(payload, "factionId", existing == null ? "" : factionId(existing)),
+                selfDeploy,
+                unlockLevel(payload),
+                loadout,
+                str(payload, "music", ""),
+                str(payload, "profile", ""),
+                str(payload, "cmdcamScene", ""),
+                radio,
+                radioDisabled);
+    }
+
     private static String str(JsonObject o, String key, String def) {
         return o.has(key) && !o.get(key).isJsonNull() ? o.get(key).getAsString() : def;
     }
