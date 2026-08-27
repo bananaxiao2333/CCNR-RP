@@ -15,7 +15,7 @@ import net.minecraft.network.chat.Component;
 
 /**
  * 部署入场电影（客户端）：
- * 全屏黑 0.5s → 突然阵营徽章图标，停留 3s → 主标题打字显示职业 → 副标题逐行打字（项目名字/项目阵营/阵营关系/项目简历）
+ * 全屏黑 0.5s → 突然阵营徽章图标，停留 3s → 主标题打字显示职业 → 副标题逐行打字（成员姓名/所属阵营/阵营关系/职业画像）
  * → 打字完成后不额外停留，直接黑屏渐退 1.6s → 文字与图标在 2s 后开始缓慢淡出（打完即进入淡出，无 3s 停顿）。
  */
 public final class CinematicController {
@@ -129,10 +129,10 @@ public final class CinematicController {
     /** 四行副标题（分段着色：阵营关系按关系类型着色，其余整行副标题色）。 */
     private static List<List<Seg>> segLines() {
         List<List<Seg>> out = new ArrayList<>();
-        out.add(List.of(new Seg("项目名字：" + str(data, "name"), 0)));
-        out.add(List.of(new Seg("项目阵营：" + str(data, "factionName"), 0)));
+        out.add(List.of(new Seg(lang("ccnr_rp.cinematic.member") + str(data, "name"), 0)));
+        out.add(List.of(new Seg(lang("ccnr_rp.cinematic.faction") + str(data, "factionName"), 0)));
         List<Seg> rel = new ArrayList<>();
-        rel.add(new Seg("阵营关系：", 0));
+        rel.add(new Seg(lang("ccnr_rp.cinematic.relations"), 0));
         if (data.has("relations") && data.get("relations").isJsonArray()) {
             boolean first = true;
             for (JsonElement e : data.getAsJsonArray("relations")) {
@@ -152,10 +152,10 @@ public final class CinematicController {
             rel.add(new Seg("—", 0));
         }
         out.add(rel);
-        // 项目简历（职业 profile 优先；未配置的职位不显示该行）
+        // 职业画像（职业 profile 优先；未配置则跳过该行）
         String resume = str(data, "background");
         if (!resume.isBlank()) {
-            out.add(List.of(new Seg("项目简历：" + resume, 0)));
+            out.add(List.of(new Seg(lang("ccnr_rp.cinematic.profile") + resume, 0)));
         }
         return out;
     }
@@ -209,6 +209,11 @@ public final class CinematicController {
 
     private static String str(JsonObject o, String key) {
         return o.has(key) && !o.get(key).isJsonNull() ? o.get(key).getAsString() : "";
+    }
+
+    /** 按 lang 键取本地化文本（副标题标签就地翻译，不硬编码中文）。 */
+    private static String lang(String key) {
+        return net.minecraft.network.chat.Component.translatable(key).getString();
     }
 
     /** 打字进度：第 start 毫秒开始，逐字填充。 */

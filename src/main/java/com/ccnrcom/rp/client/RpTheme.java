@@ -7,7 +7,7 @@ package com.ccnrcom.rp.client;
 import net.minecraft.client.gui.GuiGraphics;
 
 /**
- * CCNR-RP 界面主题 v3——"SCP:NET 机密终端"：
+ * CCNR-RP 界面主题 v3——"CCNR:NET 机密终端"（量子科学设施）：
  * 冷暗科技金属底 / 青色主色(文字+边框，电子屏发光) / 高饱和正红(选中+警戒) / 金·蓝徽章(机构等级)。
  * 布局：严格三栏网格（左：机构分类徽章导航 / 中：角色档案列表 / 右：详细资料+3D预览+战术装备实物）。
  */
