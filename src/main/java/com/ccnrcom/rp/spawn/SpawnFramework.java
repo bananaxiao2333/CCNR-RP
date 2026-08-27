@@ -423,12 +423,14 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
             en.addProperty("name", name);
             en.addProperty("professionName", professionId);
             String music = "";
+            String profProfile = "";
             com.google.gson.JsonArray relations = new com.google.gson.JsonArray();
             if (CCNRRPMod.factions != null) {
                 var profDef = CCNRRPMod.factions.findProfession(professionId).orElse(null);
                 if (profDef != null) {
                     en.addProperty("professionName", FactionProfessions.idsSafeName(profDef));
                     music = FactionProfessions.music(profDef);
+                    profProfile = FactionProfessions.profile(profDef);
                 }
                 var graph = CCNRRPMod.factions.graph();
                 var f = graph.factions().get(factionId);
@@ -463,7 +465,8 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
             en.addProperty("cmdcamScene", sceneReady ? cmdcamScene : "");
             en.addProperty("music", musicOn ? music : "");
             en.add("relations", relations);
-            en.addProperty("background", background == null ? "" : background);
+            // 「项目简历」行：职业 profile（项目简历）优先，未配置则回退角色背景（当前部署路径背景恒为空）
+            en.addProperty("background", !profProfile.isBlank() ? profProfile : (background == null ? "" : background));
             // 入场无线电（播放优先级：职业 > 阵营；职业 radioDisabled 时该职业不播任何无线电）：
             // 播完入场动画后客户端 action bar 打字机逐句展示；注入阵营色（说话人按阵营颜色渲染）
             com.google.gson.JsonObject radio = resolveRadio(factionId, professionId);

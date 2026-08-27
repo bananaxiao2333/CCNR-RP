@@ -6,6 +6,7 @@ package com.ccnrcom.rp.client;
 
 import com.ccnrcom.rp.network.RpChannels;
 import com.ccnrcom.rp.network.RpPackets;
+import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -51,7 +52,7 @@ public class RecruitPopupScreen extends Screen {
                         RecruitOverlayHud.remove(o.offerId());
                         rebuild();
                     }));
-            y += 72;
+            y += 82;
         }
     }
 
@@ -60,9 +61,9 @@ public class RecruitPopupScreen extends Screen {
         open = this;
         int w = Math.min(360, this.width - 40);
         px1 = this.width - w - 12;
-        py1 = this.height / 2 - 120;
+        py1 = this.height / 2 - 140;
         px2 = this.width - 12;
-        py2 = this.height / 2 + 120;
+        py2 = this.height / 2 + 140;
         rebuild();
     }
 
@@ -73,9 +74,10 @@ public class RecruitPopupScreen extends Screen {
         g.drawString(font, title, px1 + 12, py1 + 10, RpTheme.TEXT_PRIMARY);
         int y = py1 + 34;
         for (RecruitOverlayHud.OfferEntry o : entries()) {
+            int cardH = 68;
             int kc = kindColor(o.kind());
-            RpRoundRect.fill(g, px1 + 8, y, px2 - 8, y + 58, 8f, RpTheme.PANEL_BG_ALT);
-            RpRoundRect.fill(g, px1 + 8, y, px1 + 11, y + 58, 8f, kc); // 左侧类型色条
+            RpRoundRect.fill(g, px1 + 8, y, px2 - 8, y + cardH, 8f, RpTheme.PANEL_BG_ALT);
+            RpRoundRect.fill(g, px1 + 8, y, px1 + 11, y + cardH, 8f, kc); // 左侧类型色条
             // 人物立绘（战术装备预览同款：水平跟随鼠标、俯仰锁定，带职位装备）。
             // 临时征召的 charId 不在角色列表，直接按邀请的 professionId 取职业装备渲染
             CharacterPreview.renderPortrait(
@@ -104,9 +106,22 @@ public class RecruitPopupScreen extends Screen {
                     font,
                     Component.translatable(kindDescKey(o.kind())).getString(),
                     px1 + 62,
-                    y + 38,
+                    y + 34,
                     RpTheme.TEXT_SECONDARY);
-            y += 72;
+            // 项目简历（职业 profile，可选；最多 2 行，超长裁剪；未配置不占行）
+            String profile = ClientCharacterState.professionProfile(o.professionId());
+            if (!profile.isBlank()) {
+                int rw = (px2 - 12) - (px1 + 62);
+                List<String> lines = wrapText(profile, Math.max(40, rw));
+                int ry = y + 46;
+                g.enableScissor(px1 + 62, ry, px2 - 12, y + cardH - 2);
+                for (int i = 0; i < Math.min(lines.size(), 2); i++) {
+                    g.drawString(font, lines.get(i), px1 + 62, ry, RpTheme.TEXT_SECONDARY);
+                    ry += 10;
+                }
+                g.disableScissor();
+            }
+            y += 82;
         }
         super.render(g, mouseX, mouseY, partialTick);
     }
@@ -144,6 +159,31 @@ public class RecruitPopupScreen extends Screen {
         if (entries().isEmpty()) {
             onClose();
         }
+    }
+
+    /** 按像素宽度折行（中文/长职位名）。 */
+    private List<String> wrapText(String text, int maxW) {
+        List<String> out = new ArrayList<>();
+        if (text == null || text.isBlank()) {
+            out.add("");
+            return out;
+        }
+        StringBuilder cur = new StringBuilder();
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '\n' || font.width(cur.toString() + c) > maxW) {
+                out.add(cur.toString());
+                cur.setLength(0);
+                if (c == '\n') {
+                    continue;
+                }
+            }
+            cur.append(c);
+        }
+        if (cur.length() > 0) {
+            out.add(cur.toString());
+        }
+        return out;
     }
 
     @Override

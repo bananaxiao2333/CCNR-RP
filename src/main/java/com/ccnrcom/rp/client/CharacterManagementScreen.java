@@ -686,7 +686,13 @@ public class CharacterManagementScreen extends Screen {
                 true);
         JsonObject loadout = loadoutOf(p);
         int contentTop = bodyY1 + 50;
-        int contentBottom = deployY - 12;
+        // 项目简历（职业 profile，可选）：展示在战术装备预览之下、部署按钮之上；未配置的职位不占位
+        String profile = str(p, "profile");
+        List<String> resumeLines = profile.isBlank() ? List.of() : wrapText(profile, w - 16);
+        int maxFit = Math.max(1, (deployY - 12 - contentTop - 40) / 10);
+        int resumeLineCount = Math.min(resumeLines.size(), Math.min(MAX_PROFILE_LINES, maxFit));
+        int resumeH = resumeLineCount == 0 ? 0 : 15 + resumeLineCount * 10;
+        int contentBottom = deployY - 12 - resumeH;
         int modelW = Math.max(88, w * 38 / 100);
         // 预览区背景阵营徽章（身份归属视觉提示，参考 t-mt8dmt3a 统一徽章封装）：
         // 大号半透明水印徽章置于装备槽区右侧空白背景，先画背景再画内容（模型/装备槽在上层不遮挡）；
@@ -716,6 +722,34 @@ public class CharacterManagementScreen extends Screen {
         g.disableScissor();
         // 战术装备实物预览（职位 loadout：头/胸/腿/靴/武器，悬停显示词条）
         renderEquipList(g, x + modelW + 8, x + w - 8, contentTop, contentBottom, loadout, mx, my);
+        // 项目简历（装备预览之下、部署按钮之上）
+        if (resumeLineCount > 0) {
+            renderProfileResume(g, x, w, contentBottom, deployY, resumeLines, resumeLineCount);
+        }
+    }
+
+    /** 项目简历展示区最多行数（超长裁剪；显示区域受限时自动减少行数）。 */
+    private static final int MAX_PROFILE_LINES = 4;
+
+    /** 在装备预览之下、部署按钮之上渲染项目简历：分隔线 + 标签 + 折行文本（裁剪到展示区）。 */
+    private void renderProfileResume(
+            GuiGraphics g, int x, int w, int top, int buttonTop, List<String> lines, int lineCount) {
+        int bottom = buttonTop - 8;
+        g.fill(x + 2, top + 1, x + w - 2, top + 2, RpTheme.PANEL_BORDER);
+        g.drawString(
+                font,
+                Component.translatable("ccnr_rp.gui.character.profile").getString(),
+                x + 2,
+                top + 6,
+                RpTheme.TEXT_DIM,
+                true);
+        g.enableScissor(x, top, x + w, bottom);
+        int ly = top + 17;
+        for (int i = 0; i < lineCount; i++) {
+            g.drawString(font, lines.get(i), x + 2, ly, RpTheme.TEXT_SECONDARY);
+            ly += 10;
+        }
+        g.disableScissor();
     }
 
     private static JsonObject loadoutOf(JsonObject p) {
