@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.18.18（击杀友好提示 + 击杀事件广播关系参数）
+
+- **击杀友好提示**：玩家击杀友好阵营玩家时，左下角弹出提示（约 6 秒），展示被击杀者的阵营、职业、玩家名与玩家 UUID；
+  服务端权威判定（FactionGraph.resolve == FRIENDLY 且双方有档案/阵营）后定向发包 KillFriendlyNoticeS2C；
+  可配置开关 serverconfig kill.friendlyNotice（默认 true，关闭不计算不发包）。
+- **击杀事件广播拓展**：character_kill 事件新增 victimRelation 参数（击杀者↔被击杀者阵营关系：hostile/neutral/friendly，
+  任一方无阵营/未知为空串），供经验规则表达式消费；ExperienceEventRegistry 参数表与 docs/06 同步。
+- 新增客户端 HUD：KillFriendlyNoticeHud（左下角 toast，登出清理）；zh/en 语言包新增 3 键。
+- 测试：新增 KillRelationTest（关系解析 5 例）+ ExperienceEventRegistryTest 补 victimRelation 断言；LangFileTest 守护键集一致。
+- 构建：spotlessApply / build -PrunTests 全绿。
+
 ## 2.18.17（精简默认配置为样板）
 
 - **默认配置精简为样板**：factions.json 由 8 阵营/28 职业 → **3 阵营/4 职业**（行政总部/麦迪逊/QDF，图标改用内置向量 shield/claw/cross，不再引用已删除的内嵌图片）+ 1 组 + 2 关系；

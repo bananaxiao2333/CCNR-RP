@@ -157,6 +157,33 @@ public final class StatusManager {
                 && CCNRRPMod.users.isAlive(attacker.getUUID().toString())) {
             CCNRRPMod.experience.emitKill(attacker.getUUID().toString(), attacker, player);
         }
+        // 击杀友好提示（可配置开关，serverconfig kill.friendlyNotice）：击杀者击杀友好阵营玩家 → 左下角提示
+        // （载荷：被击杀者玩家名/UUID/阵营/职业）。关闭开关时不计算不发包；未知阵营跳过提示，不打断主流程。
+        if (CCNRRPConfig.KILL_FRIENDLY_NOTICE.get()
+                && killer instanceof net.minecraft.server.level.ServerPlayer attacker
+                && !attacker.getUUID().equals(player.getUUID())
+                && CCNRRPMod.users != null
+                && CCNRRPMod.users.hasProfile(player.getUUID().toString())
+                && CCNRRPMod.factions != null) {
+            String kf = CCNRRPMod.users.factionId(attacker.getUUID().toString());
+            String vf = CCNRRPMod.users.factionId(player.getUUID().toString());
+            if (!kf.isBlank() && !vf.isBlank()) {
+                try {
+                    if (CCNRRPMod.factions.graph().resolve(kf, vf) == com.ccnrcom.rp.faction.RelationType.FRIENDLY) {
+                        RpChannels.sendTo(
+                                attacker,
+                                new RpPackets.KillFriendlyNoticeS2C(
+                                        player.getName().getString(),
+                                        player.getUUID().toString(),
+                                        vf,
+                                        CCNRRPMod.users.professionId(
+                                                player.getUUID().toString())));
+                    }
+                } catch (IllegalArgumentException ignored) {
+                    // 未知阵营：跳过提示（关系图 resolve 对未知 id 抛异常）
+                }
+            }
+        }
         // 统一：清除客户端征召身份（幂等）。
         // 注意：不在死亡瞬间切旁观者——否则打断原版掉落与 Corpse 尸体生成；重生时由 onPlayerRespawn 切旁观并传回尸体旁。
         RpChannels.sendTo(player, new RpPackets.ConscriptStateS2C(""));

@@ -15,7 +15,7 @@
 | 事件 | 触发 | 参数（名+类型，固定） |
 | --- | --- | --- |
 | `character_alive` | 每 60 秒对每个 **ALIVE** 用户各发一次 | `uuid`String, `playerName`String, `professionId`String, `factionId`String, `aliveSeconds`Long(本回合累计), `intervalSeconds`Long(60) |
-| `character_kill` | 玩家击杀**任意生物**（LivingEntity，含玩家）→ 发给击杀者 | `uuid`/playerName``/`professionId`/`factionId`（击杀者）, `victimType`String, `victimName`String, `victimUuid`String(可为空), `victimProfessionId`/`victimFactionId`String(非玩家为空) |
+| `character_kill` | 玩家击杀**任意生物**（LivingEntity，含玩家）→ 发给击杀者 | `uuid`/playerName``/`professionId`/`factionId`（击杀者）, `victimType`String, `victimName`String, `victimUuid`String(可为空), `victimProfessionId`/`victimFactionId`String(非玩家为空), `victimRelation`String(`hostile`/`neutral`/`friendly`，击杀者↔被击杀者阵营关系；任一方无阵营/未知为空串) |
 | `character_death` | 角色死亡/掉线判死，**结算开始前**发给死者 | `uuid`, `playerName`, `professionId`, `factionId`, `reason`String(`death`/`offline`) |
 
 注册表是纯类（`ExperienceEventRegistry`），客户端/服务端共用，管理面板补全与参数面板

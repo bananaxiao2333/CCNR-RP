@@ -35,6 +35,8 @@ public final class CCNRRPConfig {
     public static final ConfigValue<Integer> NAMETAG_BADGE_SIZE;
     /** 玩家头顶悬浮标签离头顶的高度（格，默认 0.9；越大标签越高）。 */
     public static final ConfigValue<Double> NAMETAG_OFFSET;
+    /** 击杀友好玩家时左下角提示（可配置开关；false=关闭提示）。 */
+    public static final ConfigValue<Boolean> KILL_FRIENDLY_NOTICE;
 
     static {
         ForgeConfigSpec.Builder b = new ForgeConfigSpec.Builder();
@@ -61,6 +63,9 @@ public final class CCNRRPConfig {
         NAMETAG_BADGE_SIZE = b.comment("头顶标签阵营徽章大小（世界单位，0=不显示徽章，只显示文字）").define("badgeSize", 9);
         NAMETAG_OFFSET = b.comment("头顶标签离头顶的高度（格，越大标签越高）").define("offset", 0.9);
         b.pop();
+        b.push("kill");
+        KILL_FRIENDLY_NOTICE = b.comment("击杀友好玩家时左下角提示（false=关闭）").define("friendlyNotice", true);
+        b.pop();
         SPEC = b.build();
     }
 
@@ -81,7 +86,8 @@ public final class CCNRRPConfig {
                 "pow",
                 "enabled",
                 "badgeSize",
-                "offset");
+                "offset",
+                "friendlyNotice");
     }
 
     /** 当前所有 serverconfig 值（key → 数值），供管理面板展示。 */
@@ -98,6 +104,7 @@ public final class CCNRRPConfig {
         o.addProperty("enabled", NAMETAG_ENABLED.get());
         o.addProperty("badgeSize", NAMETAG_BADGE_SIZE.get());
         o.addProperty("offset", NAMETAG_OFFSET.get());
+        o.addProperty("friendlyNotice", KILL_FRIENDLY_NOTICE.get());
         return o;
     }
 
@@ -116,6 +123,7 @@ public final class CCNRRPConfig {
                 case "enabled" -> NAMETAG_ENABLED.set(Boolean.parseBoolean(value.trim()));
                 case "badgeSize" -> NAMETAG_BADGE_SIZE.set(Integer.parseInt(value.trim()));
                 case "offset" -> NAMETAG_OFFSET.set(Double.parseDouble(value.trim()));
+                case "friendlyNotice" -> KILL_FRIENDLY_NOTICE.set(Boolean.parseBoolean(value.trim()));
                 default -> {
                     return java.util.List.of("未知配置项: " + key);
                 }

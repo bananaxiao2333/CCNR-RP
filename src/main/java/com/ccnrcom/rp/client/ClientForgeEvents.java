@@ -121,6 +121,7 @@ public final class ClientForgeEvents {
     public static void onClientLogout(net.minecraftforge.client.event.ClientPlayerNetworkEvent.LoggingOut event) {
         RecruitOverlayHud.clear();
         DeployNoticeBanner.clear();
+        KillFriendlyNoticeHud.clear();
         ClientCharacterState.resetForJoin();
     }
 
