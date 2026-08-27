@@ -894,7 +894,11 @@ public final class RpPackets {
         }
     }
 
-    /** 关系规则编辑（C2S）：{action: add|update|remove, rule: {from[],to?,type}}；服务端校验+落盘+回执。 */
+    /**
+     * 关系规则编辑（C2S）：{action: add|update|remove, rule: {from[],to?,type}, original?{from[],to?}}；
+     * update 携带 original（选中规则的原始 from/to）时服务端原位替换；无 original 回退按新值 upsert。
+     * 服务端校验+落盘+回执。
+     */
     public static final class RelationEditC2S {
         public final String payload;
 
