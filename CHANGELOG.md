@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.18.34（人物 3D 立绘/预览 XYZ 锁定：移除鼠标追踪）
+
+- **所有人物立体展示取消鼠标追踪**：K 面板 3D 预览、招募弹窗立绘、右侧悬浮招募卡与已同意列表的立绘
+  全部 XYZ 锁定为正面视角（原版 `renderEntityInInventoryFollowsMouse` 鼠标参数传绘制中心 → 旋转角为 0），
+  不再随鼠标位置旋转/倾斜。
+- `CharacterPreview.render` / `renderPortrait` 签名删除 mouseX/mouseY 参数（不再有“跟随鼠标”接口），
+  4 处调用点同步清理；注释同步更新。
+- 构建：spotlessApply / build -PrunTests / test -PrunTests 全绿。
+
 ## 2.18.33（配置变更全服广播异步化：所有配置数据即时同步全员，多人不卡服）
 
 - **广播异步化（核心）**：管理端 CRUD/设置变更后的全服同步不再在主线程逐玩家构建大 JSON 与读配置文件——

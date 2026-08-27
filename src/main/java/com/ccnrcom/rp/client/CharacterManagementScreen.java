@@ -710,7 +710,7 @@ public class CharacterManagementScreen extends Screen {
             com.ccnrcom.rp.client.RpIcons.bigBadge(g, badgeCx, badgeCy, badgeR, fIcon, fTier, 36);
             g.disableScissor();
         }
-        // 3D 人物立绘（使用玩家自己的皮肤，来自 CharacterPreview）
+        // 3D 人物立绘（使用玩家自己的皮肤，来自 CharacterPreview；XYZ 锁定正面视角）
         g.enableScissor(x, contentTop, x + modelW, contentBottom);
         JsonObject ch = new JsonObject();
         ch.addProperty("id", "pos-" + selectedId);
@@ -718,7 +718,7 @@ public class CharacterManagementScreen extends Screen {
         int modelH = contentBottom - contentTop;
         int scale = Math.max(12, Math.min(36, Math.min(modelH / 3 - 6, modelW / 3)));
         int cy = contentTop + modelH / 2 + 4;
-        CharacterPreview.render(g, x + modelW / 2, cy, scale, mx, my, ch, loadout);
+        CharacterPreview.render(g, x + modelW / 2, cy, scale, ch, loadout);
         g.disableScissor();
         // 战术装备实物预览（职位 loadout：头/胸/腿/靴/武器，悬停显示词条）
         renderEquipList(g, x + modelW + 8, x + w - 8, contentTop, contentBottom, loadout, mx, my);

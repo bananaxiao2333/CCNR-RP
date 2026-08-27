@@ -78,14 +78,13 @@ public class RecruitPopupScreen extends Screen {
             int kc = kindColor(o.kind());
             RpRoundRect.fill(g, px1 + 8, y, px2 - 8, y + cardH, 8f, RpTheme.PANEL_BG_ALT);
             RpRoundRect.fill(g, px1 + 8, y, px1 + 11, y + cardH, 8f, kc); // 左侧类型色条
-            // 人物立绘（战术装备预览同款：水平跟随鼠标、俯仰锁定，带职位装备）。
+            // 人物立绘（战术装备预览同款：XYZ 锁定正面视角，带职位装备）。
             // 临时征召的 charId 不在角色列表，直接按邀请的 professionId 取职业装备渲染
             CharacterPreview.renderPortrait(
                     g,
                     px1 + 35,
                     y + 29,
                     19,
-                    mouseX,
                     o.charId(),
                     o.charName(),
                     ClientCharacterState.professionLoadout(o.professionId()));

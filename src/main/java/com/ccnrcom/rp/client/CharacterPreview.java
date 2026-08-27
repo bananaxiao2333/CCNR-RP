@@ -18,8 +18,8 @@ import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.world.entity.player.Inventory;
 
 /**
- * 右侧 3D 模型预览：真实玩家模型 + 职位 loadout 装备（角色查看界面展示职位装备），跟随鼠标旋转。
- * 渲染复用原版 InventoryScreen.renderEntityInInventoryFollowsMouse（GUI 摄像机）。
+ * 右侧 3D 模型预览：真实玩家模型 + 职位 loadout 装备（角色查看界面展示职位装备），XYZ 锁定正面视角（不跟随鼠标）。
+ * 渲染复用原版 InventoryScreen.renderEntityInInventoryFollowsMouse（GUI 摄像机，鼠标参数传绘制中心即零旋转）。
  */
 public final class CharacterPreview {
 
@@ -33,16 +33,8 @@ public final class CharacterPreview {
         cached = null;
     }
 
-    /** 在 (cx,cy) 中心渲染模型；调用方负责 enableScissor 裁剪预览框。loadout=职业装备定义（可 null）。 */
-    public static void render(
-            GuiGraphics g,
-            int cx,
-            int cy,
-            int scale,
-            float mouseX,
-            float mouseY,
-            JsonObject character,
-            JsonObject loadout) {
+    /** 在 (cx,cy) 中心渲染模型；调用方负责 enableScissor 裁剪预览框。loadout=职业装备定义（可 null）。XYZ 锁定正面视角（不跟随鼠标）。 */
+    public static void render(GuiGraphics g, int cx, int cy, int scale, JsonObject character, JsonObject loadout) {
         if (character == null) {
             return;
         }
@@ -55,15 +47,13 @@ public final class CharacterPreview {
         if (p == null) {
             return;
         }
-        // 旋转角钳制：yaw ≤45°，pitch ≤33°——限制鼠标拖拽幅度，避免模型前倾时头“穿出”预览框。
-        float dx = Math.max(-40f, Math.min(40f, cx - mouseX));
-        float dy = Math.max(-26f, Math.min(26f, cy - mouseY));
-        InventoryScreen.renderEntityInInventoryFollowsMouse(g, cx, cy, scale, dx, dy, p);
+        // XYZ 锁定：鼠标参数传预览中心 → 旋转角为 0（正面、不倾斜）
+        InventoryScreen.renderEntityInInventoryFollowsMouse(g, cx, cy, scale, cx, cy, p);
     }
 
-    /** 立绘渲染（按 charId/name，供无完整角色 JSON 的场景：招募卡片等）。 */
+    /** 立绘渲染（按 charId/name，供无完整角色 JSON 的场景：招募卡片等）。XYZ 锁定正面视角（不跟随鼠标）。 */
     public static void renderPortrait(
-            GuiGraphics g, int cx, int cy, int scale, float mouseX, String charId, String name, JsonObject loadout) {
+            GuiGraphics g, int cx, int cy, int scale, String charId, String name, JsonObject loadout) {
         Minecraft mc = Minecraft.getInstance();
         ClientLevel level = mc.level;
         if (level == null || charId == null || charId.isBlank()) {
@@ -73,10 +63,9 @@ public final class CharacterPreview {
         if (p == null) {
             return;
         }
-        // Z 轴（水平 yaw）跟随鼠标、其他轴（俯仰）锁定：立绘感，模型不前后倾
-        float yaw = Math.max(-45f, Math.min(45f, cx - mouseX));
-        // (cx, cy) 语义 = 立绘视觉中心：模型从脚底向上画（身高 ≈ 2×scale），脚底下移一个 scale 使人物居中于框
-        InventoryScreen.renderEntityInInventoryFollowsMouse(g, cx, cy + scale, scale, yaw, 0f, p);
+        // (cx, cy) 语义 = 立绘视觉中心：模型从脚底向上画（身高 ≈ 2×scale），脚底下移一个 scale 使人物居中于框；
+        // XYZ 锁定：鼠标参数传绘制中心 → 旋转角为 0（正面、不倾斜）
+        InventoryScreen.renderEntityInInventoryFollowsMouse(g, cx, cy + scale, scale, cx, cy + scale, p);
     }
 
     private static AbstractClientPlayer entity(ClientLevel level, JsonObject c, JsonObject loadout) {
