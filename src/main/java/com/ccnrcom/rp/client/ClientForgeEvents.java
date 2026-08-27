@@ -159,6 +159,9 @@ public final class ClientForgeEvents {
      * 状态栏与事件横幅仅在「背包」（InventoryScreen）打开时绘制最上层；其余界面与正常游戏内不显示。
      * 经验结算 HUD 在「死亡界面」（DeathScreen）上绘制最上层——死亡结算动画发生在死亡瞬间，
      * 此时 HUD 覆盖层被死亡界面遮挡不渲染，若不在界面之上绘制会显得「动画瞬间完成」。
+     * 击杀友好提示在「聊天界面」（ChatScreen）上绘制最上层——ChatScreen 是 Screen，渲染在 HUD
+     * 覆盖层之上，左下角聊天历史面板会盖住提示；在聊天界面之上重绘（HUD 覆盖层与此处共同渲染，
+     * 内部按显示时间门控，不会重复出两次）。
      */
     @SubscribeEvent
     public static void onScreenRender(net.minecraftforge.client.event.ScreenEvent.Render.Post event) {
@@ -171,6 +174,9 @@ public final class ClientForgeEvents {
         } else if (event.getScreen() instanceof net.minecraft.client.gui.screens.DeathScreen) {
             // 死亡结算动画：逐项吸入放慢播放，结束后隐藏
             XpHudOverlay.render(event.getGuiGraphics(), event.getScreen().width, event.getScreen().height);
+        } else if (event.getScreen() instanceof net.minecraft.client.gui.screens.ChatScreen) {
+            // 击杀友好提示（左下角 toast）：聊天界面打开时在聊天框之上重绘，避免被聊天历史面板遮挡
+            KillFriendlyNoticeHud.render(event.getGuiGraphics(), event.getScreen().width, event.getScreen().height);
         }
     }
 }
