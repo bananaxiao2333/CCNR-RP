@@ -383,8 +383,10 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
             Wave wave,
             boolean cinematic,
             boolean musicOn) {
-        // 部署前清空背包（含护甲/副手）：防止死亡/观察期间遗留物品带进新岗位
+        // 部署前清空背包（含护甲/副手）并重设角色状态（生命/饱食/效果/火/坠落/空气）：
+        // 防止死亡/观察期间遗留物品与状态带进新岗位
         clearInventory(p);
+        resetPlayerState(p);
         if (CCNRRPMod.factions != null) {
             CCNRRPMod.factions.findProfession(professionId).ifPresent(def -> {
                 LoadoutManager.apply(p, FactionProfessions.loadout(def));
@@ -596,6 +598,22 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
         for (int i = 0; i < 41; i++) { // 0-35 背包 + 36-39 护甲 + 40 副手
             inv.setItem(i, net.minecraft.world.item.ItemStack.EMPTY);
         }
+    }
+
+    /**
+     * 重设角色状态（部署前，配合 clearInventory）：生命回满、饱食度/饱和度/消耗回满、
+     * 清空全部药水效果、灭火、清坠落距离、补满空气、清除吸收值——新岗位不带旧状态上场。
+     */
+    private static void resetPlayerState(ServerPlayer p) {
+        p.setHealth(p.getMaxHealth());
+        p.getFoodData().setFoodLevel(20);
+        p.getFoodData().setSaturation(5.0f);
+        p.getFoodData().setExhaustion(0.0f);
+        p.removeAllEffects();
+        p.clearFire();
+        p.setAbsorptionAmount(0.0f);
+        p.fallDistance = 0.0f;
+        p.setAirSupply(p.getMaxAirSupply());
     }
 
     /** 部署目标维度：职业部署点维度优先，否则阵营出生点维度，再否则 wave.dim，最后主世界（与 teleport 落位一致）。 */
