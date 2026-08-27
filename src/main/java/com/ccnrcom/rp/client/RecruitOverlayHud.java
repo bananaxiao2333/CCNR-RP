@@ -112,16 +112,13 @@ public final class RecruitOverlayHud {
                         default -> RpTheme.ACCENT;
                     };
             RpRoundRect.fill(gfx, x, y, x + 3, y + h, 8f, kc);
-            // 人物立绘（战术装备预览同款：水平跟随鼠标、俯仰锁定，带职位装备）。
+            // 人物立绘（战术装备预览同款：XYZ 锁定正面视角，带职位装备）。
             // 临时征召的 charId 不在角色列表，直接按邀请的 professionId 取职业装备渲染
             CharacterPreview.renderPortrait(
                     gfx,
                     x + 23,
                     y + 22,
                     16,
-                    (float) net.minecraft.client.Minecraft.getInstance()
-                            .mouseHandler
-                            .xpos(),
                     o.charId(),
                     o.charName(),
                     ClientCharacterState.professionLoadout(o.professionId()));
@@ -183,7 +180,6 @@ public final class RecruitOverlayHud {
                     x + 13,
                     y + h / 2,
                     9,
-                    0f,
                     o.charId(),
                     o.charName(),
                     ClientCharacterState.professionLoadout(o.professionId()));
