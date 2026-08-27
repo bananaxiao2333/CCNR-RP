@@ -32,6 +32,8 @@ public final class CinematicController {
 
     private static JsonObject data;
     private static long startMs;
+    /** 部署无线电数据（CinematicS2C 载荷 radio 字段；null=本次无无线电）。 */
+    private static JsonObject radioData;
 
     /** 部署电影数据里的 CMDCam 场景名（空=本次部署无场景，HUD 播完即落位）。 */
     private static String pendingScene = "";
@@ -57,6 +59,11 @@ public final class CinematicController {
         pendingScene = payload == null ? "" : str(payload, "cmdcamScene");
         landingArmed = false;
         sceneSeen = false;
+        // 入场无线电数据暂存：动画播完后由 RadioPlayer 播放（客户端 action bar 打字机）
+        radioData =
+                payload != null && payload.has("radio") && payload.get("radio").isJsonObject()
+                        ? payload.getAsJsonObject("radio")
+                        : null;
         // 音乐传递（高→低）：启动程序指定音乐 > 职业音乐 > 阵营音乐；均未配置则静默跳过
         ClientAudio.playEntrance(resolveMusic(payload));
     }
@@ -253,6 +260,9 @@ public final class CinematicController {
                 landNow();
             }
             data = null;
+            // 入场无线电：动画播完后 action bar 打字机逐句播放（职业/阵营配置）
+            RadioPlayer.start(radioData);
+            radioData = null;
             return;
         }
         int ta = (int) (textA * 255f);

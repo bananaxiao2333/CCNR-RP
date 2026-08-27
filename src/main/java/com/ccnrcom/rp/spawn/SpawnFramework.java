@@ -464,6 +464,19 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
             en.addProperty("music", musicOn ? music : "");
             en.add("relations", relations);
             en.addProperty("background", background == null ? "" : background);
+            // 入场无线电（播放优先级：职业 > 阵营；职业 radioDisabled 时该职业不播任何无线电）：
+            // 播完入场动画后客户端 action bar 打字机逐句展示；注入阵营色（说话人按阵营颜色渲染）
+            com.google.gson.JsonObject radio = resolveRadio(factionId, professionId);
+            if (com.ccnrcom.rp.faction.FactionProfessions.hasRadioLines(radio)) {
+                com.google.gson.JsonObject r = radio.deepCopy();
+                var fac = CCNRRPMod.factions == null
+                        ? null
+                        : CCNRRPMod.factions.graph().factions().get(factionId);
+                if (fac != null) {
+                    r.addProperty("color", fac.color() == null ? "#FFFFFF" : fac.color());
+                }
+                en.add("radio", r);
+            }
             if (cinematic) {
                 // 电影 HUD 与（可选）CMDCam 场景同一时刻开始播放（场景在目标维度查取）；
                 // 无 CMDCam 时玩家已先落位切生存，动画仅作视觉叠加
@@ -481,6 +494,27 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
                 teleport(p, wave, factionId, professionId);
             }
         }
+    }
+
+    /**
+     * 入场无线电（播放优先级：职业 > 阵营；职业 radioDisabled=true 时不播任何无线电，含阵营默认）。
+     * 返回 {speaker, lines:[{text, wait}]}；未配置/禁用返回 null。
+     */
+    private static com.google.gson.JsonObject resolveRadio(String factionId, String professionId) {
+        if (CCNRRPMod.factions == null) {
+            return null;
+        }
+        var profDef = CCNRRPMod.factions.findProfession(professionId).orElse(null);
+        if (profDef != null) {
+            if (FactionProfessions.radioDisabled(profDef)) {
+                return null; // 职业禁用无线电：不播（含阵营默认）
+            }
+            com.google.gson.JsonObject profRadio = FactionProfessions.radio(profDef);
+            if (FactionProfessions.hasRadioLines(profRadio)) {
+                return profRadio; // 职业无线电优先
+            }
+        }
+        return CCNRRPMod.factions.factionRadio(factionId);
     }
 
     /** 入场 CMDCam 场景（覆盖优先级：阵营 < 刷新波 < 职业，职业最高）；未配置返回空串。 */

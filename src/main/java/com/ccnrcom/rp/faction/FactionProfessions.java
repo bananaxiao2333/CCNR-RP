@@ -34,7 +34,8 @@ public final class FactionProfessions {
         return out;
     }
 
-    /** 校验并写入（upsert），返回错误列表（空=成功）。music/profile 为空串时从定义中移除。 */
+    /** 校验并写入（upsert），返回错误列表（空=成功）。music/profile 为空串时从定义中移除。
+     *  radio 为 null 表示不修改无线电；非 null 时整体替换（含清空）。 */
     public static List<String> upsert(
             JsonObject root,
             String id,
@@ -46,6 +47,8 @@ public final class FactionProfessions {
             String music,
             String profile,
             String cmdcamScene,
+            JsonObject radio,
+            boolean radioDisabled,
             java.util.function.Predicate<String> factionExists) {
         List<String> errors = new ArrayList<>();
         if (id == null || id.isBlank()) {
@@ -95,7 +98,37 @@ public final class FactionProfessions {
         } else {
             picked.remove("cmdcamScene");
         }
+        // 无线电：null=不修改；非 null 整体替换（空对象/空 lines = 移除无线电）
+        if (radio != null) {
+            if (hasRadioLines(radio)) {
+                picked.add("radio", radio.deepCopy());
+            } else {
+                picked.remove("radio");
+            }
+        }
+        // 禁用无线电开关（职业级；true=该职业不播任何无线电，含阵营默认）
+        picked.addProperty("radioDisabled", radioDisabled);
         return List.of();
+    }
+
+    /** 无线电是否含有效句子（lines 非空数组）。 */
+    public static boolean hasRadioLines(JsonObject radio) {
+        return radio != null
+                && radio.has("lines")
+                && radio.get("lines").isJsonArray()
+                && radio.getAsJsonArray("lines").size() > 0;
+    }
+
+    /** 无线电配置（职业级，可选）：{speaker, lines:[{text, wait}]}；空=未配置。 */
+    public static JsonObject radio(JsonObject def) {
+        return def != null && def.has("radio") && def.get("radio").isJsonObject() ? def.getAsJsonObject("radio") : null;
+    }
+
+    /** 职业禁用无线电开关（true=该职业不播任何无线电）。 */
+    public static boolean radioDisabled(JsonObject def) {
+        return def != null
+                && def.has("radioDisabled")
+                && def.get("radioDisabled").getAsBoolean();
     }
 
     /** 删除职业定义（root 就地修改）；返回是否找到并删除。 */

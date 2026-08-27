@@ -349,11 +349,25 @@ public final class CharacterService {
                 String music = str(p, "music", "");
                 String profile = str(p, "profile", "");
                 String cmdcamScene = str(p, "cmdcamScene", "");
+                com.google.gson.JsonObject radio =
+                        p.has("radio") && p.get("radio").isJsonObject() ? p.getAsJsonObject("radio") : null;
+                boolean radioDisabled =
+                        p.has("radioDisabled") && p.get("radioDisabled").getAsBoolean();
                 if ("delete".equals(action)) {
                     errors = CCNRRPMod.factions.deleteProfession(id);
                 } else {
                     errors = CCNRRPMod.factions.upsertProfession(
-                            id, name, factionId, selfDeploy, unlockLevel, null, music, profile, cmdcamScene);
+                            id,
+                            name,
+                            factionId,
+                            selfDeploy,
+                            unlockLevel,
+                            null,
+                            music,
+                            profile,
+                            cmdcamScene,
+                            radio,
+                            radioDisabled);
                 }
             }
             case "faction" -> {
@@ -381,6 +395,37 @@ public final class CharacterService {
                             str(p, "cmdcamScene", ""));
                     case "delete" -> errors = CCNRRPMod.factions.deleteFaction(id);
                     default -> errors = List.of("未知操作: " + action);
+                }
+            }
+                // 无线电编辑（独立弹窗保存）：kind=radio-faction（阵营 radio）/ radio-profession（职业 radio + radioDisabled）
+            case "radio-faction" -> {
+                String id = str(p, "id", "");
+                com.google.gson.JsonObject radio =
+                        p.has("radio") && p.get("radio").isJsonObject() ? p.getAsJsonObject("radio") : null;
+                errors = CCNRRPMod.factions.setFactionRadio(id, radio);
+            }
+            case "radio-profession" -> {
+                String id = str(p, "id", "");
+                com.google.gson.JsonObject radio =
+                        p.has("radio") && p.get("radio").isJsonObject() ? p.getAsJsonObject("radio") : null;
+                boolean radioDisabled =
+                        p.has("radioDisabled") && p.get("radioDisabled").getAsBoolean();
+                var def = CCNRRPMod.factions.findProfession(id).orElse(null);
+                if (def == null) {
+                    errors = List.of("未找到职业: " + id);
+                } else {
+                    errors = CCNRRPMod.factions.upsertProfession(
+                            str(def, "id", id),
+                            com.ccnrcom.rp.faction.FactionProfessions.idsSafeName(def),
+                            com.ccnrcom.rp.faction.FactionProfessions.factionId(def),
+                            com.ccnrcom.rp.faction.FactionProfessions.selfDeploy(def),
+                            com.ccnrcom.rp.faction.FactionProfessions.unlockLevel(def),
+                            com.ccnrcom.rp.faction.FactionProfessions.loadout(def),
+                            com.ccnrcom.rp.faction.FactionProfessions.music(def),
+                            com.ccnrcom.rp.faction.FactionProfessions.profile(def),
+                            com.ccnrcom.rp.faction.FactionProfessions.cmdcamScene(def),
+                            radio,
+                            radioDisabled);
                 }
             }
             case "event" -> {
@@ -958,6 +1003,10 @@ public final class CharacterService {
                 o.addProperty("description", f.description());
                 o.addProperty("music", f.music());
                 o.addProperty("cmdcamScene", f.cmdcamScene() == null ? "" : f.cmdcamScene());
+                com.google.gson.JsonObject facRadio = CCNRRPMod.factions.factionRadio(f.id());
+                if (com.ccnrcom.rp.faction.FactionProfessions.hasRadioLines(facRadio)) {
+                    o.add("radio", facRadio.deepCopy());
+                }
                 JsonObject spawn = factionSpawnJson(f.id());
                 if (spawn != null) {
                     o.add("spawn", spawn);
@@ -1008,6 +1057,11 @@ public final class CharacterService {
                     o.addProperty("music", com.ccnrcom.rp.faction.FactionProfessions.music(def));
                     o.addProperty("profile", com.ccnrcom.rp.faction.FactionProfessions.profile(def));
                     o.addProperty("cmdcamScene", com.ccnrcom.rp.faction.FactionProfessions.cmdcamScene(def));
+                    JsonObject profRadio = com.ccnrcom.rp.faction.FactionProfessions.radio(def);
+                    if (com.ccnrcom.rp.faction.FactionProfessions.hasRadioLines(profRadio)) {
+                        o.add("radio", profRadio.deepCopy());
+                    }
+                    o.addProperty("radioDisabled", com.ccnrcom.rp.faction.FactionProfessions.radioDisabled(def));
                     o.add("loadout", com.ccnrcom.rp.faction.FactionProfessions.loadout(def));
                     pa.add(o);
                 });

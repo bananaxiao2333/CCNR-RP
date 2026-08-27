@@ -513,7 +513,7 @@ public final class FactionManager {
             boolean selfDeploy,
             int unlockLevel,
             com.google.gson.JsonObject loadout) {
-        return upsertProfession(id, name, factionId, selfDeploy, unlockLevel, loadout, "", "", "");
+        return upsertProfession(id, name, factionId, selfDeploy, unlockLevel, loadout, "", "", "", null, false);
     }
 
     /** 职业定义管理（含出场音乐、项目简历与 CMDCam 出场场景）。 */
@@ -527,6 +527,23 @@ public final class FactionManager {
             String music,
             String profile,
             String cmdcamScene) {
+        return upsertProfession(
+                id, name, factionId, selfDeploy, unlockLevel, loadout, music, profile, cmdcamScene, null, false);
+    }
+
+    /** 职业定义管理（含无线电：radio 配置 + radioDisabled 禁用开关；radio 为 null=不修改）。 */
+    public List<String> upsertProfession(
+            String id,
+            String name,
+            String factionId,
+            boolean selfDeploy,
+            int unlockLevel,
+            com.google.gson.JsonObject loadout,
+            String music,
+            String profile,
+            String cmdcamScene,
+            com.google.gson.JsonObject radio,
+            boolean radioDisabled) {
         JsonObject candidate = root.deepCopy();
         List<String> errors = FactionProfessions.upsert(
                 candidate,
@@ -539,6 +556,8 @@ public final class FactionManager {
                 music,
                 profile,
                 cmdcamScene,
+                radio,
+                radioDisabled,
                 f -> graph.factions().containsKey(f));
         if (!errors.isEmpty()) {
             return errors;
@@ -548,6 +567,51 @@ public final class FactionManager {
         }
         this.root = candidate;
         return List.of();
+    }
+
+    // ---------- 阵营无线电（factions.json faction.radio 字段） ----------
+
+    /** 阵营无线电配置（可选）：{speaker, lines:[{text, wait}]}；未配置返回 null。 */
+    public com.google.gson.JsonObject factionRadio(String factionId) {
+        if (root == null || factionId == null || factionId.isBlank()) {
+            return null;
+        }
+        com.google.gson.JsonArray fa = root.has("factions") ? root.getAsJsonArray("factions") : new JsonArray();
+        for (int i = 0; i < fa.size(); i++) {
+            com.google.gson.JsonObject o = fa.get(i).getAsJsonObject();
+            if (str(o, "id", "").equals(factionId)
+                    && o.has("radio")
+                    && o.get("radio").isJsonObject()) {
+                return o.getAsJsonObject("radio");
+            }
+        }
+        return null;
+    }
+
+    /** 写入阵营无线电配置（空对象/空 lines = 移除）；返回错误列表（空=成功）。 */
+    public List<String> setFactionRadio(String factionId, com.google.gson.JsonObject radio) {
+        if (!graph.factions().containsKey(factionId)) {
+            return List.of("未找到阵营: " + factionId);
+        }
+        JsonObject candidate = root.deepCopy();
+        JsonArray fa = candidate.has("factions") ? candidate.getAsJsonArray("factions") : new JsonArray();
+        for (int i = 0; i < fa.size(); i++) {
+            JsonObject o = fa.get(i).getAsJsonObject();
+            if (!str(o, "id", "").equals(factionId)) {
+                continue;
+            }
+            if (FactionProfessions.hasRadioLines(radio)) {
+                o.add("radio", radio.deepCopy());
+            } else {
+                o.remove("radio");
+            }
+            if (!JsonUtil.atomicWrite(file, candidate)) {
+                return List.of("配置文件写入失败");
+            }
+            this.root = candidate;
+            return List.of();
+        }
+        return List.of("未找到阵营: " + factionId);
     }
 
     /** 删除职业定义。 */
