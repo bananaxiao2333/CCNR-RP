@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.18.40（修复人物3D预览模型扭曲/抽搐）
+
+- **修复 K 面板「详细资料」人物 3D 预览与招募立绘模型扭曲/抽搐**：`CharacterPreview.render` 与 `renderPortrait` 把绘制中心 `cx/cy`（几百像素的大数）当作「鼠标相对模型锚点的像素增量」传入原版 `InventoryScreen.renderEntityInInventoryFollowsMouse`，该方法按 `atan(v/40)` 求角并乘 20°/40° 写入 yaw/pitch，导致模型被放大成近 90° 的俯仰 + 任意 yaw，缩成一团/间续抽搐。
+- 修正：锁定正面视角应传 **0 增量**（`0.0F, 0.0F`），即原版「鼠标居中」的默认正面姿态；同步修正类注释与两个方法的误导性注释。
+- 涉及界面：K 面板人物立绘主预览、招募卡片/已同意列表立绘（`RecruitOverlayHud` / `RecruitPopupScreen` 复用同一 `renderPortrait`）。
+- 构建：spotlessApply / build / test -PrunTests 全绿。
+
 ## 2.18.39（部署重设角色状态）
 
 - **部署前重设角色状态**：统一部署磨子（普通/征召/重新部署）在清空背包的同时新增 `resetPlayerState`——

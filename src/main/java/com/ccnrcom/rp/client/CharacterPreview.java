@@ -19,7 +19,8 @@ import net.minecraft.world.entity.player.Inventory;
 
 /**
  * 右侧 3D 模型预览：真实玩家模型 + 职位 loadout 装备（角色查看界面展示职位装备），XYZ 锁定正面视角（不跟随鼠标）。
- * 渲染复用原版 InventoryScreen.renderEntityInInventoryFollowsMouse（GUI 摄像机，鼠标参数传绘制中心即零旋转）。
+ * 渲染复用原版 InventoryScreen.renderEntityInInventoryFollowsMouse（GUI 摄像机）。注意：该方法第 5/6 个参数是
+ * 「鼠标相对模型锚点的像素增量」并按 atan(x/40) 求角，锁定正面视角必须传 0 增量，绝不能传绘制中心 cx/cy。
  */
 public final class CharacterPreview {
 
@@ -47,8 +48,9 @@ public final class CharacterPreview {
         if (p == null) {
             return;
         }
-        // XYZ 锁定：鼠标参数传预览中心 → 旋转角为 0（正面、不倾斜）
-        InventoryScreen.renderEntityInInventoryFollowsMouse(g, cx, cy, scale, cx, cy, p);
+        // XYZ 锁定：原版函数把第 5/6 个参数当成「鼠标相对模型锚点的像素增量」，并按 atan(x/40) 求角（*20° 后写入 yaw/pitch）。
+        // 要得到 0 旋转的正面视角必须传 0 增量；若错误地传绘制中心 cx/cy（几百像素的大数），模型会被放大成近 90° 的俯仰 + 任意 yaw → 缩成一团/抽搐。
+        InventoryScreen.renderEntityInInventoryFollowsMouse(g, cx, cy, scale, 0.0F, 0.0F, p);
     }
 
     /** 立绘渲染（按 charId/name，供无完整角色 JSON 的场景：招募卡片等）。XYZ 锁定正面视角（不跟随鼠标）。 */
@@ -64,8 +66,8 @@ public final class CharacterPreview {
             return;
         }
         // (cx, cy) 语义 = 立绘视觉中心：模型从脚底向上画（身高 ≈ 2×scale），脚底下移一个 scale 使人物居中于框；
-        // XYZ 锁定：鼠标参数传绘制中心 → 旋转角为 0（正面、不倾斜）
-        InventoryScreen.renderEntityInInventoryFollowsMouse(g, cx, cy + scale, scale, cx, cy + scale, p);
+        // XYZ 锁定：传 0 增量 → 角度为 0（正面、不倾斜）；勿传绘制中心（大像素值会被当增量放大成扭曲）。
+        InventoryScreen.renderEntityInInventoryFollowsMouse(g, cx, cy + scale, scale, 0.0F, 0.0F, p);
     }
 
     private static AbstractClientPlayer entity(ClientLevel level, JsonObject c, JsonObject loadout) {
