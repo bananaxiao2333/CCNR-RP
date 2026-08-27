@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.18.41（缩短入场电影：开场黑屏提速 + 打完即淡出）
+
+- **缩短部署入场电影时间轴**：开场全屏黑停留 1s → 0.5s；移除打字动画完成后额外的 3s 停顿（`T_AFTER_ALL`），打字一结束即开始黑屏渐退，整体收尾更快。
+- 改动：`CinematicController` 时间轴常量（`T_BLACK_HOLD=1000→500`、删除 `T_AFTER_ALL`），同步更新类 Javadoc 时间轴描述；影响面不变。
+- 构建：spotlessApply / build / test -PrunTests 全绿。
+
 ## 2.18.40（修复人物3D预览模型扭曲/抽搐）
 
 - **修复 K 面板「详细资料」人物 3D 预览与招募立绘模型扭曲/抽搐**：`CharacterPreview.render` 与 `renderPortrait` 把绘制中心 `cx/cy`（几百像素的大数）当作「鼠标相对模型锚点的像素增量」传入原版 `InventoryScreen.renderEntityInInventoryFollowsMouse`，该方法按 `atan(v/40)` 求角并乘 20°/40° 写入 yaw/pitch，导致模型被放大成近 90° 的俯仰 + 任意 yaw，缩成一团/间续抽搐。
