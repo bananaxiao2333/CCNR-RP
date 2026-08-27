@@ -239,13 +239,21 @@ public class CharacterManagementScreen extends Screen {
         }
     }
 
-    /** 职业是否无可用部署余额：上限 0=禁止部署，或在职数 ≥ 上限。 */
+    /**
+     * 职业是否无可用部署余额：与部署按钮同条件——职业或阵营维度在职数（在场换岗按不含本人算）≥ 上限，或上限 0=禁止。
+     * 职业维度上限 professionLimit() 已含 GLOBAL 兜底（未配置专属规则的职业按 GLOBAL 计），与部署按钮/服务端校验一致。
+     */
     private boolean profNoBalance(JsonObject p) {
-        int lim = ClientCharacterState.professionLimit(str(p, "id"));
-        if (lim < 0) {
-            return false; // 未配置规则 = 不限
-        }
-        return ClientCharacterState.professionOccupied(str(p, "id")) >= lim;
+        String profId = str(p, "id");
+        String facId = str(p, "factionId");
+        boolean selfAlive = ClientCharacterState.userStatus() == CharacterStatus.ALIVE;
+        boolean selfInProf = selfAlive && profId.equals(ClientCharacterState.userProfessionId());
+        boolean selfInFac = selfAlive && facId.equals(ClientCharacterState.userFactionId());
+        int profOcc = ClientCharacterState.professionOccupied(profId) - (selfInProf ? 1 : 0);
+        int facOcc = ClientCharacterState.factionOccupied(facId) - (selfInFac ? 1 : 0);
+        int profLim = ClientCharacterState.professionLimit(profId);
+        int facLim = ClientCharacterState.factionLimit(facId);
+        return (profLim >= 0 && profOcc >= profLim) || (facLim >= 0 && facOcc >= facLim);
     }
 
     /** 阵营是否无可用职业复活：该阵营下所有职业均无可用余额（无职业也视为不可用）。 */
@@ -646,10 +654,16 @@ public class CharacterManagementScreen extends Screen {
         String req = "需求等级：Lv " + unlockLevel(p) + "（当前 Lv " + userLevel() + "）";
         g.drawString(font, req, x + 8, y + 24, met ? RpTheme.STATUS_ALIVE : RpTheme.RED_LINE);
         // 部署限制与当前在职（全局性限制预览；服务端 deploy 统一入口强校验）
-        int profLimit = ClientCharacterState.professionLimit(str(p, "id"));
-        int facLimit = ClientCharacterState.factionLimit(str(p, "factionId"));
-        int profOcc = ClientCharacterState.professionOccupied(str(p, "id"));
-        int facOcc = ClientCharacterState.factionOccupied(str(p, "factionId"));
+        // 与部署按钮同条件：在职数按「不含本人」计算（在场换岗不重复占位），职业或阵营任一满即标红
+        String profId = str(p, "id");
+        String facId = str(p, "factionId");
+        boolean selfAlive = ClientCharacterState.userStatus() == CharacterStatus.ALIVE;
+        boolean selfInProf = selfAlive && profId.equals(ClientCharacterState.userProfessionId());
+        boolean selfInFac = selfAlive && facId.equals(ClientCharacterState.userFactionId());
+        int profLimit = ClientCharacterState.professionLimit(profId);
+        int facLimit = ClientCharacterState.factionLimit(facId);
+        int profOcc = ClientCharacterState.professionOccupied(profId) - (selfInProf ? 1 : 0);
+        int facOcc = ClientCharacterState.factionOccupied(facId) - (selfInFac ? 1 : 0);
         StringBuilder lim = new StringBuilder("在职 ");
         if (profLimit >= 0) {
             lim.append(profOcc).append("/").append(profLimit).append(" 职业");
