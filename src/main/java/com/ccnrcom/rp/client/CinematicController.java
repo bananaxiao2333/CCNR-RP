@@ -153,7 +153,11 @@ public final class CinematicController {
             rel.add(new Seg("—", 0));
         }
         out.add(rel);
-        out.add(List.of(new Seg("项目简历：" + str(data, "background"), 0)));
+        // 项目简历（职业 profile 优先；未配置的职位不显示该行）
+        String resume = str(data, "background");
+        if (!resume.isBlank()) {
+            out.add(List.of(new Seg("项目简历：" + resume, 0)));
+        }
         return out;
     }
 

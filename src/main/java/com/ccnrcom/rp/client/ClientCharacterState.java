@@ -522,6 +522,19 @@ public final class ClientCharacterState {
         return null;
     }
 
+    /** 职业简历（项目简历 profile，客户端镜像；未配置/无该字段则空串）——K 面板/招募弹窗展示用。 */
+    public static synchronized String professionProfile(String professionId) {
+        for (JsonObject p : professions) {
+            String pid = p.has("id") && !p.get("id").isJsonNull() ? p.get("id").getAsString() : "";
+            if (pid.equals(professionId)) {
+                return p.has("profile") && !p.get("profile").isJsonNull()
+                        ? p.get("profile").getAsString()
+                        : "";
+            }
+        }
+        return "";
+    }
+
     public static synchronized List<JsonObject> managerEvents() {
         return List.copyOf(managerEvents);
     }
