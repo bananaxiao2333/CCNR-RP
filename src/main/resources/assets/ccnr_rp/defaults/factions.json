@@ -5,65 +5,25 @@
       "id": "admin_hq",
       "name": "行政总部",
       "color": "#FFC84C",
-      "description": "量子科学公司最高管理层，直接对接集团行政总部（T0）",
-      "icon": "img:admin_hq",
+      "description": "量子科学公司最高管理层（样板阵营）",
+      "icon": "shield",
       "tier": 1
     },
     {
       "id": "madison",
       "name": "麦迪逊研究所",
       "color": "#00BCD4",
-      "description": "暗物质反应堆研发与设施内技术运行、科学研究（T1）",
-      "icon": "img:madison",
-      "tier": 1
-    },
-    {
-      "id": "nuclear",
-      "name": "区域核能运营部",
-      "color": "#FF9800",
-      "description": "各核电站的运营与管理（T1）",
-      "icon": "img:nuclear",
-      "tier": 2
-    },
-    {
-      "id": "rd_tech",
-      "name": "研发与技术部",
-      "color": "#9C27B0",
-      "description": "Epsilon-8生物 / Kilo-9医药 / Beta-6物理实验室（T1）",
-      "icon": "img:rd_tech",
+      "description": "暗物质反应堆研发与设施内技术运行（样板阵营）",
+      "icon": "claw",
       "tier": 1
     },
     {
       "id": "qdf",
       "name": "QDF司令部",
       "color": "#4CAF50",
-      "description": "设施保全与武装力量指挥。量子科技与量子防御共同下属（T2）",
-      "icon": "img:qdf",
+      "description": "设施保全与武装力量指挥（样板阵营）",
+      "icon": "cross",
       "tier": 2
-    },
-    {
-      "id": "qsa",
-      "name": "QSA综合处理小组",
-      "color": "#FF3B30",
-      "description": "高级安全保障部队，直属上级为CCNR安全保障总局（T2）",
-      "icon": "img:qsa",
-      "tier": 2
-    },
-    {
-      "id": "qso",
-      "name": "QSO",
-      "color": "#B26BFF",
-      "description": "直属最高层的私人武装部队，非极端时刻不出场（T2）",
-      "icon": "img:qso",
-      "tier": 1
-    },
-    {
-      "id": "logistics",
-      "name": "后勤与供应链部",
-      "color": "#795548",
-      "description": "物资保障、运输、仓储、食堂（T3）",
-      "icon": "gear",
-      "tier": 3
     }
   ],
   "groups": [
@@ -71,39 +31,19 @@
       "id": "core_depts",
       "memberIds": [
         "admin_hq",
-        "madison",
-        "nuclear",
-        "rd_tech"
-      ]
-    },
-    {
-      "id": "sec_force",
-      "memberIds": [
-        "qdf",
-        "qsa",
-        "qso"
+        "madison"
       ]
     }
   ],
   "relations": [
     {
-      "from": "sec_force",
-      "to": "core_depts",
-      "type": "friendly"
-    },
-    {
-      "from": "qso",
-      "to": "qdf",
-      "type": "friendly"
-    },
-    {
-      "from": "logistics",
+      "from": "qdf",
       "to": "core_depts",
       "type": "friendly"
     },
     {
       "from": "admin_hq",
-      "to": "sec_force",
+      "to": "qdf",
       "type": "friendly"
     }
   ],
@@ -118,79 +58,7 @@
         "armor": [],
         "offhand": {}
       },
-      "profile": "设施内最高权限：封锁区域、部署QDF/QSA、降职决议、关闭闸门/毒气释放。"
-    },
-    {
-      "id": "hq_vp",
-      "name": "量子科学副总裁",
-      "factionId": "admin_hq",
-      "selfDeploy": false,
-      "loadout": {
-        "inventory": [],
-        "armor": [],
-        "offhand": {}
-      },
-      "profile": "与CEO同级最高权限，覆盖封锁、部署、决议与设施管控。"
-    },
-    {
-      "id": "hq_dept_manager",
-      "name": "部门主管",
-      "factionId": "admin_hq",
-      "selfDeploy": false,
-      "loadout": {
-        "inventory": [],
-        "armor": [],
-        "offhand": {}
-      },
-      "profile": "辖区部门内全部权限，参考CEO权限但局限于辖区范围。"
-    },
-    {
-      "id": "hq_admin_chief",
-      "name": "行政总管",
-      "factionId": "admin_hq",
-      "selfDeploy": false,
-      "loadout": {
-        "inventory": [],
-        "armor": [],
-        "offhand": {}
-      },
-      "profile": "文件封锁、降职与设施内最高权限，同CEO权限。"
-    },
-    {
-      "id": "facility_manager",
-      "name": "设施主管",
-      "factionId": "admin_hq",
-      "selfDeploy": true,
-      "loadout": {
-        "inventory": [],
-        "armor": [],
-        "offhand": {}
-      },
-      "profile": "设施整体运营、安保协调与权限审批；直接对接行政总部。"
-    },
-    {
-      "id": "m1_master",
-      "name": "研究所主管",
-      "factionId": "madison",
-      "selfDeploy": false,
-      "loadout": {
-        "inventory": [],
-        "armor": [],
-        "offhand": {}
-      },
-      "profile": "设施内无障碍永久通行；所有系统与紧急停机授权。"
-    },
-    {
-      "id": "m2_chief_engineer",
-      "name": "反应堆首席工程师",
-      "factionId": "madison",
-      "selfDeploy": false,
-      "loadout": {
-        "inventory": [],
-        "armor": [],
-        "offhand": {}
-      },
-      "profile": "反应堆层、控制室、研发区；运行参数修改、维护指令。"
+      "profile": "设施内最高权限：封锁区域、部署QDF/QSA、降职决议（样板职业）。"
     },
     {
       "id": "m3_senior_researcher",
@@ -202,163 +70,7 @@
         "armor": [],
         "offhand": {}
       },
-      "profile": "研发区、实验区、数据室；数据调阅、实验方案设计。"
-    },
-    {
-      "id": "m4_researcher",
-      "name": "研究员/实验员",
-      "factionId": "madison",
-      "selfDeploy": true,
-      "loadout": {
-        "inventory": [],
-        "armor": [],
-        "offhand": {}
-      },
-      "profile": "实验区、办公区；实验执行、数据记录。"
-    },
-    {
-      "id": "m4_technician",
-      "name": "技术员",
-      "factionId": "madison",
-      "selfDeploy": false,
-      "loadout": {
-        "inventory": [],
-        "armor": [],
-        "offhand": {}
-      },
-      "profile": "办公区、设备层（仅维护时段）；设备操作（限指定设备）。"
-    },
-    {
-      "id": "m5_intern",
-      "name": "访客/实习生",
-      "factionId": "madison",
-      "selfDeploy": false,
-      "loadout": {
-        "inventory": [],
-        "armor": [],
-        "offhand": {}
-      },
-      "profile": "仅游览，无操作权限。"
-    },
-    {
-      "id": "nu1_station_manager",
-      "name": "核电站站长",
-      "factionId": "nuclear",
-      "selfDeploy": false,
-      "loadout": {
-        "inventory": [],
-        "armor": [],
-        "offhand": {}
-      },
-      "profile": "负责核电站整体运营与安全管理，直接对接区域核能运营部。"
-    },
-    {
-      "id": "nu2_operator",
-      "name": "核电站操作员",
-      "factionId": "nuclear",
-      "selfDeploy": false,
-      "loadout": {
-        "inventory": [],
-        "armor": [],
-        "offhand": {}
-      },
-      "profile": "负责反应堆运行参数监控与日常操作。"
-    },
-    {
-      "id": "nu3_maintenance",
-      "name": "运维工程师",
-      "factionId": "nuclear",
-      "selfDeploy": true,
-      "loadout": {
-        "inventory": [],
-        "armor": [],
-        "offhand": {}
-      },
-      "profile": "负责电站设备巡检、维护与故障处理。"
-    },
-    {
-      "id": "r1_director",
-      "name": "研发总监",
-      "factionId": "rd_tech",
-      "selfDeploy": false,
-      "loadout": {
-        "inventory": [],
-        "armor": [],
-        "offhand": {}
-      },
-      "profile": "负责全设施部门项目资金调配与研发技术管理。"
-    },
-    {
-      "id": "r2_chief_scientist",
-      "name": "首席科学家",
-      "factionId": "rd_tech",
-      "selfDeploy": false,
-      "loadout": {
-        "inventory": [],
-        "armor": [],
-        "offhand": {}
-      },
-      "profile": "负责项目权限评估与实验室协调（麦迪逊研究设施）。"
-    },
-    {
-      "id": "r3_senior_researcher",
-      "name": "高级研究员",
-      "factionId": "rd_tech",
-      "selfDeploy": true,
-      "loadout": {
-        "inventory": [],
-        "armor": [],
-        "offhand": {}
-      },
-      "profile": "负责项目执行、数据评估。"
-    },
-    {
-      "id": "r4_researcher",
-      "name": "研究员/实验员",
-      "factionId": "rd_tech",
-      "selfDeploy": true,
-      "loadout": {
-        "inventory": [],
-        "armor": [],
-        "offhand": {}
-      },
-      "profile": "负责实验执行、数据评估。"
-    },
-    {
-      "id": "r5_assistant",
-      "name": "助理研究员/实习生",
-      "factionId": "rd_tech",
-      "selfDeploy": false,
-      "loadout": {
-        "inventory": [],
-        "armor": [],
-        "offhand": {}
-      },
-      "profile": "负责辅助研究、记录、文档归纳。"
-    },
-    {
-      "id": "s1_commander",
-      "name": "QDF总司令",
-      "factionId": "qdf",
-      "selfDeploy": false,
-      "loadout": {
-        "inventory": [],
-        "armor": [],
-        "offhand": {}
-      },
-      "profile": "可进入全设施；装备QDF全部装备。"
-    },
-    {
-      "id": "s2_guard_captain",
-      "name": "设施安保组长",
-      "factionId": "qdf",
-      "selfDeploy": false,
-      "loadout": {
-        "inventory": [],
-        "armor": [],
-        "offhand": {}
-      },
-      "profile": "可进入负责区域内所有设施；QDF全部装备，重型火力需审批。"
+      "profile": "研发区、实验区、数据室；数据调阅、实验方案设计（样板职业）。"
     },
     {
       "id": "s3_special",
@@ -370,7 +82,7 @@
         "armor": [],
         "offhand": {}
       },
-      "profile": "可进入任务范围内区域；QDF标准装备，可申请高等级装备。"
+      "profile": "可进入任务范围内区域；QDF标准装备（样板职业）。"
     },
     {
       "id": "s4_guard",
@@ -382,115 +94,7 @@
         "armor": [],
         "offhand": {}
       },
-      "profile": "可进入任务范围内区域；QDF标准装备。"
-    },
-    {
-      "id": "s5_door_guard",
-      "name": "门禁警卫",
-      "factionId": "qdf",
-      "selfDeploy": false,
-      "loadout": {
-        "inventory": [],
-        "armor": [],
-        "offhand": {}
-      },
-      "profile": "可进入任务范围内；QDF轻型装备。"
-    },
-    {
-      "id": "a1_leader",
-      "name": "QSA组长",
-      "factionId": "qsa",
-      "selfDeploy": false,
-      "loadout": {
-        "inventory": [],
-        "armor": [],
-        "offhand": {}
-      },
-      "profile": "可进入全设施任何地点；QSA高级装备，重火力需审批。"
-    },
-    {
-      "id": "a2_elite",
-      "name": "QSA高级队员",
-      "factionId": "qsa",
-      "selfDeploy": false,
-      "loadout": {
-        "inventory": [],
-        "armor": [],
-        "offhand": {}
-      },
-      "profile": "可进入设施大部分地点（低于L5）；QSA高级装备。"
-    },
-    {
-      "id": "a3_member",
-      "name": "QSA队员",
-      "factionId": "qsa",
-      "selfDeploy": true,
-      "loadout": {
-        "inventory": [],
-        "armor": [],
-        "offhand": {}
-      },
-      "profile": "可进入任务范围内；QSA标准装备。"
-    },
-    {
-      "id": "h1_squad_leader",
-      "name": "QSO小队长",
-      "factionId": "qso",
-      "selfDeploy": false,
-      "loadout": {
-        "inventory": [],
-        "armor": [],
-        "offhand": {}
-      },
-      "profile": "可进入设施任何地点；配备特殊药剂与最高级武器装备。"
-    },
-    {
-      "id": "h2_member",
-      "name": "QSO队员",
-      "factionId": "qso",
-      "selfDeploy": false,
-      "loadout": {
-        "inventory": [],
-        "armor": [],
-        "offhand": {}
-      },
-      "profile": "可进入设施任何地点；配备特殊药剂、最高级武器装备，可调用重火力。"
-    },
-    {
-      "id": "n1_director",
-      "name": "后勤管理总监",
-      "factionId": "logistics",
-      "selfDeploy": false,
-      "loadout": {
-        "inventory": [],
-        "armor": [],
-        "offhand": {}
-      },
-      "profile": "负责设施内后勤供应统筹。"
-    },
-    {
-      "id": "n2_logistics_manager",
-      "name": "物流主任",
-      "factionId": "logistics",
-      "selfDeploy": false,
-      "loadout": {
-        "inventory": [],
-        "armor": [],
-        "offhand": {}
-      },
-      "profile": "负责物资运输与仓储管理。"
-    },
-    {
-      "id": "n3_canteen_lead",
-      "name": "食堂负责人",
-      "factionId": "logistics",
-      "selfDeploy": false,
-      "loadout": {
-        "inventory": [],
-        "armor": [],
-        "offhand": {}
-      },
-      "profile": "负责食堂与餐饮供应。"
+      "profile": "可进入任务范围内区域；QDF标准装备（样板职业）。"
     }
   ]
 }

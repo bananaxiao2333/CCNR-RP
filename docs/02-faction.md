@@ -40,7 +40,7 @@
   ]
 }
 ```
-首次启动若缺失默认写入以上示例（含《职位划分》组织）。
+首次启动若缺失默认写入精简样板示例（3 个样例阵营 + 4 个样例职业，字段结构同上）。
 
 ## 4. 命令（OP≥2 或 ccnnrp.admin.faction）
 `/rp faction list`、`/rp faction relation <a> <b>`、`/rp faction relation set <a> <b> <hostile|neutral|friendly>`、

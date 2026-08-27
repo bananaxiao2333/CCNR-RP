@@ -6,7 +6,6 @@
      "sequence": [
        {"type": "TRIGGER", "source": "phase:danger", "label": "阶段 danger"},
        {"type": "COMMAND", "command": "say [CCNR-RP] 危险阶段开始"}
-     ]},
-    {"id": "ending", "order": 2, "durationMinutes": 15}
+     ]}
   ]
 }

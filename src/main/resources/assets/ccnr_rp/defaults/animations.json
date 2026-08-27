@@ -11,27 +11,15 @@
     "player_death": {"steps": [
       {"type": "FADE", "color": "#7F0000", "from": 0, "to": 0.6, "durationTicks": 40}
     ]},
-    "game_end": {"steps": [
-      {"type": "FADE", "color": "#000000", "from": 0, "to": 1, "durationTicks": 40},
-      {"type": "CAMS", "scene": "game_end_cam", "durationTicks": 200},
-      {"type": "FADE", "color": "#000000", "from": 1, "to": 0, "durationTicks": 30},
-      {"type": "TITLE", "title": "游戏结束", "subtitle": "疏散裁定与结算完成", "durationTicks": 80}
-    ]},
     "event_start_alarm": {"steps": [
       {"type": "SOUND", "sound": "minecraft:block.note_block.alarm", "volume": 100, "pitch": 80},
       {"type": "CAMS", "scene": "event_start_cam", "durationTicks": 120},
       {"type": "TITLE", "title": "警报", "subtitle": "事件: ${event}", "durationTicks": 60}
-    ]},
-    "level_up": {"steps": [
-      {"type": "TITLE", "title": "升级!", "subtitle": "等级 ${level}", "durationTicks": 60},
-      {"type": "ACTIONBAR", "text": "等级 ${level}", "durationTicks": 40}
     ]}
   },
   "hooks": {
     "player_spawn": "spawn_intro",
     "player_death": "player_death",
-    "game_end": "game_end",
-    "event_start": "event_start_alarm",
-    "level_up": "level_up"
+    "event_start": "event_start_alarm"
   }
 }
