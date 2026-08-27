@@ -32,6 +32,10 @@ public final class RpRelationTab {
     private EditBox toBox;
     private RelationType selType = RelationType.NEUTRAL;
     private int selIndex = -1;
+    /** 选中规则的原始 from/to（保存/删除定位用；编辑 from/to 后仍按选中规则原位替换/删除）。 */
+    private List<String> origFrom = List.of();
+
+    private List<String> origTo = List.of();
     private String notice = "";
     private long noticeUntil = 0;
 
@@ -47,26 +51,33 @@ public final class RpRelationTab {
         this.py2 = py2;
         listX1 = px1 + 12;
         listX2 = listX1 + Math.min(300, (px2 - px1) * 42 / 100);
-        listY1 = py1 + 44;
-        listY2 = py2 - 56;
+        // 内容区与其它页签对齐：页签栏占 py1+42..py1+62，内容从 py1+76 起，避免与页签/分隔线重叠
+        listY1 = py1 + 76;
+        listY2 = py2 - 60;
         int ex = listX2 + 16;
         int ew = px2 - ex - 12;
         if (fromBox == null) {
-            fromBox = new EditBox(Minecraft.getInstance().font, ex, listY1, ew, 18, Component.literal("from"));
+            fromBox = new EditBox(Minecraft.getInstance().font, ex, listY1 + 18, ew, 18, Component.literal("from"));
             fromBox.setMaxLength(256);
-            toBox = new EditBox(Minecraft.getInstance().font, ex, listY1 + 34, ew, 18, Component.literal("to"));
+            toBox = new EditBox(Minecraft.getInstance().font, ex, listY1 + 52, ew, 18, Component.literal("to"));
             toBox.setMaxLength(256);
-            screen.addXpWidget(fromBox);
-            screen.addXpWidget(toBox);
         } else {
             fromBox.setX(ex);
             fromBox.setWidth(ew);
-            fromBox.setY(listY1);
+            fromBox.setY(listY1 + 18);
             toBox.setX(ex);
             toBox.setWidth(ew);
-            toBox.setY(listY1 + 34);
+            toBox.setY(listY1 + 52);
         }
-        clearEditor();
+        // rebuild 会先 clearWidgets 清空全部控件，输入框必须每次重新注册，否则不渲染也不接收输入
+        screen.addXpWidget(fromBox);
+        screen.addXpWidget(toBox);
+        // 数据刷新等触发的重建保留已选规则的编辑内容；无选中则复位
+        if (selIndex >= 0 && selIndex < rules().size()) {
+            loadEditor(selIndex);
+        } else {
+            clearEditor();
+        }
     }
 
     private int editorX() {
@@ -74,7 +85,8 @@ public final class RpRelationTab {
     }
 
     private int editorY() {
-        return listY1 + 58;
+        // 类型三选：位于 to 输入框（listY1+52..70）下方
+        return listY1 + 78;
     }
 
     private int actionY() {
@@ -108,6 +120,8 @@ public final class RpRelationTab {
 
     private void clearEditor() {
         selIndex = -1;
+        origFrom = List.of();
+        origTo = List.of();
         if (fromBox != null) {
             fromBox.setValue("");
         }
@@ -124,9 +138,10 @@ public final class RpRelationTab {
         }
         JsonObject r = rules.get(index);
         selIndex = index;
-        fromBox.setValue(join(idList(r, "from")));
-        List<String> to = idList(r, "to");
-        toBox.setValue(join(to));
+        origFrom = idList(r, "from");
+        origTo = idList(r, "to");
+        fromBox.setValue(join(origFrom));
+        toBox.setValue(join(origTo));
         selType = RelationType.parse(str(r, "type", "neutral"));
         if (selType == null) {
             selType = RelationType.NEUTRAL;
@@ -228,6 +243,10 @@ public final class RpRelationTab {
     }
 
     private void addRule() {
+        if (editorRule().getAsJsonArray("from").isEmpty()) {
+            notice("ccnr_rp.gui.admin.relation.from_required");
+            return;
+        }
         JsonObject req = new JsonObject();
         req.addProperty("action", "add");
         req.add("rule", editorRule());
@@ -242,9 +261,15 @@ public final class RpRelationTab {
             notice("ccnr_rp.gui.admin.relation.select_first");
             return;
         }
+        if (editorRule().getAsJsonArray("from").isEmpty()) {
+            notice("ccnr_rp.gui.admin.relation.from_required");
+            return;
+        }
         JsonObject req = new JsonObject();
         req.addProperty("action", "update");
         req.add("rule", editorRule());
+        // 携带选中规则的原始 from/to，服务端按此定位并原位替换（支持修改 from/to，不会误增新规则）
+        req.add("original", originalRule());
         com.ccnrcom.rp.network.RpChannels.sendToServer(
                 new com.ccnrcom.rp.network.RpPackets.RelationEditC2S(req.toString()));
         clearEditor();
@@ -258,11 +283,26 @@ public final class RpRelationTab {
         }
         JsonObject req = new JsonObject();
         req.addProperty("action", "remove");
-        req.add("rule", editorRule());
+        // 删除针对选中规则本身（用原始 from/to 定位），而非输入框当前内容
+        req.add("rule", originalRule());
         com.ccnrcom.rp.network.RpChannels.sendToServer(
                 new com.ccnrcom.rp.network.RpPackets.RelationEditC2S(req.toString()));
         clearEditor();
         refresh();
+    }
+
+    /** 选中规则的原始 from/to（未选中时为空数组；to 为空则省略 = 内部关系）。 */
+    private JsonObject originalRule() {
+        JsonObject o = new JsonObject();
+        JsonArray from = new JsonArray();
+        origFrom.forEach(from::add);
+        o.add("from", from);
+        if (!origTo.isEmpty()) {
+            JsonArray to = new JsonArray();
+            origTo.forEach(to::add);
+            o.add("to", to);
+        }
+        return o;
     }
 
     /** 请求重新同步角色列表（服务端编辑已落盘，刷新展示新规则）。 */
@@ -274,14 +314,16 @@ public final class RpRelationTab {
 
     public void render(GuiGraphics g, int mx, int my) {
         var font = Minecraft.getInstance().font;
-        // 左侧：规则列表
+        List<JsonObject> rules = rules();
+        // 左侧：规则列表（面板 + 标题 + 可滚动行，与其它页签列表风格一致）
+        RpRoundRect.outlined(
+                g, listX1 - 2, listY1 - 4, listX2 + 2, listY2 + 2, 4f, RpTheme.PANEL_BORDER, RpTheme.PANEL_BG_EVEN);
         g.drawString(
                 font,
-                Component.translatable("ccnr_rp.gui.admin.relation.list"),
-                listX1,
-                py1 + 20,
-                RpTheme.TEXT_SECONDARY);
-        List<JsonObject> rules = rules();
+                Component.translatable("ccnr_rp.gui.admin.relation.list").getString() + " (" + rules.size() + ")",
+                listX1 + 4,
+                listY1 - 4,
+                RpTheme.TEXT_DIM);
         g.enableScissor(listX1, listY1, listX2, listY2);
         for (int i = 0; i < rules.size(); i++) {
             int ry = listY1 + (i - scroll) * ROW_H;
@@ -299,11 +341,15 @@ public final class RpRelationTab {
             List<String> to = idList(r, "to");
             boolean internal = sameSet(from, to);
             String type = str(r, "type", "neutral");
-            String label = internal
+            String raw = internal
                     ? tr("ccnr_rp.gui.admin.relation.internal") + ": " + join(from)
                     : join(from) + " × " + join(to);
+            // 行文本按列表宽裁剪，避免长规则名溢出与右侧类型标签重叠
+            String tag = typeTag(type);
+            int labelMax = (listX2 - listX1) - 4 - 6 - font.width(tag) - 6;
+            String label = clip(font, raw, Math.max(20, labelMax));
             g.drawString(font, label, listX1 + 4, ry + 5, sel ? 0xFFFFFFFF : RpTheme.TEXT_PRIMARY);
-            g.drawString(font, typeTag(type), listX1 + 4 + font.width(label) + 6, ry + 5, typeColor(type));
+            g.drawString(font, tag, listX1 + 4 + font.width(label) + 6, ry + 5, typeColor(type));
         }
         g.disableScissor();
 
@@ -314,10 +360,10 @@ public final class RpRelationTab {
                 font,
                 Component.translatable("ccnr_rp.gui.admin.relation.from"),
                 ex,
-                listY1 - 14,
+                listY1 + 4,
                 RpTheme.TEXT_SECONDARY);
         g.drawString(
-                font, Component.translatable("ccnr_rp.gui.admin.relation.to"), ex, listY1 + 20, RpTheme.TEXT_SECONDARY);
+                font, Component.translatable("ccnr_rp.gui.admin.relation.to"), ex, listY1 + 38, RpTheme.TEXT_SECONDARY);
         // 类型三选按钮
         int bw = 54;
         for (int i = 0; i < 3; i++) {
@@ -390,8 +436,8 @@ public final class RpRelationTab {
         }
         g.drawString(font, Component.translatable("ccnr_rp.gui.admin.relation.hint"), ex, py2 - 40, RpTheme.TEXT_DIM);
         // 输入框背景（EditBox 自身绘制，此处仅补充面板底色一致性）
-        g.fill(ex - 1, listY1 - 1, ex + (px2 - ex - 12) + 1, listY1 + 19, 0x99383838);
-        g.fill(ex - 1, listY1 + 33, ex + (px2 - ex - 12) + 1, listY1 + 53, 0x99383838);
+        g.fill(ex - 1, listY1 + 17, ex + (px2 - ex - 12) + 1, listY1 + 37, 0x99383838);
+        g.fill(ex - 1, listY1 + 51, ex + (px2 - ex - 12) + 1, listY1 + 71, 0x99383838);
     }
 
     private static String tr(String key) {
@@ -407,6 +453,18 @@ public final class RpRelationTab {
         java.util.Collections.sort(sa);
         java.util.Collections.sort(sb);
         return sa.equals(sb);
+    }
+
+    /** 按像素宽度裁剪文本（超宽截断加省略号），避免长规则名溢出行宽。 */
+    private static String clip(net.minecraft.client.gui.Font font, String s, int maxW) {
+        if (font.width(s) <= maxW) {
+            return s;
+        }
+        String out = s;
+        while (!out.isEmpty() && font.width(out + "…") > maxW) {
+            out = out.substring(0, out.length() - 1);
+        }
+        return out + "…";
     }
 
     private static String typeTag(String type) {

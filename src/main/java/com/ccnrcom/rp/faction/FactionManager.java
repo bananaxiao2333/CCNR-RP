@@ -244,9 +244,9 @@ public final class FactionManager {
     }
 
     /**
-     * 关系规则 CRUD（管理面板 RelationEditC2S 服务端入口）：payload = {action, rule?{from,to,type}}。
-     * action: add / update / remove。update 与 remove 按 from/to 列表集合匹配定位（方向对称）。
-     * 返回错误列表（空 = 成功）。
+     * 关系规则 CRUD（管理面板 RelationEditC2S 服务端入口）：payload = {action, rule?{from,to,type}, original?{from,to}}。
+     * action: add / update / remove。update 携带 original 时按原始 from/to 定位原位替换（方向对称）；
+     * 无 original 回退按新值 upsert；remove 按 rule 的 from/to 匹配定位。返回错误列表（空 = 成功）。
      */
     public static void onRelationEdit(net.minecraft.server.level.ServerPlayer player, String payload) {
         if (player == null || com.ccnrcom.rp.CCNRRPMod.factions == null) {
@@ -269,11 +269,25 @@ public final class FactionManager {
             return;
         }
         String action = str(req, "action", "");
+        // 载荷结构为 {action, rule{from,to,type}, original?}：必须先取出嵌套的 rule，否则 CRUD 读到空 from
+        JsonObject rule = req.has("rule") && req.get("rule").isJsonObject() ? req.getAsJsonObject("rule") : null;
         List<String> errors;
         if ("remove".equals(action)) {
-            errors = com.ccnrcom.rp.CCNRRPMod.factions.removeRelation(req);
-        } else if ("add".equals(action) || "update".equals(action)) {
-            errors = com.ccnrcom.rp.CCNRRPMod.factions.upsertRelation(req);
+            errors = rule == null ? List.of("缺少 rule") : com.ccnrcom.rp.CCNRRPMod.factions.removeRelation(rule);
+        } else if ("add".equals(action)) {
+            errors = rule == null ? List.of("缺少 rule") : com.ccnrcom.rp.CCNRRPMod.factions.upsertRelation(rule);
+        } else if ("update".equals(action)) {
+            // 管理面板「保存」携带 original：按选中规则的原始 from/to 定位原位替换（支持修改 from/to）；
+            // 旧载荷无 original 时回退按新值 upsert（兼容命令/旧客户端）
+            JsonObject original =
+                    req.has("original") && req.get("original").isJsonObject() ? req.getAsJsonObject("original") : null;
+            if (rule == null) {
+                errors = List.of("缺少 rule");
+            } else if (original != null && original.has("from")) {
+                errors = com.ccnrcom.rp.CCNRRPMod.factions.updateRelation(rule, original);
+            } else {
+                errors = com.ccnrcom.rp.CCNRRPMod.factions.upsertRelation(rule);
+            }
         } else {
             errors = List.of("未知操作: " + action);
         }
@@ -343,6 +357,69 @@ public final class FactionManager {
             o.add("to", ta);
             o.addProperty("type", type.name().toLowerCase(java.util.Locale.ROOT));
             relations.add(o);
+        }
+        ParseResult result = parse(candidate);
+        if (!result.success()) {
+            return result.errors();
+        }
+        JsonUtil.atomicWrite(file, candidate);
+        this.root = candidate;
+        this.graph = result.graph();
+        return List.of();
+    }
+
+    /**
+     * 更新关系规则：按 original 的 from/to 列表集合定位（方向对称），原位替换为 rule 的新内容并保持优先级位置；
+     * 未找到返回错误。支持修改 from/to（不再按新值误增一条新规则）。
+     */
+    public List<String> updateRelation(JsonObject rule, JsonObject original) {
+        List<String> from = idList(rule.get("from"));
+        List<String> to = rule.has("to") ? idList(rule.get("to")) : from;
+        RelationType type = RelationType.parse(str(rule, "type", ""));
+        if (from.isEmpty() || to.isEmpty()) {
+            return List.of("from/to 不能为空");
+        }
+        if (type == null) {
+            return List.of("无效关系类型");
+        }
+        List<String> errors = new ArrayList<>();
+        for (String s : from) {
+            if (!hasFactionOrGroup(s)) {
+                errors.add("未知的 from 项: " + s);
+            }
+        }
+        for (String s : to) {
+            if (!hasFactionOrGroup(s)) {
+                errors.add("未知的 to 项: " + s);
+            }
+        }
+        if (!errors.isEmpty()) {
+            return errors;
+        }
+        List<String> of = idList(original.get("from"));
+        List<String> ot = original.has("to") ? idList(original.get("to")) : of;
+        JsonObject candidate = root.deepCopy();
+        JsonArray relations = candidate.has("relations") ? candidate.getAsJsonArray("relations") : new JsonArray();
+        boolean replaced = false;
+        for (int i = 0; i < relations.size(); i++) {
+            if (matchesLists(relations.get(i).getAsJsonObject(), of, ot)) {
+                JsonObject o = relations.get(i).getAsJsonObject();
+                o.remove("from");
+                o.remove("to");
+                o.remove("type");
+                JsonArray fa = new JsonArray();
+                from.forEach(fa::add);
+                JsonArray ta = new JsonArray();
+                to.forEach(ta::add);
+                o.add("from", fa);
+                o.add("to", ta);
+                o.addProperty("type", type.name().toLowerCase(java.util.Locale.ROOT));
+                replaced = true;
+                break;
+            }
+        }
+        if (!replaced) {
+            return List.of("未找到该关系规则");
         }
         ParseResult result = parse(candidate);
         if (!result.success()) {
