@@ -124,10 +124,20 @@ public class RpAdminScreen extends Screen {
     private final List<int[]> rdDelBounds = new ArrayList<>();
     private EditBox radioSpeakerBox;
     private final List<Object[]> radioTextEdits = new ArrayList<>();
-    /** 底部编辑区已建输入框的行范围（editStart, rows）；范围变化时重建，稳定复用防止焦点/输入丢失。 */
+    /** 行内输入框已建的可见行范围（off, maxVis）；可见范围变化时重建，稳定复用防止焦点/输入丢失。 */
     private int radioEditStart = -1;
 
     private int radioEditCount = 0;
+    /** 句子行拖拽调序：正在拖拽的行索引（-1=未拖拽）。 */
+    private int radioDragIdx = -1;
+    /** 句子列表布局（渲染时更新，供拖拽调序命中计算）。 */
+    private int radioListTop = 0;
+
+    private int radioMaxVis = 0;
+    private int radioOff = 0;
+    private static final int RADIO_ROW_H = 26;
+    /** 句子行拖拽手柄命中区（x1,y1,x2,y2,idx）。 */
+    private final List<int[]> rdHandleBounds = new ArrayList<>();
 
     // 行为序列编辑器（流程编辑器，P1.4）：弹窗管理 WAIT/WAVE/COMMAND/FORCE_PICK 步骤（仿出生点弹窗）
     private boolean seqModalOpen = false;
@@ -1549,95 +1559,104 @@ public class RpAdminScreen extends Screen {
                 false);
         cy += 26;
 
-        g.drawString(font, "提示：每句打字完成后停留 wait 秒（上一句保持），再播下一句；格式「说话人：内容」。", cx, cy, RpTheme.TEXT_DIM);
+        g.drawString(font, "提示：行内直接编辑句子与停留秒数；按住行首「≡」上下拖动调换顺序；新句子追加在尾部。", cx, cy, RpTheme.TEXT_DIM);
         cy += 16;
 
-        // 句子列表（滚动，行高 22）：文本 + 停留秒数 + 删除
+        // 句子列表（滚动，行高 RADIO_ROW_H）：拖拽手柄 + 文本输入 + 停留秒数输入 + 删除 —— 行内编辑
         int listTop = cy + 4;
         int listBottom = rdY2 - 20;
-        int maxVis = Math.max(1, (listBottom - listTop) / 22);
+        int maxVis = Math.max(1, (listBottom - listTop) / RADIO_ROW_H);
         int off = Math.min(radioScroll, Math.max(0, radioLines.size() - maxVis));
+        radioListTop = listTop;
+        radioMaxVis = maxVis;
+        radioOff = off;
         rdDelBounds.clear();
+        rdHandleBounds.clear();
+        // 行内输入框范围跟踪：可见范围 (off, maxVis) 变化（滚动/增删/调序）时重建，稳定复用防焦点丢失
+        if (radioEditStart != off || radioEditCount != maxVis) {
+            for (Object[] e : radioTextEdits) {
+                removeWidget((EditBox) e[0]);
+                removeWidget((EditBox) e[1]);
+            }
+            radioTextEdits.clear();
+            radioEditStart = off;
+            radioEditCount = maxVis;
+        }
         int ry = listTop;
         for (int i = 0; i < maxVis; i++) {
             int idx = off + i;
             if (idx >= radioLines.size()) {
                 break;
             }
+            int rowRight = cw - 14;
+            int delW = 40;
+            int delX = rowRight - delW;
+            int hx = cx + 4;
+            int hw = 16;
+            int gap = 6;
+            int avail = rowRight - cx - hw - delW - 3 * gap;
+            int waitW = Math.max(48, Math.min(96, avail / 4));
+            int textW = avail - waitW;
+            int tbX = hx + hw + gap;
+            int wbX = tbX + textW + gap;
+            int boxY = ry + 4;
             RpRoundRect.outlined(
                     g,
                     cx,
                     ry,
-                    cw - 48,
-                    ry + 20,
+                    rowRight,
+                    ry + RADIO_ROW_H - 2,
                     6f,
-                    inRect(mouseX, mouseY, cx, ry, cw - 48, ry + 20) ? borderHover : border,
+                    inRect(mouseX, mouseY, cx, ry, rowRight, ry + RADIO_ROW_H - 2) ? borderHover : border,
                     idx % 2 == 0 ? RpTheme.PANEL_BG : RpTheme.PANEL_BG_EVEN);
-            g.drawString(font, "[" + idx + "] " + radioLines.get(idx), cx + 6, ry + 5, RpTheme.TEXT_PRIMARY);
-            int rbX = cw - 44;
-            rdDelBounds.add(new int[] {rbX, ry, rbX + 40, ry + 18, idx});
+            // 拖拽手柄（左：按住上下拖动调序）
+            int hx2 = hx + hw;
+            int hy = ry + 6;
+            int hy2 = ry + RADIO_ROW_H - 6;
+            rdHandleBounds.add(new int[] {hx, hy, hx2, hy2, idx});
+            g.drawString(
+                    font,
+                    "≡",
+                    hx + 4,
+                    hy + 2,
+                    inRect(mouseX, mouseY, hx, hy, hx2, hy2) ? RpTheme.CYAN : RpTheme.TEXT_SECONDARY);
+            // 行内文本 + 停留秒数输入框（稳定复用）
+            Object[] e = i < radioTextEdits.size() ? radioTextEdits.get(i) : null;
+            EditBox tb;
+            EditBox wb;
+            if (e == null) {
+                tb = mkBox(tbX, boxY, textW, "", radioLines.get(idx), false);
+                wb = mkBox(wbX, boxY, waitW, "", radioWaits.get(idx), false);
+                radioTextEdits.add(new Object[] {tb, wb, idx});
+            } else {
+                tb = (EditBox) e[0];
+                wb = (EditBox) e[1];
+                tb.setX(tbX);
+                tb.setY(boxY);
+                tb.setWidth(textW);
+                wb.setX(wbX);
+                wb.setY(boxY);
+                wb.setWidth(waitW);
+            }
+            tb.render(g, mouseX, mouseY, partialTick);
+            wb.render(g, mouseX, mouseY, partialTick);
+            // 删除按钮（右）
+            rdDelBounds.add(new int[] {delX, ry, delX + delW, ry + 18, idx});
             RpButton.draw(
                     g,
-                    rbX,
+                    delX,
                     ry + 1,
-                    rbX + 40,
+                    delX + delW,
                     ry + 19,
                     "删",
-                    inRect(mouseX, mouseY, rbX, ry + 1, rbX + 40, ry + 19) ? borderHover : border,
+                    inRect(mouseX, mouseY, delX, ry + 1, delX + delW, ry + 19) ? borderHover : border,
                     false);
-            ry += 22;
+            ry += RADIO_ROW_H;
         }
         if (radioLines.isEmpty()) {
             g.drawString(font, "（空：点「+ 添加句子」开始）", cx, listTop + 4, RpTheme.TEXT_DIM);
         }
         RpScrollbar.draw(g, cw - 8, listTop, listBottom, radioLines.size(), maxVis, off);
-
-        // 底部编辑区：每句 text + wait 输入框（稳定复用；仅编辑行范围变化时重建，保证焦点与已输入内容不丢）
-        int ey = listBottom + 6;
-        int editW = Math.max(100, (cw - cx - 12) / 2);
-        int maxEdits = Math.max(1, Math.min(radioLines.size(), (rdY2 - ey - 8) / 24));
-        int editStart = Math.max(0, radioLines.size() - maxEdits);
-        int rows = radioLines.size() - editStart;
-        if (radioEditStart != editStart || radioEditCount != rows) {
-            for (Object[] e : radioTextEdits) {
-                removeWidget((EditBox) e[0]);
-                removeWidget((EditBox) e[1]);
-            }
-            radioTextEdits.clear();
-            radioEditStart = editStart;
-            radioEditCount = rows;
-        }
-        int iy = ey;
-        for (int i = 0; i < rows; i++) {
-            int idx = editStart + i;
-            Object[] e = i < radioTextEdits.size() ? radioTextEdits.get(i) : null;
-            EditBox tb;
-            EditBox wb;
-            if (e == null) {
-                tb = mkBox(cx + 26, iy, editW, "", radioLines.get(idx), false);
-                wb = mkBox(
-                        cx + 26 + editW + 8,
-                        iy,
-                        Math.max(56, cw - cx - 26 - editW - 8),
-                        "",
-                        radioWaits.get(idx),
-                        false);
-                radioTextEdits.add(new Object[] {tb, wb, idx});
-            } else {
-                tb = (EditBox) e[0];
-                wb = (EditBox) e[1];
-                tb.setX(cx + 26);
-                tb.setY(iy);
-                tb.setWidth(editW);
-                wb.setX(cx + 26 + editW + 8);
-                wb.setY(iy);
-                wb.setWidth(Math.max(56, cw - cx - 26 - editW - 8));
-            }
-            g.drawString(font, "句" + idx, cx, iy + 3, RpTheme.TEXT_DIM);
-            tb.render(g, mouseX, mouseY, partialTick);
-            wb.render(g, mouseX, mouseY, partialTick);
-            iy += 24;
-        }
     }
 
     /** 无线电弹窗命中（在 mouseClicked 顶部调用，弹窗期间吞掉底层点击）。 */
@@ -1663,6 +1682,15 @@ public class RpAdminScreen extends Screen {
                 && inRect((int) mx, (int) my, rdToggleX1, rdToggleY1, rdToggleX2, rdToggleY2)) {
             radioDisabled = !radioDisabled;
             return true;
+        }
+        for (int[] h : rdHandleBounds) {
+            if (inRect((int) mx, (int) my, h[0], h[1], h[2], h[3])) {
+                int idx = h.length > 4 ? h[4] : -1;
+                if (idx >= 0 && idx < radioLines.size()) {
+                    radioDragIdx = idx; // 开始拖拽调序（mouseDragged 里移动行）
+                }
+                return true;
+            }
         }
         for (int[] b : rdDelBounds) {
             if (inRect((int) mx, (int) my, b[0], b[1], b[2], b[3])) {
@@ -1699,8 +1727,34 @@ public class RpAdminScreen extends Screen {
         }
     }
 
+    /** 按鼠标 Y 计算拖拽目标行索引（限制在可见行范围内）。 */
+    private int radioDragTarget(double my) {
+        if (radioMaxVis <= 0 || radioListTop <= 0) {
+            return radioDragIdx;
+        }
+        int v = (int) ((my - radioListTop) / RADIO_ROW_H);
+        v = Math.max(0, Math.min(v, radioMaxVis - 1));
+        int idx = radioOff + v;
+        return Math.max(0, Math.min(idx, radioLines.size() - 1));
+    }
+
+    /** 拖拽调序：把 from 行移动到 to 行，并强制下一帧重建行内输入框。 */
+    private void moveRadioLine(int from, int to) {
+        if (from == to || from < 0 || from >= radioLines.size() || to < 0 || to >= radioLines.size()) {
+            return;
+        }
+        String t = radioLines.remove(from);
+        String w = radioWaits.remove(from);
+        radioLines.add(to, t);
+        radioWaits.add(to, w);
+        radioDragIdx = to;
+        radioEditStart = -1;
+        radioEditCount = 0;
+    }
+
     /** 关闭无线电编辑弹窗并清理其专属输入框 widget（等价于行为序列弹窗的 closeSequenceModal）。 */
     private void closeRadioModal() {
+        radioDragIdx = -1;
         if (radioSpeakerBox != null) {
             removeWidget(radioSpeakerBox);
             radioSpeakerBox = null;
@@ -2704,9 +2758,17 @@ public class RpAdminScreen extends Screen {
         return false;
     }
 
-    /** 滚动条拖拽：按住游标移动即滚动。 */
+    /** 滚动条拖拽：按住游标移动即滚动；无线电弹窗打开时优先处理句子拖拽调序。 */
     @Override
     public boolean mouseDragged(double mx, double my, int button, double dx, double dy) {
+        // 无线电弹窗句子拖拽调序（优先于其它滚动条拖拽）
+        if (radioModalOpen && radioDragIdx >= 0) {
+            int target = radioDragTarget(my);
+            if (target != radioDragIdx) {
+                moveRadioLine(radioDragIdx, target);
+            }
+            return true;
+        }
         if (tabDrag && maxTabScroll > 0) {
             int sbX1 = px1 + 12;
             int sbX2 = px2 - 12;
@@ -2745,6 +2807,10 @@ public class RpAdminScreen extends Screen {
 
     @Override
     public boolean mouseReleased(double mx, double my, int button) {
+        if (radioModalOpen && radioDragIdx >= 0) {
+            radioDragIdx = -1; // 结束句子拖拽调序
+            return true;
+        }
         tabDrag = false;
         RpScrollbar.endDrag();
         return super.mouseReleased(mx, my, button);
