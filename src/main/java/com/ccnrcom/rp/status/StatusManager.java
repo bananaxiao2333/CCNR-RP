@@ -189,11 +189,17 @@ public final class StatusManager {
                 : "";
         String envMsgId = killer == null ? event.getSource().getMsgId() : "";
         String killerName = killer == null ? "" : killer.getName().getString();
+        // 击杀者职业（死亡通知「阵营 · 职业」展示用）：玩家击杀取击杀者当前职业，其余为空。
+        String killerProfession = "";
+        if (killer instanceof net.minecraft.server.level.ServerPlayer kp && CCNRRPMod.users != null) {
+            killerProfession = CCNRRPMod.users.professionId(kp.getUUID().toString());
+        }
         RpChannels.sendTo(
                 player,
                 new RpPackets.DeathNoticeS2C(
                         killerName,
                         killerFaction,
+                        killerProfession,
                         relation == null ? "" : relation.name().toLowerCase(java.util.Locale.ROOT),
                         weapon,
                         envMsgId));

@@ -406,7 +406,12 @@ public class RpAdminScreen extends Screen {
             y += 30;
         }
         addRenderableWidget(RpButton.primary(
-                x, py2 - 40, w, 20, Component.translatable("ccnr_rp.gui.admin.crud.save"), b -> saveSettingsForm()));
+                x,
+                py2 - 40,
+                Math.min(160, Math.max(96, w / 3)),
+                20,
+                Component.translatable("ccnr_rp.gui.admin.crud.save"),
+                b -> saveSettingsForm()));
     }
 
     /** 保存「设定」标签全部输入框：settings.json 字符串项 → ManagerSetC2S；serverconfig 数值 → ServerConfigSetC2S。 */
@@ -435,31 +440,32 @@ public class RpAdminScreen extends Screen {
         idBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.id", id, edit);
         y += 30;
         boolean enabled = ev == null || !ev.has("enabled") || ev.get("enabled").getAsBoolean();
-        addRenderableWidget(RpButton.secondary(x, y, w, 18, Component.literal("启用: " + (enabled ? "是" : "否")), b -> {
-            evState = !evState;
-            rebuild();
-        }));
         evState = enabled;
-        y += 30;
         fld3Box = mkBox(x, y, w, "时长(秒,0=事件持续时间)", ev == null ? "0" : num(ev, "durationSeconds", 0), false);
         y += 30;
-        addRenderableWidget(
-                RpButton.secondary(x, y, w, 18, Component.literal("编辑行为序列…（WAIT/WAVE/COMMAND/FORCE_PICK）"), b -> {
-                    openSequenceModal();
-                }));
+        // 管理快捷操作：启用开关 / 编辑行为序列 / 手动触发事件 —— 三个长按钮压成一行短按钮并排
+        boolean evEnabled = enabled;
+        buttonRow(
+                x,
+                y,
+                w,
+                20,
+                java.util.List.of(
+                        new ActButton("启用: " + (evEnabled ? "是" : "否"), 1, () -> {
+                            evState = !evState;
+                            rebuild();
+                        }),
+                        new ActButton("行为序列", 1, () -> openSequenceModal()),
+                        new ActButton("触发事件", 0, () -> {
+                            String evtId = idBox.getValue();
+                            if (evtId.isBlank()) {
+                                notice = "缺少 id";
+                                return;
+                            }
+                            RpChannels.sendToServer(new RpPackets.AdminEventTriggerC2S(evtId));
+                        })));
         y += 26;
         actionRow(x, y, w, edit);
-        // 管理快捷操作：手动触发事件
-        y += 26;
-        addRenderableWidget(
-                RpButton.primary(x, y, w, 20, Component.literal("触发事件：手动启动选中事件（等同 /rp event trigger）"), b -> {
-                    String evtId = idBox.getValue();
-                    if (evtId.isBlank()) {
-                        notice = "缺少 id";
-                        return;
-                    }
-                    RpChannels.sendToServer(new RpPackets.AdminEventTriggerC2S(evtId));
-                }));
     }
 
     private void buildPhaseForm() {
@@ -476,10 +482,8 @@ public class RpAdminScreen extends Screen {
         y += 30;
         fld3Box = mkBox(x, y, w, "时长(分钟)", ph == null ? "30" : num(ph, "durationMinutes", 30), false);
         y += 30;
-        addRenderableWidget(
-                RpButton.secondary(x, y, w, 18, Component.literal("编辑行为序列…（WAIT/WAVE/COMMAND/FORCE_PICK）"), b -> {
-                    openSequenceModal();
-                }));
+        // 编辑行为序列（整行长按钮压成短按钮）
+        buttonRow(x, y, w, 20, java.util.List.of(new ActButton("行为序列", 1, () -> openSequenceModal())));
         y += 26;
         actionRow(x, y, w, edit);
     }
@@ -507,22 +511,22 @@ public class RpAdminScreen extends Screen {
         // 人数上限
         unlockLevelBox = mkBox(x, y, w, "人数上限 limit（0=不限）", r == null ? "" : num(r, "limit", 0), false);
         y += 30;
-        addRenderableWidget(
-                RpButton.secondary(x, y, w, 18, Component.literal("说明：部署时职业超上限（或未配置职业规则时超通用上限）/ 阵营超上限 → 拒绝部署"), b -> {
-                    // 纯说明，无动作
-                }));
+        // 说明 + 清空全部限制：两个整行长按钮压成一行短按钮并排
+        buttonRow(
+                x,
+                y,
+                w,
+                20,
+                java.util.List.of(new ActButton("说明：超上限拒绝部署", 1, () -> {}), new ActButton("清空全部限制", 2, () -> {
+                    for (JsonObject rule : ClientCharacterState.deployLimits()) {
+                        JsonObject del = payload();
+                        del.addProperty("id", str(rule, "id"));
+                        requestCrud("limit", "delete", del);
+                    }
+                    notice = "已请求清空限制";
+                })));
         y += 26;
         actionRow(x, y, w, edit);
-        // 快捷操作：清空全部限制
-        y += 26;
-        addRenderableWidget(RpButton.danger(x, y, w, 20, Component.literal("清空全部限制（删除所有规则）"), b -> {
-            for (JsonObject rule : ClientCharacterState.deployLimits()) {
-                JsonObject del = payload();
-                del.addProperty("id", str(rule, "id"));
-                requestCrud("limit", "delete", del);
-            }
-            notice = "已请求清空限制";
-        }));
     }
 
     private String limitTypeLabel() {
@@ -608,23 +612,22 @@ public class RpAdminScreen extends Screen {
         camSceneBox =
                 mkBox(x, y, w, "ccnr_rp.gui.admin.field.cam_scene", wv == null ? "" : str(wv, "cmdcamScene"), false);
         y += 30;
-        addRenderableWidget(
-                RpButton.secondary(x, y, w, 18, Component.literal("编辑行为序列…（WAIT/WAVE/COMMAND/FORCE_PICK）"), b -> {
-                    openSequenceModal();
-                }));
-        y += 26;
-        actionRow(x, y, w, edit);
-        // 管理快捷操作：手动召唤复活波
-        y += 26;
-        addRenderableWidget(
-                RpButton.primary(x, y, w, 20, Component.literal("召唤复活波：向候选池发邀请（等同 /rp spawn trigger）"), b -> {
+        // 管理快捷操作：编辑行为序列 / 手动召唤复活波 —— 两个长按钮压成一行短按钮并排
+        buttonRow(
+                x,
+                y,
+                w,
+                20,
+                java.util.List.of(new ActButton("行为序列", 1, () -> openSequenceModal()), new ActButton("召唤复活波", 0, () -> {
                     String wvId = idBox.getValue();
                     if (wvId.isBlank()) {
                         notice = "缺少 id";
                         return;
                     }
                     RpChannels.sendToServer(new RpPackets.AdminWaveTriggerC2S(wvId));
-                }));
+                })));
+        y += 26;
+        actionRow(x, y, w, edit);
     }
 
     /** 通用操作行：保存/删除/新建。 */
@@ -658,6 +661,32 @@ public class RpAdminScreen extends Screen {
                     evState = true;
                     rebuild();
                 }));
+    }
+
+    /** 一行操作按钮（等宽短按钮，并排摆列）：variant 0=主操作 / 1=次级 / 2=危险。 */
+    private record ActButton(String label, int variant, Runnable onPress) {}
+
+    /** 把多个「整行堆叠」的长按钮压缩成一行等宽短按钮并排（n=1 时压成有界短按钮）。 */
+    private void buttonRow(int x, int y, int w, int h, java.util.List<ActButton> buttons) {
+        if (buttons == null || buttons.isEmpty()) {
+            return;
+        }
+        int n = buttons.size();
+        int bw = n == 1 ? Math.min(180, Math.max(96, w / 3)) : (w - (n - 1) * 4) / n;
+        for (int i = 0; i < n; i++) {
+            ActButton b = buttons.get(i);
+            int bx = x + i * (bw + 4);
+            RpButton btn =
+                    switch (b.variant()) {
+                        case 0 -> RpButton.primary(bx, y, bw, h, Component.literal(b.label()), p -> b.onPress()
+                                .run());
+                        case 2 -> RpButton.danger(bx, y, bw, h, Component.literal(b.label()), p -> b.onPress()
+                                .run());
+                        default -> RpButton.secondary(bx, y, bw, h, Component.literal(b.label()), p -> b.onPress()
+                                .run());
+                    };
+            addRenderableWidget(btn);
+        }
     }
 
     private String crudKind() {
@@ -926,10 +955,30 @@ public class RpAdminScreen extends Screen {
         camSceneBox = mkBox(
                 x, y, w, "ccnr_rp.gui.admin.field.cam_scene", prof == null ? "" : str(prof, "cmdcamScene"), false);
         y += 30;
-        // 无线电管理（职业级；优先级 职业 > 阵营，radioDisabled 可禁用该职业无线电）
-        addRenderableWidget(RpButton.secondary(
-                x, y, w, 18, Component.literal("无线电管理…（职业优先于阵营 / 可禁用）"), b -> openRadioModal("profession")));
-        y += 30;
+        // 管理快捷操作（职业级）：无线电 / 刷给自己 / 全量保存装备 / 职业复活点 —— 4 个长按钮压成一行短按钮并排
+        buttonRow(
+                x,
+                y,
+                w,
+                20,
+                java.util.List.of(
+                        new ActButton("无线电管理", 1, () -> openRadioModal("profession")),
+                        new ActButton("刷给自己", 0, () -> {
+                            if (selProfId.isBlank()) {
+                                notice = "请先在左侧选择职业";
+                                return;
+                            }
+                            RpChannels.sendToServer(new RpPackets.AdminSelfProfessionC2S(selProfId));
+                        }),
+                        new ActButton("保存装备", 1, () -> {
+                            if (selProfId.isBlank()) {
+                                notice = "请先在左侧选择职业";
+                                return;
+                            }
+                            RpChannels.sendToServer(new RpPackets.AdminProfessionSaveFullC2S(selProfId));
+                        }),
+                        new ActButton("职业复活点", 1, () -> openSpawnModal("profession"))));
+        y += 26;
         int bw3 = Math.max(60, w / 4);
         addRenderableWidget(RpButton.primary(
                 x, y, bw3, 20, Component.translatable("ccnr_rp.gui.admin.crud.save"), b -> saveProfession(edit)));
@@ -952,26 +1001,6 @@ public class RpAdminScreen extends Screen {
                     tierIdx = 1;
                     rebuild();
                 }));
-        // 管理快捷操作：把自己的角色（在场优先）刷成所选职业（含阵营）
-        addRenderableWidget(RpButton.primary(x, y + 26, w, 20, Component.literal("刷给自己：当前角色改为所选职业（含阵营）"), b -> {
-            if (selProfId.isBlank()) {
-                notice = "请先在左侧选择职业";
-                return;
-            }
-            RpChannels.sendToServer(new RpPackets.AdminSelfProfessionC2S(selProfId));
-        }));
-        // 管理快捷操作：把当前背包/护甲/副手（含 NBT）全量保存为所选职业 loadout（/rp profession save <id> --full）
-        addRenderableWidget(
-                RpButton.secondary(x, y + 52, w, 20, Component.literal("全量保存装备：当前背包/护甲/副手 → 所选职业（--full）"), b -> {
-                    if (selProfId.isBlank()) {
-                        notice = "请先在左侧选择职业";
-                        return;
-                    }
-                    RpChannels.sendToServer(new RpPackets.AdminProfessionSaveFullC2S(selProfId));
-                }));
-        // 职业复活点（P9 扩展）：弹窗管理坐标列表 + 分布规则（部署优先级：职业 > 阵营 > 世界复活点）
-        addRenderableWidget(RpButton.secondary(
-                x, y + 78, w, 20, Component.literal("管理职业复活点…（规则 / 坐标 / 添加当前坐标）"), b -> openSpawnModal("profession")));
     }
 
     private JsonObject selProf() {
@@ -1049,10 +1078,16 @@ public class RpAdminScreen extends Screen {
         camSceneBox =
                 mkBox(x, y, w, "ccnr_rp.gui.admin.field.cam_scene", fac == null ? "" : str(fac, "cmdcamScene"), false);
         y += 30;
-        // 无线电管理（阵营级：入场动画播完 action bar 打字机播放）
-        addRenderableWidget(RpButton.secondary(
-                x, y, w, 18, Component.literal("无线电管理…（入场动画后 action bar 播放）"), b -> openRadioModal("faction")));
-        y += 30;
+        // 管理快捷操作（阵营级）：无线电管理 / 管理部署点 —— 两个长按钮压成一行短按钮并排
+        buttonRow(
+                x,
+                y,
+                w,
+                20,
+                java.util.List.of(
+                        new ActButton("无线电管理", 1, () -> openRadioModal("faction")),
+                        new ActButton("管理部署点", 1, () -> openSpawnModal("faction"))));
+        y += 26;
         int bw3 = Math.max(60, w / 4);
         addRenderableWidget(RpButton.primary(
                 x, y, bw3, 20, Component.translatable("ccnr_rp.gui.admin.crud.save"), b -> saveFaction(edit)));
@@ -1074,9 +1109,6 @@ public class RpAdminScreen extends Screen {
                     tierIdx = 1;
                     rebuild();
                 }));
-        // 部署点配置（P9）：弹出管理窗口（规则 + 坐标列表 + 一键添加当前坐标）
-        addRenderableWidget(RpButton.secondary(
-                x, y + 28, w, 18, Component.literal("管理部署点…（规则 / 坐标 / 添加当前坐标）"), b -> openSpawnModal("faction")));
         // 关系管理与关系测定图已并入独立页签（TAB_RELATION），不再放在阵营表单内
     }
 
@@ -2819,7 +2851,12 @@ public class RpAdminScreen extends Screen {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (seqModalOpen && keyCode == 256) { // Esc：关闭流程编辑器（含输入框清理），不关闭整个管理面板
+        // Esc：先关弹窗返回上层表单（无线电/流程编辑器），而不是关闭整个管理面板
+        if (radioModalOpen && keyCode == 256) {
+            radioModalOpen = false;
+            return true;
+        }
+        if (seqModalOpen && keyCode == 256) {
             closeSequenceModal();
             return true;
         }
