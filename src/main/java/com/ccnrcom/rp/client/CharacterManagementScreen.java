@@ -718,6 +718,8 @@ public class CharacterManagementScreen extends Screen {
         int modelH = contentBottom - contentTop;
         int scale = Math.max(12, Math.min(36, Math.min(modelH / 3 - 6, modelW / 3)));
         int cy = contentTop + modelH / 2 + 4;
+        // A档：全息投影底座（人物背后光束 + 底部发光地格；纯绘制层，置于模型之后）
+        renderHoloBase(g, x + modelW / 2, contentTop, contentBottom, cy, scale);
         CharacterPreview.render(g, x + modelW / 2, cy, scale, ch, loadout);
         g.disableScissor();
         // 战术装备实物预览（职位 loadout：头/胸/腿/靴/武器，悬停显示词条）
@@ -759,6 +761,38 @@ public class CharacterManagementScreen extends Screen {
         return p.getAsJsonObject("loadout");
     }
 
+    /**
+     * A档：全息投影底座（纯绘制，不改模型渲染）。人物背后一条青光柱，脚下透视地格 + 发光底座圆环，
+     * 让立绘看起来像悬浮的全息投影。所有调用方为客户端主线程渲染，无每帧分配。
+     */
+    private static void renderHoloBase(GuiGraphics g, int cx, int top, int bottom, int cy, int scale) {
+        int baseY = Math.min(bottom - 6, cy + scale);
+        int light = 0x0045D8F2; // 透明青
+        int beam = 0x4D45D8F2; // 半透青（CYAN_DIM 低透明度）
+        // 1) 纵向投影光柱：顶部透明 -> 底部泛青，宽度随 scale 变化（top<baseY 才画）
+        if (top < baseY) {
+            int bw = Math.max(6, scale / 2);
+            g.fillGradient(cx - bw, top, cx + bw, baseY, light, beam);
+        }
+        // 2) 底部透视地格：几条横向扫掠线（越靠下越密，模拟透视地板）
+        int gx1 = cx - Math.max(20, scale * 3 / 2);
+        int gx2 = cx + Math.max(20, scale * 3 / 2);
+        for (int i = 1; i <= 4; i++) {
+            int yy = baseY - (i * i) * 3; // 越靠近底座越密
+            if (yy < top + 4) {
+                break;
+            }
+            int a = 90 - i * 16;
+            g.fill(gx1, yy, gx2, yy + 1, (a << 24) | 0x45D8F2);
+        }
+        // 3) 发光底座：同心圆环 + 底部渐隐
+        int baseR = Math.max(8, Math.min(18, scale));
+        int ring = 0x8C45D8F2;
+        int disc = 0xFF202020;
+        com.ccnrcom.rp.client.RpIcons.ring(g, cx, baseY, baseR, ring, disc);
+        com.ccnrcom.rp.client.RpIcons.circle(g, cx, baseY, Math.max(2, baseR / 3), (0x5A45D8F2));
+    }
+
     private void renderEquipList(
             GuiGraphics g, int ex, int er, int top, int bottom, JsonObject loadout, int mx, int my) {
         String[] labels = {
@@ -779,15 +813,39 @@ public class CharacterManagementScreen extends Screen {
         if (availH < 10) {
             return;
         }
-        int rowH = Math.max(16, Math.min(24, availH / labels.length));
-        int slotS = Math.min(18, rowH - 3);
+        int rowH = Math.max(18, Math.min(26, availH / labels.length));
+        int slotS = Math.min(20, rowH - 4);
         int iy = (slotS - 16) / 2;
+        int railX = ex - 4;
+        // B档：负载轨左缘贯穿线（连接五槽，形成整体终端轨）
+        int railTop = top + 6;
+        int railBot = top + 6 + (labels.length - 1) * rowH + slotS;
+        g.fill(railX, railTop, railX + 1, railBot, RpTheme.alphaBlend(RpTheme.TEXT_DIM, 140));
         ItemStack hovered = ItemStack.EMPTY;
         for (int i = 0; i < labels.length; i++) {
             int ry = top + 6 + i * rowH;
-            RpRoundRect.outlined(g, ex, ry, ex + slotS, ry + slotS, 3f, RpTheme.PANEL_BORDER, 0xFF2F2F2F);
             ItemStack stack = stacks[i];
-            if (stack != null && !stack.isEmpty()) {
+            boolean loaded = stack != null && !stack.isEmpty();
+            boolean weapon = i == labels.length - 1;
+            // 状态着色：空槽暗灰 / 已装备青 / 武器红（一眼定位武器）
+            int accent;
+            int glow;
+            if (!loaded) {
+                accent = 0xFF4A4A4A;
+                glow = 0;
+            } else if (weapon) {
+                accent = RpTheme.RED_LINE;
+                glow = RpTheme.alphaBlend(RpTheme.RED, 40);
+            } else {
+                accent = RpTheme.CYAN_DIM;
+                glow = RpTheme.alphaBlend(RpTheme.CYAN, 36);
+            }
+            // 槽位卡片：底 + 顶部门闩色条 + 边框按状态着色
+            RpRoundRect.outlined(g, ex, ry, ex + slotS, ry + slotS, 3f, accent, 0xFF2B2B2B);
+            g.fill(ex + 1, ry + 1, ex + slotS - 1, ry + 2, accent);
+            if (loaded) {
+                // 已装备辉光底衬（青/红），提升立体感
+                g.fill(ex + 1, ry + 3, ex + slotS - 1, ry + slotS - 1, glow);
                 g.renderItem(stack, ex + iy, ry + iy);
                 if (mx >= ex && mx <= ex + slotS && my >= ry && my <= ry + slotS) {
                     hovered = stack;
@@ -795,7 +853,8 @@ public class CharacterManagementScreen extends Screen {
             } else {
                 g.drawString(font, "—", ex + slotS / 2 - 2, ry + slotS / 2 - 4, RpTheme.TEXT_DIM);
             }
-            g.drawString(font, labels[i], ex + slotS + 6, ry + slotS / 2 - 4, RpTheme.TEXT_SECONDARY, true);
+            int labelColor = loaded ? (weapon ? RpTheme.RED : RpTheme.TEXT_PRIMARY) : RpTheme.TEXT_DIM;
+            g.drawString(font, labels[i], ex + slotS + 6, ry + slotS / 2 - 4, labelColor, true);
         }
         // 悬停物品显示词条
         if (!hovered.isEmpty()) {
