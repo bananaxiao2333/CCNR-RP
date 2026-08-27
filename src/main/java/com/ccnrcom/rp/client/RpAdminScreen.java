@@ -1063,6 +1063,9 @@ public class RpAdminScreen extends Screen {
         String id = fac == null ? "" : str(fac, "id");
         boolean edit = !id.isBlank();
         loadFactionSpawn(fac);
+        if (fac != null) {
+            syncFactionIconTier(fac); // 选中后每次重建表单都同步图标/等级（防刷新回退默认值）
+        }
         // ID 仅编辑模式锁定（创建模式必须可输入，否则无法新建）
         idBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.id", id, edit);
         y += 30;
@@ -2323,7 +2326,14 @@ public class RpAdminScreen extends Screen {
         p.addProperty("name", nameBox.getValue());
         p.addProperty("color", colorBox.getValue());
         p.addProperty("description", descBox.getValue());
-        p.addProperty("icon", iconOptions().get(iconIdx));
+        // 图标：当前阵营的图标不在可选列表（如自定义 img 素材未同步）时保留原值，防止保存覆盖成别的图标
+        JsonObject fac = selFaction();
+        String curIcon = fac == null ? "" : str(fac, "icon");
+        if (!curIcon.isBlank() && !iconOptions().contains(curIcon)) {
+            p.addProperty("icon", curIcon);
+        } else {
+            p.addProperty("icon", iconOptions().get(iconIdx));
+        }
         p.addProperty("tier", tierIdx + 1);
         p.addProperty("music", musicBox.getValue());
         p.addProperty("cmdcamScene", camSceneBox == null ? "" : camSceneBox.getValue());
@@ -2892,6 +2902,12 @@ public class RpAdminScreen extends Screen {
 
     private void selectFaction(JsonObject f) {
         selFactionId = str(f, "id");
+        syncFactionIconTier(f);
+        rebuild();
+    }
+
+    /** 从选中阵营同步图标/等级到表单（选中/刷新后均调用，防保存时用默认值覆盖原数据）。 */
+    private void syncFactionIconTier(JsonObject f) {
         String icon = str(f, "icon");
         java.util.List<String> opts = iconOptions();
         for (int i = 0; i < opts.size(); i++) {
@@ -2901,7 +2917,6 @@ public class RpAdminScreen extends Screen {
             }
         }
         tierIdx = Math.max(0, Math.min(2, tierOf(f) - 1));
-        rebuild();
     }
 
     private void selectLimit(JsonObject r) {

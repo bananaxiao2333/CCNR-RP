@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.18.32（修复：管理面板职业/阵营表单保存清空其他数据）
+
+- **职业表单保存清空装备（loadout）/ 无线电禁用 / 自部署开关**：管理面板「职业」表单只含基础字段，
+  服务端 onManagerCrud 把 `loadout` 恒传 `null`（upsert 落空装备）、`selfDeploy`/`radioDisabled` 恒传 `false`，
+  每次点保存都会把职业的**战术装备、无线电禁用开关、自部署开关**重置为空——正是「保存后其他数据全部清空」。
+  现改为 `FactionProfessions.resolveSave(payload, existing)`：表单未携带的字段从现有定义**继承**，
+  保存 = 表单输出覆盖到原数据上，不再整条重建（新建职业仍落空装备、开关默认关）。
+- **阵营表单图标/等级同步加固**：表单重建（数据刷新广播后）也会从选中阵营同步图标/等级，
+  不再依赖点选时机；阵营的自定义图标（`img:` 素材未同步到可选列表）保存时**保留原值**，不再被默认图标覆盖。
+  阵营保存链路（updateFaction = deepCopy + 仅覆盖表单 8 字段）本已保留 radio/spawn/professions，补测试固化。
+- 测试：FactionProfessionsTest 新增 resolveSave 继承/新建两路径 + 端到端 upsert 保留验证；
+  新增 FactionManagerSaveTest（updateFaction 保留 radio/spawn/professions）。
+- 构建：spotlessApply / build -PrunTests / test -PrunTests 全绿。
+
 ## 2.18.31（职业简历（profile）展示：K 面板 + 部署入场电影 + 招募弹窗）
 
 - **K 面板（职位选择终端）**：右栏在「战术装备预览」之下、部署按钮之上直接展示该职位的**项目简历**

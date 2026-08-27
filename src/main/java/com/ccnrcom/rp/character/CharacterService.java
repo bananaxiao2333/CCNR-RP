@@ -342,32 +342,26 @@ public final class CharacterService {
         switch (kind) {
             case "profession" -> {
                 String id = str(p, "id", "");
-                String name = str(p, "name", id);
-                String factionId = str(p, "factionId", "");
-                boolean selfDeploy = p.has("selfDeploy") && p.get("selfDeploy").getAsBoolean();
-                int unlockLevel = com.ccnrcom.rp.faction.FactionProfessions.unlockLevel(p);
-                String music = str(p, "music", "");
-                String profile = str(p, "profile", "");
-                String cmdcamScene = str(p, "cmdcamScene", "");
-                com.google.gson.JsonObject radio =
-                        p.has("radio") && p.get("radio").isJsonObject() ? p.getAsJsonObject("radio") : null;
-                boolean radioDisabled =
-                        p.has("radioDisabled") && p.get("radioDisabled").getAsBoolean();
                 if ("delete".equals(action)) {
                     errors = CCNRRPMod.factions.deleteProfession(id);
                 } else {
+                    // 表单未编辑的字段（自部署/装备 loadout/无线电禁用）从现有定义继承，
+                    // 保存 = 表单输出覆盖到原数据上，防止空值把原字段清空（如装备被 emptyLoadout 覆盖）
+                    com.ccnrcom.rp.faction.FactionProfessions.ProfessionSave save =
+                            com.ccnrcom.rp.faction.FactionProfessions.resolveSave(
+                                    p, CCNRRPMod.factions.findProfession(id).orElse(null));
                     errors = CCNRRPMod.factions.upsertProfession(
-                            id,
-                            name,
-                            factionId,
-                            selfDeploy,
-                            unlockLevel,
-                            null,
-                            music,
-                            profile,
-                            cmdcamScene,
-                            radio,
-                            radioDisabled);
+                            save.id(),
+                            save.name(),
+                            save.factionId(),
+                            save.selfDeploy(),
+                            save.unlockLevel(),
+                            save.loadout(),
+                            save.music(),
+                            save.profile(),
+                            save.cmdcamScene(),
+                            save.radio(),
+                            save.radioDisabled());
                 }
             }
             case "faction" -> {

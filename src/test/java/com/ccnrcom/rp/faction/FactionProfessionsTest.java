@@ -70,6 +70,87 @@ class FactionProfessionsTest {
     }
 
     @Test
+    void resolveSaveKeepsLoadoutSelfDeployRadioDisabled() {
+        // 现有定义：带装备 / 自部署开 / 无线电禁用开 / 无线电配置
+        JsonObject root = new JsonObject();
+        JsonObject loadout = new JsonObject();
+        JsonArray inv = new JsonArray();
+        JsonObject sword = new JsonObject();
+        sword.addProperty("slot", 0);
+        sword.addProperty("item", "minecraft:iron_sword");
+        sword.addProperty("count", 1);
+        inv.add(sword);
+        loadout.add("inventory", inv);
+        JsonObject radio = new JsonObject();
+        radio.addProperty("speaker", "指挥官");
+        JsonArray lines = new JsonArray();
+        JsonObject l1 = new JsonObject();
+        l1.addProperty("text", "欢迎");
+        l1.addProperty("wait", 2.0);
+        lines.add(l1);
+        radio.add("lines", lines);
+        List<String> errors = FactionProfessions.upsert(
+                root, "medic", "军医", "a", true, 0, loadout, "m.wav", "简历", "cam", radio, true, id -> id.equals("a"));
+        assertTrue(errors.isEmpty(), () -> errors.toString());
+
+        // 表单输出：仅含表单字段（无 selfDeploy/loadout/radio/radioDisabled）
+        JsonObject payload = new JsonObject();
+        payload.addProperty("id", "medic");
+        payload.addProperty("name", "军医改");
+        payload.addProperty("factionId", "a");
+        payload.addProperty("unlockLevel", 3);
+        payload.addProperty("music", "new.wav");
+        payload.addProperty("profile", "新简历");
+        payload.addProperty("cmdcamScene", "");
+
+        var save = FactionProfessions.resolveSave(
+                payload, FactionProfessions.find(root, "medic").orElseThrow());
+        assertTrue(save.selfDeploy(), "自部署开关应继承原值");
+        assertTrue(save.radioDisabled(), "无线电禁用开关应继承原值");
+        assertTrue(save.loadout().has("inventory"), "装备 loadout 应继承原值");
+        assertEquals(3, save.unlockLevel());
+        assertEquals("军医改", save.name());
+        assertEquals("new.wav", save.music());
+        assertEquals("", save.cmdcamScene());
+
+        // 端到端：按 resolveSave 结果 upsert 后原字段不被清空
+        List<String> saveErrors = FactionProfessions.upsert(
+                root,
+                save.id(),
+                save.name(),
+                save.factionId(),
+                save.selfDeploy(),
+                save.unlockLevel(),
+                save.loadout(),
+                save.music(),
+                save.profile(),
+                save.cmdcamScene(),
+                save.radio(),
+                save.radioDisabled(),
+                id -> id.equals("a"));
+        assertTrue(saveErrors.isEmpty(), () -> saveErrors.toString());
+        JsonObject after = FactionProfessions.find(root, "medic").orElseThrow();
+        assertTrue(after.getAsJsonObject("loadout").has("inventory"), "保存后装备不应丢失");
+        assertTrue(after.has("radio"), "保存后无线电不应丢失");
+        assertTrue(FactionProfessions.radioDisabled(after), "保存后无线电禁用开关不应被重置");
+        assertTrue(FactionProfessions.selfDeploy(after), "保存后自部署开关不应被重置");
+    }
+
+    @Test
+    void resolveSaveForCreateHasNoInheritance() {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("id", "new_prof");
+        payload.addProperty("name", "新职业");
+        payload.addProperty("factionId", "a");
+        var save = FactionProfessions.resolveSave(payload, null);
+        assertNull(save.loadout(), "新建无现有定义，loadout 为 null（upsert 落空装备）");
+        assertFalse(save.selfDeploy());
+        assertFalse(save.radioDisabled());
+        assertNull(save.radio());
+        assertEquals("new_prof", save.id());
+    }
+
+    @Test
     void radioUpsertWritesAndReads() {
         JsonObject root = new JsonObject();
         JsonObject radio = new JsonObject();
