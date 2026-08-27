@@ -194,6 +194,45 @@ class FactionManagerSaveTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void setProfessionSpawnPersists() throws Exception {
+        JsonObject root = new JsonObject();
+        root.addProperty("version", 1);
+        JsonArray pa = new JsonArray();
+        JsonObject prof = new JsonObject();
+        prof.addProperty("id", "medic");
+        prof.addProperty("name", "军医");
+        prof.addProperty("factionId", "a");
+        pa.add(prof);
+        root.add("professions", pa);
+        root.add("factions", new JsonArray());
+        Object mgr = allocManager(root);
+        Class<?> c = mgr.getClass();
+
+        java.util.List<com.ccnrcom.rp.faction.FactionManager.SpawnPoint> pts = java.util.List.of(
+                new com.ccnrcom.rp.faction.FactionManager.SpawnPoint(10, 64, -5, "minecraft:overworld"),
+                new com.ccnrcom.rp.faction.FactionManager.SpawnPoint(20, 70, 0, "minecraft:the_nether"));
+        java.lang.reflect.Method set =
+                c.getMethod("setProfessionSpawn", String.class, String.class, java.util.List.class);
+        java.util.List<String> errors = (java.util.List<String>) set.invoke(mgr, "medic", "SINGLE", pts);
+        assertTrue(errors.isEmpty(), () -> errors.toString());
+
+        Field rootField = c.getDeclaredField("root");
+        rootField.setAccessible(true);
+        JsonObject after = (JsonObject) rootField.get(mgr);
+        JsonObject prof2 = after.getAsJsonArray("professions").get(0).getAsJsonObject();
+        assertTrue(prof2.has("spawn"), "spawn 应已写入");
+        JsonObject sp = prof2.getAsJsonObject("spawn");
+        assertEquals("SINGLE", sp.get("rule").getAsString());
+        assertEquals(2, sp.getAsJsonArray("points").size());
+        assertEquals(
+                "minecraft:the_nether",
+                sp.getAsJsonArray("points").get(1).getAsJsonObject().get("dim").getAsString());
+        // 其它字段保留
+        assertEquals("军医", prof2.get("name").getAsString());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void updateFactionPreservesOtherFields() throws Exception {
         JsonObject root = sampleRoot();
         Path tmp = Files.createTempFile("factions-test", ".json");

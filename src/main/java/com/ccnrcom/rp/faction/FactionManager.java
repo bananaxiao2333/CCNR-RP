@@ -292,7 +292,7 @@ public final class FactionManager {
             errors = List.of("未知操作: " + action);
         }
         if (errors.isEmpty()) {
-            com.ccnrcom.rp.character.CharacterService.broadcastConfigAll(); // 关系规则属配置数据：全服镜像即时刷新
+            com.ccnrcom.rp.character.CharacterService.broadcastConfigAll(player); // 关系规则属配置数据：编辑者全量刷新 + 其余玩家异步广播
             com.ccnrcom.rp.network.RpChannels.sendTo(
                     player, new com.ccnrcom.rp.network.RpPackets.ErrorS2C("ccnr_rp.faction.relation.saved"));
         } else {
