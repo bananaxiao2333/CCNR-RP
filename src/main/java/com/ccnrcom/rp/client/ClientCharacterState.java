@@ -29,6 +29,8 @@ public final class ClientCharacterState {
     private static int nametagBadgeSize = 9;
     /** 玩家头顶悬浮标签离头顶高度（格，服务端同步，默认 0.9）。 */
     private static double nametagOffset = 0.9;
+    /** 击杀友好提示距聊天区上方的额外间距（像素，服务端同步，默认 4）。 */
+    private static int killNoticeOffset = 4;
 
     private static boolean isAdmin = false;
     private static boolean autoOpenPending = false;
@@ -195,6 +197,9 @@ public final class ClientCharacterState {
         if (root.has("nametagOffset")) {
             nametagOffset = root.get("nametagOffset").getAsDouble();
         }
+        if (root.has("killNoticeOffset")) {
+            killNoticeOffset = root.get("killNoticeOffset").getAsInt();
+        }
         // 入服自动开面板不在列表同步时武装——等素材同步完成后由 armAutoOpenPanel() 武装
         // （同步完成前部署被禁用，面板提前打开无意义）。
     }
@@ -277,6 +282,11 @@ public final class ClientCharacterState {
     /** 玩家头顶悬浮标签离头顶高度（格，服务端同步）。 */
     public static synchronized double nametagOffset() {
         return nametagOffset;
+    }
+
+    /** 击杀友好提示距聊天区上方的额外间距（像素，服务端同步）。 */
+    public static synchronized int killNoticeOffset() {
+        return killNoticeOffset;
     }
 
     // ---------- 用户级身份（v2） ----------
