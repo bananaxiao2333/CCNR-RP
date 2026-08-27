@@ -239,6 +239,25 @@ public class CharacterManagementScreen extends Screen {
         }
     }
 
+    /** 职业是否无可用部署余额：上限 0=禁止部署，或在职数 ≥ 上限。 */
+    private boolean profNoBalance(JsonObject p) {
+        int lim = ClientCharacterState.professionLimit(str(p, "id"));
+        if (lim < 0) {
+            return false; // 未配置规则 = 不限
+        }
+        return ClientCharacterState.professionOccupied(str(p, "id")) >= lim;
+    }
+
+    /** 阵营是否无可用职业复活：该阵营下所有职业均无可用余额（无职业也视为不可用）。 */
+    private boolean facNoAvailable(JsonObject fac) {
+        for (JsonObject p : professions) {
+            if (str(p, "factionId").equals(str(fac, "id")) && !profNoBalance(p)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private static String factionName(JsonObject p, List<JsonObject> metas) {
         String fid = str(p, "factionId");
         for (JsonObject f : metas) {
@@ -480,6 +499,8 @@ public class CharacterManagementScreen extends Screen {
             boolean sel =
                     !filterFaction.isEmpty() && fac != null && str(fac, "id").equals(filterFaction);
             boolean hover = mx >= b[0] && mx <= b[2] && my >= b[1] && my <= b[3];
+            // 阵营无可用职业复活（该阵营所有职业均无部署余额）→ 行标红
+            boolean noAvail = fac != null && facNoAvailable(fac);
             if (sel) {
                 RpTheme.selectedBar(g, b[0], b[1], b[2], b[3], 6f);
             } else {
@@ -490,8 +511,10 @@ public class CharacterManagementScreen extends Screen {
                         b[2],
                         b[3],
                         6f,
-                        hover ? RpTheme.PANEL_BORDER_BRIGHT : RpTheme.PANEL_BORDER,
-                        hover ? RpTheme.PANEL_BG_ALT : RpTheme.PANEL_BG);
+                        noAvail ? RpTheme.RED_LINE : (hover ? RpTheme.PANEL_BORDER_BRIGHT : RpTheme.PANEL_BORDER),
+                        noAvail
+                                ? RpTheme.alphaBlend(RpTheme.RED_DIM, 0x30)
+                                : (hover ? RpTheme.PANEL_BG_ALT : RpTheme.PANEL_BG));
             }
             if (fac == null) {
                 RpIcons.badge(g, b[0] + 12, b[1] + 11, 8, "target", 2, sel);
@@ -510,7 +533,13 @@ public class CharacterManagementScreen extends Screen {
                 if (font.width(name) > maxW) {
                     name = font.plainSubstrByWidth(name, maxW - 1) + "…";
                 }
-                g.drawString(font, name, b[0] + 25, b[1] + 7, sel ? 0xFFFFFFFF : RpTheme.TEXT_SECONDARY, true);
+                g.drawString(
+                        font,
+                        name,
+                        b[0] + 25,
+                        b[1] + 7,
+                        sel ? 0xFFFFFFFF : (noAvail ? RpTheme.RED_LINE : RpTheme.TEXT_SECONDARY),
+                        true);
             }
         }
     }
@@ -528,6 +557,8 @@ public class CharacterManagementScreen extends Screen {
             JsonObject p = visible.get(idx);
             boolean sel = str(p, "id").equals(selectedId);
             boolean hover = mx >= b[0] && mx <= b[2] && my >= b[1] && my <= b[3];
+            // 职业无可用部署余额（上限 0=禁止 或在职满）→ 行标红
+            boolean noBal = profNoBalance(p);
             if (sel) {
                 RpTheme.selectedBar(g, b[0], b[1], b[2], b[3], 8f);
             } else {
@@ -538,12 +569,22 @@ public class CharacterManagementScreen extends Screen {
                         b[2],
                         b[3],
                         8f,
-                        hover ? RpTheme.PANEL_BORDER_BRIGHT : RpTheme.PANEL_BORDER,
-                        hover ? RpTheme.PANEL_BG_ALT : (i % 2 == 0 ? RpTheme.PANEL_BG : RpTheme.PANEL_BG_EVEN));
+                        noBal ? RpTheme.RED_LINE : (hover ? RpTheme.PANEL_BORDER_BRIGHT : RpTheme.PANEL_BORDER),
+                        noBal
+                                ? RpTheme.alphaBlend(RpTheme.RED_DIM, 0x26)
+                                : (hover
+                                        ? RpTheme.PANEL_BG_ALT
+                                        : (i % 2 == 0 ? RpTheme.PANEL_BG : RpTheme.PANEL_BG_EVEN)));
             }
             JsonObject fac = factionMeta(str(p, "factionId"));
             RpIcons.factionBadge(g, b[0] + 14, b[1] + 14, 7, fac, false);
-            g.drawString(font, str(p, "name"), b[0] + 34, b[1] + 6, sel ? 0xFFFFFFFF : RpTheme.TEXT_PRIMARY, true);
+            g.drawString(
+                    font,
+                    str(p, "name"),
+                    b[0] + 34,
+                    b[1] + 6,
+                    sel ? 0xFFFFFFFF : (noBal ? RpTheme.RED_LINE : RpTheme.TEXT_PRIMARY),
+                    true);
             g.drawString(
                     font, factionName(p, factionMeta), b[0] + 34, b[1] + 20, sel ? 0xFFFFFFFF : RpTheme.TEXT_SECONDARY);
             // 灰色职位 ID

@@ -82,4 +82,17 @@ class DeployLimitsTest {
         // GLOBAL 兜底满（medic 未配置 → GLOBAL 20；用另一个职业测 GLOBAL）
         assertTrue(DeployLimits.check(rules, "s4_guard", "madison", 20, 1).isPresent());
     }
+
+    @Test
+    void zeroLimitForbidsDeployment() {
+        // 上限 0 = 禁止部署：即使 0 在职也拒绝（0 不再表示不限）
+        List<DeployLimits.Rule> profRules = DeployLimits.parse(root(rule("p1", "PROFESSION", "medic", 0)));
+        assertTrue(DeployLimits.check(profRules, "medic", "qdf", 0, 0).isPresent());
+        // 阵营上限 0 同样禁止
+        List<DeployLimits.Rule> facRules = DeployLimits.parse(root(rule("f1", "FACTION", "qdf", 0)));
+        assertTrue(DeployLimits.check(facRules, "medic", "qdf", 0, 0).isPresent());
+        // GLOBAL 上限 0 = 未配置专属规则的职业全部禁止
+        List<DeployLimits.Rule> globalRules = DeployLimits.parse(root(rule("g1", "GLOBAL", "", 0)));
+        assertTrue(DeployLimits.check(globalRules, "s4_guard", "madison", 0, 0).isPresent());
+    }
 }

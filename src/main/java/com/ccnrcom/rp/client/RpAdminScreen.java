@@ -523,7 +523,7 @@ public class RpAdminScreen extends Screen {
         nameBox = mkBox(x, y, w, "目标(阵营/职业 id；GLOBAL 留空=通用)", target, false);
         y += 30;
         // 人数上限
-        unlockLevelBox = mkBox(x, y, w, "人数上限 limit（0=不限）", r == null ? "" : num(r, "limit", 0), false);
+        unlockLevelBox = mkBox(x, y, w, "人数上限 limit（0=禁止部署；不限=不配置该规则）", r == null ? "" : num(r, "limit", 0), false);
         y += 30;
         // 说明 + 清空全部限制：两个整行长按钮压成一行短按钮并排
         buttonRow(
@@ -531,7 +531,7 @@ public class RpAdminScreen extends Screen {
                 y,
                 w,
                 20,
-                java.util.List.of(new ActButton("说明：超上限拒绝部署", 1, () -> {}), new ActButton("清空全部限制", 2, () -> {
+                java.util.List.of(new ActButton("说明：0=禁止部署；在职≥上限拒绝", 1, () -> {}), new ActButton("清空全部限制", 2, () -> {
                     for (JsonObject rule : ClientCharacterState.deployLimits()) {
                         JsonObject del = payload();
                         del.addProperty("id", str(rule, "id"));
