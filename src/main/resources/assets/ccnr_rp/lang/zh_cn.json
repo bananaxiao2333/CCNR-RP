@@ -57,6 +57,8 @@
   "ccnr_rp.gui.admin.relation.internal": "内部",
   "ccnr_rp.gui.admin.relation.select_first": "请先选中一条关系规则",
   "ccnr_rp.gui.admin.relation.from_required": "请先填写 from（阵营/组 id，逗号分隔）",
+  "ccnr_rp.gui.admin.relation.inject": "注入",
+  "ccnr_rp.gui.admin.relation.pick_faction": "选择阵营…",
   "ccnr_rp.gui.admin.relation.hint": "from/to 支持多个阵营或组；留空 to = 内部关系（两两互设）",
   "ccnr_rp.profession.list.header": "职业列表：",
   "ccnr_rp.profession.list.item": "%s（阵营 %s，自部署=%s）",

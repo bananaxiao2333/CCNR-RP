@@ -57,6 +57,8 @@
   "ccnr_rp.gui.admin.relation.internal": "Internal",
   "ccnr_rp.gui.admin.relation.select_first": "Select a relation rule first",
   "ccnr_rp.gui.admin.relation.from_required": "Fill in from first (faction/group ids, comma-separated)",
+  "ccnr_rp.gui.admin.relation.inject": "Inject",
+  "ccnr_rp.gui.admin.relation.pick_faction": "Select faction…",
   "ccnr_rp.gui.admin.relation.hint": "from/to support multiple factions or groups; empty to = internal relation",
   "ccnr_rp.profession.list.header": "Professions:",
   "ccnr_rp.profession.list.item": "%s (faction %s, selfDeploy=%s)",

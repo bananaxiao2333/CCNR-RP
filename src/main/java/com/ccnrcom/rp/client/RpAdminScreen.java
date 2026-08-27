@@ -2188,6 +2188,10 @@ public class RpAdminScreen extends Screen {
             spawnModalClick(mx, my); // 命中弹窗按钮则处理；未命中也不放行到底层
             return true;
         }
+        // 关系页签阵营下拉/注入：弹层会盖住输入框等 widget，须在 super（widget 分发）之前命中
+        if (tab == TAB_RELATION && relationTab().mouseClickedOverlay((int) mx, (int) my, button)) {
+            return true;
+        }
         if (super.mouseClicked(mx, my, button)) {
             return true;
         }
@@ -2671,6 +2675,10 @@ public class RpAdminScreen extends Screen {
             renderLimitTargetSuggestions(g);
             resolveIdSugSource();
             renderIdSuggestions(g);
+            // 关系页签阵营下拉弹层：同样需盖住输入框，放最后绘制
+            if (tab == TAB_RELATION) {
+                relationTab().renderOverlay(g, mouseX, mouseY);
+            }
         }
         if (impactOpen) {
             renderImpactModal(g, mouseX, mouseY);
