@@ -159,6 +159,7 @@ public class CCNRRPMod {
 
     @SubscribeEvent
     public void onServerStopping(ServerStoppingEvent event) {
+        com.ccnrcom.rp.character.CharacterService.shutdownBroadcaster(); // 关闭配置广播后台线程（docs/01 §9.4 对称清理）
         if (users != null) {
             users.save();
         }
