@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.18.16（移除内嵌多媒体资源，jar 瘦身）
+
+- **删除打包进 jar 的多媒体资源**：7 张阵营图标（textures/faction/*.png）、界面背景 logo（textures/gui/bg_logo.png，代码无引用）、
+  模组图标（icon.png）——共约 452KB，jar 由 ~1.0MB 降至 ~0.55MB。
+- 阵营图标改为完全由服务器素材库下发（config/ccnr_rp/textures/，客户端进服自动缓存），移除代码中的内嵌回退分支：
+  AssetLibrary 内嵌默认图标拷贝、RpIcons/PlayerNametagRenderer 的 jar 内嵌回退、RpAdminScreen 写死的 img:admin_hq/img:madison 预设；
+  mods.toml 移除 logoFile（模组图标）。
+- docs/10 同步：img: 徽章未上传/未配置时仅显示底色徽章盘（无内嵌回退）。
+- 构建：spotlessApply / build -PrunTests 全绿。
+
 ## 2.18.15（开发文档：管理面板 GUI / 载荷链路 / 发布流程经验沉淀）
 
 - docs/11 新增「管理面板 GUI / 载荷链路 / 发布流程经验」章节：clearWidgets 控件生命周期陷阱、

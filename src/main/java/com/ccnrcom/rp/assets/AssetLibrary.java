@@ -31,8 +31,6 @@ public final class AssetLibrary {
     /** 素材名：字母/数字/下划线/连字符 ≤64 字符，.ogg（音乐）或 .png（图标）。 */
     private static final java.util.regex.Pattern NAME_PATTERN =
             java.util.regex.Pattern.compile("[A-Za-z0-9_-]{1,64}\\.(ogg|png)");
-    /** 内嵌默认阵营图标（首次启动写入服务器素材目录，保证 img: 图标开箱可用且受服务器控制）。 */
-    private static final String[] DEFAULT_ICONS = {"admin_hq", "madison", "qdf", "qsa", "qso", "nuclear", "rd_tech"};
     /** 同步完成确认超时（毫秒）：超时自动放行部署，防老客户端/异常永久锁死。 */
     private static final long SYNC_TIMEOUT_MS = 60_000L;
     /** 待同步玩家：UUID → 标记时刻（登录下发清单时标记；确认/超时/登出移除）。 */
@@ -64,25 +62,12 @@ public final class AssetLibrary {
         return rootDir().resolve("textures");
     }
 
-    /** 首次启动把内嵌默认阵营图标写入 config/ccnr_rp/textures/（服务器控制起点，客户端不再依赖 jar 内嵌）。 */
+    /** 首次启动确保服务器素材目录存在（阵营图标/音乐由管理员上传，无内嵌副本）。 */
     public static void ensureDefaults() {
         try {
             Files.createDirectories(texturesDir());
-            for (String name : DEFAULT_ICONS) {
-                Path target = texturesDir().resolve(name + ".png");
-                if (Files.exists(target)) {
-                    continue;
-                }
-                try (var in =
-                        AssetLibrary.class.getResourceAsStream("/assets/ccnr_rp/textures/faction/" + name + ".png")) {
-                    if (in != null) {
-                        Files.write(target, in.readAllBytes());
-                        LOGGER.info("[CCNR-RP] 默认阵营图标已写入服务器素材目录: {}", name);
-                    }
-                }
-            }
         } catch (Exception e) {
-            LOGGER.warn("[CCNR-RP] 默认阵营图标写入失败: {}", e.getMessage());
+            LOGGER.warn("[CCNR-RP] 素材目录创建失败: {}", e.getMessage());
         }
     }
 
