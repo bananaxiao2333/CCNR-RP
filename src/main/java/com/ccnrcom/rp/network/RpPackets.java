@@ -966,26 +966,34 @@ public final class RpPackets {
     public static final class DeathNoticeS2C {
         public final String killerName;
         public final String killerFactionId;
+        public final String killerProfessionId;
         public final String relation; // hostile/neutral/friendly（击杀者↔被击杀者；非玩家击杀/未知=空）
         public final String weapon; // 击杀者主手武器显示名（空=空手/非活体）
         public final String envMsgId; // 环境伤害源 msgId（如 fall/lava；有击杀者时为空）
 
         public DeathNoticeS2C(
-                String killerName, String killerFactionId, String relation, String weapon, String envMsgId) {
+                String killerName,
+                String killerFactionId,
+                String killerProfessionId,
+                String relation,
+                String weapon,
+                String envMsgId) {
             this.killerName = killerName == null ? "" : killerName;
             this.killerFactionId = killerFactionId == null ? "" : killerFactionId;
+            this.killerProfessionId = killerProfessionId == null ? "" : killerProfessionId;
             this.relation = relation == null ? "" : relation;
             this.weapon = weapon == null ? "" : weapon;
             this.envMsgId = envMsgId == null ? "" : envMsgId;
         }
 
         public DeathNoticeS2C(FriendlyByteBuf buf) {
-            this(buf.readUtf(64), buf.readUtf(64), buf.readUtf(16), buf.readUtf(128), buf.readUtf(64));
+            this(buf.readUtf(64), buf.readUtf(64), buf.readUtf(64), buf.readUtf(16), buf.readUtf(128), buf.readUtf(64));
         }
 
         public void encode(FriendlyByteBuf buf) {
             buf.writeUtf(killerName, 64);
             buf.writeUtf(killerFactionId, 64);
+            buf.writeUtf(killerProfessionId, 64);
             buf.writeUtf(relation, 16);
             buf.writeUtf(weapon, 128);
             buf.writeUtf(envMsgId, 64);
