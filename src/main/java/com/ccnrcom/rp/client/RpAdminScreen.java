@@ -124,6 +124,10 @@ public class RpAdminScreen extends Screen {
     private final List<int[]> rdDelBounds = new ArrayList<>();
     private EditBox radioSpeakerBox;
     private final List<Object[]> radioTextEdits = new ArrayList<>();
+    /** 底部编辑区已建输入框的行范围（editStart, rows）；范围变化时重建，稳定复用防止焦点/输入丢失。 */
+    private int radioEditStart = -1;
+
+    private int radioEditCount = 0;
 
     // 行为序列编辑器（流程编辑器，P1.4）：弹窗管理 WAIT/WAVE/COMMAND/FORCE_PICK 步骤（仿出生点弹窗）
     private boolean seqModalOpen = false;
@@ -1392,6 +1396,18 @@ public class RpAdminScreen extends Screen {
                 && target.get("radioDisabled").getAsBoolean();
         radioScroll = 0;
         notice = "";
+        // 清理上一轮编辑框状态：重新打开时重建输入框（值取自上面载入的 radioSpeaker/radioLines）
+        if (radioSpeakerBox != null) {
+            removeWidget(radioSpeakerBox);
+            radioSpeakerBox = null;
+        }
+        for (Object[] e : radioTextEdits) {
+            removeWidget((EditBox) e[0]);
+            removeWidget((EditBox) e[1]);
+        }
+        radioTextEdits.clear();
+        radioEditStart = -1;
+        radioEditCount = 0;
         radioModalOpen = true;
     }
 
@@ -1436,16 +1452,7 @@ public class RpAdminScreen extends Screen {
 
     /** 渲染无线电管理弹窗（每帧；按钮手动绘制，命中在 radioModalClick）。 */
     private void renderRadioModal(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
-        // 每帧重建输入框前先移除上一帧注册的 radio 弹窗专属 widget（防 widget 累积/重复命中）
-        if (radioSpeakerBox != null) {
-            removeWidget(radioSpeakerBox);
-            radioSpeakerBox = null;
-        }
-        for (Object[] e : radioTextEdits) {
-            removeWidget((EditBox) e[0]);
-            removeWidget((EditBox) e[1]);
-        }
-        radioTextEdits.clear();
+        // 输入框在打开时创建、跨帧稳定复用（仅编辑行范围变化/关闭时重建），避免每帧重建丢失焦点与输入
         g.fill(0, 0, width, height, 0xA6000000);
         int w = Math.min(560, width - 40);
         int h = Math.min(420, height - 40);
@@ -1471,9 +1478,15 @@ public class RpAdminScreen extends Screen {
         int bw = Math.max(64, (cw - cx - 12) / 4);
         int border = RpTheme.PANEL_BORDER;
         int borderHover = RpTheme.PANEL_BORDER_BRIGHT;
-        // 说话人（阵营色渲染前缀）
+        // 说话人（阵营色渲染前缀）：首次创建、后续复用（不重建，保证可输入且不丢焦点）
         g.drawString(font, "说话人（阵营色）:", cx, cy, RpTheme.TEXT_DIM);
-        radioSpeakerBox = mkBox(cx + 120, cy, cw - cx - 120, "", radioSpeaker, false);
+        if (radioSpeakerBox == null) {
+            radioSpeakerBox = mkBox(cx + 120, cy, cw - cx - 120, "", radioSpeaker, false);
+        } else {
+            radioSpeakerBox.setX(cx + 120);
+            radioSpeakerBox.setY(cy);
+            radioSpeakerBox.setWidth(cw - cx - 120);
+        }
         radioSpeakerBox.render(g, mouseX, mouseY, partialTick);
         cy += 30;
         // 添加句子
@@ -1579,26 +1592,58 @@ public class RpAdminScreen extends Screen {
         }
         RpScrollbar.draw(g, cw - 8, listTop, listBottom, radioLines.size(), maxVis, off);
 
-        // 底部编辑区：每句 text + wait 输入框（手动渲染在弹窗之上；点击/键盘经 radioModalClick 路由）
-        radioTextEdits.clear();
+        // 底部编辑区：每句 text + wait 输入框（稳定复用；仅编辑行范围变化时重建，保证焦点与已输入内容不丢）
         int ey = listBottom + 6;
         int editW = Math.max(100, (cw - cx - 12) / 2);
         int maxEdits = Math.max(1, Math.min(radioLines.size(), (rdY2 - ey - 8) / 24));
         int editStart = Math.max(0, radioLines.size() - maxEdits);
-        for (int i = editStart; i < radioLines.size(); i++) {
-            g.drawString(font, "句" + i, cx, ey + 3, RpTheme.TEXT_DIM);
-            EditBox tb = mkBox(cx + 26, ey, editW, "", radioLines.get(i), false);
-            EditBox wb = mkBox(
-                    cx + 26 + editW + 8, ey, Math.max(56, cw - cx - 26 - editW - 8), "", radioWaits.get(i), false);
+        int rows = radioLines.size() - editStart;
+        if (radioEditStart != editStart || radioEditCount != rows) {
+            for (Object[] e : radioTextEdits) {
+                removeWidget((EditBox) e[0]);
+                removeWidget((EditBox) e[1]);
+            }
+            radioTextEdits.clear();
+            radioEditStart = editStart;
+            radioEditCount = rows;
+        }
+        int iy = ey;
+        for (int i = 0; i < rows; i++) {
+            int idx = editStart + i;
+            Object[] e = i < radioTextEdits.size() ? radioTextEdits.get(i) : null;
+            EditBox tb;
+            EditBox wb;
+            if (e == null) {
+                tb = mkBox(cx + 26, iy, editW, "", radioLines.get(idx), false);
+                wb = mkBox(
+                        cx + 26 + editW + 8,
+                        iy,
+                        Math.max(56, cw - cx - 26 - editW - 8),
+                        "",
+                        radioWaits.get(idx),
+                        false);
+                radioTextEdits.add(new Object[] {tb, wb, idx});
+            } else {
+                tb = (EditBox) e[0];
+                wb = (EditBox) e[1];
+                tb.setX(cx + 26);
+                tb.setY(iy);
+                tb.setWidth(editW);
+                wb.setX(cx + 26 + editW + 8);
+                wb.setY(iy);
+                wb.setWidth(Math.max(56, cw - cx - 26 - editW - 8));
+            }
+            g.drawString(font, "句" + idx, cx, iy + 3, RpTheme.TEXT_DIM);
             tb.render(g, mouseX, mouseY, partialTick);
             wb.render(g, mouseX, mouseY, partialTick);
-            radioTextEdits.add(new Object[] {tb, wb, i});
-            ey += 24;
+            iy += 24;
         }
     }
 
     /** 无线电弹窗命中（在 mouseClicked 顶部调用，弹窗期间吞掉底层点击）。 */
     private boolean radioModalClick(double mx, double my, int button) {
+        // 先把输入框当前值刷回 radioLines/radioWaits/radioSpeaker，再做结构操作（增删行/保存），避免丢输入
+        collectRadioFields();
         if (inRect((int) mx, (int) my, rdAddX1, rdAddY1, rdAddX2, rdAddY2)) {
             radioLines.add("");
             radioWaits.add("1.5");
@@ -1629,12 +1674,12 @@ public class RpAdminScreen extends Screen {
                 return true;
             }
         }
-        collectRadioFields();
         for (Object[] e : radioTextEdits) {
             EditBox tb = (EditBox) e[0];
             EditBox wb = (EditBox) e[1];
-            if (tb.mouseClicked(mx, my, button) || wb.mouseClicked(mx, my, button)) {
-                setFocused(tb.mouseClicked(mx, my, button) ? tb : wb);
+            boolean hitTb = tb.mouseClicked(mx, my, button);
+            if (hitTb || wb.mouseClicked(mx, my, button)) {
+                setFocused(hitTb ? tb : wb);
                 return true;
             }
         }
@@ -1665,6 +1710,8 @@ public class RpAdminScreen extends Screen {
             removeWidget((EditBox) e[1]);
         }
         radioTextEdits.clear();
+        radioEditStart = -1;
+        radioEditCount = 0;
         setFocused(null);
         radioModalOpen = false;
     }

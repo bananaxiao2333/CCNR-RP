@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.18.25（修复：无线电管理弹窗输入框无法输入/保存、退出丢数据）
+
+- **修复无线电管理弹窗输入框失效**：弹窗输入框（说话人 / 每句 text / wait）此前每帧销毁重建
+  （removeWidget + mkBox），导致屏幕焦点每帧被清空、输入无法路由，且重建的输入框会重置为旧值；
+  现改为打开时创建、跨帧稳定复用（仅编辑行范围变化/关闭时重建），焦点与已输入内容不再丢失。
+- **保存前先回收输入框内容**：radioModalClick 顶部统一 collectRadioFields() 把输入框当前值刷回
+  radioLines/radioWaits/radioSpeaker，再做增删行/保存等结构操作，避免丢输入；修正输入框点击焦点
+  处理（去掉重复 mouseClicked 调用）。
+- 构建：spotlessApply / build -PrunTests 全绿。
+
 ## 2.18.24（弹出窗口统一行为对齐 + 工程规范 §10）
 
 - **影响确认弹窗 Esc 返回上层**：CRUD 影响确认弹窗（impactOpen）按 Esc 时取消（等同「否」，不执行 CRUD）
