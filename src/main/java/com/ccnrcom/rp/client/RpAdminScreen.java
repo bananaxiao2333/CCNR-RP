@@ -2323,7 +2323,7 @@ public class RpAdminScreen extends Screen {
         p.addProperty("name", nameBox.getValue());
         p.addProperty("color", colorBox.getValue());
         p.addProperty("description", descBox.getValue());
-        p.addProperty("icon", ICONS[iconIdx]);
+        p.addProperty("icon", iconOptions().get(iconIdx));
         p.addProperty("tier", tierIdx + 1);
         p.addProperty("music", musicBox.getValue());
         p.addProperty("cmdcamScene", camSceneBox == null ? "" : camSceneBox.getValue());
