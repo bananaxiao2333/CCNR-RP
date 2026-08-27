@@ -104,12 +104,19 @@ public final class CharacterService {
         BROADCASTER.shutdown();
     }
 
-    /** 配置变更后全服广播（异步；供其他系统（如关系编辑）成功落盘后调用）。 */
-    public static void broadcastConfigAll() {
+    /**
+     * 配置保存成功后的全员同步（docs/01 §9.2 服务端权威）：
+     * 编辑者（有编辑权限的管理员）**立即同步全量刷新**（sendList+sendManagerState，所见即所得，不依赖异步广播），
+     * 其余玩家走异步广播（后台构建纯数据 + 回主线程发包，多人不卡服）。供各配置保存入口统一调用。
+     */
+    public static void broadcastConfigAll(ServerPlayer editor) {
         CharacterService s = CCNRRPMod.characters;
-        if (s != null) {
-            s.broadcastToAll();
+        if (s == null || editor == null) {
+            return;
         }
+        s.sendList(editor); // 编辑者立即拿到全量数据（含本次改动）
+        s.sendManagerState(editor);
+        s.broadcastToAll(editor.getUUID().toString()); // 其余玩家异步广播（跳过编辑者，避免重复）
     }
 
     public CharacterService(MinecraftServer server) {
@@ -294,8 +301,8 @@ public final class CharacterService {
             service().sendError(player, "ccnr_rp.error.invalid_argument", String.join("; ", errors));
             return;
         }
-        // 等级曲线/头顶标签等 serverconfig 全服生效：异步广播全员（不再只同步操作者）
-        service().broadcastToAll();
+        // 等级曲线/头顶标签等 serverconfig 全服生效：编辑者立即全量刷新，其余玩家异步广播
+        broadcastConfigAll(player);
     }
 
     public static void onManagerSet(ServerPlayer player, String key, String value) {
@@ -312,7 +319,8 @@ public final class CharacterService {
             service().sendError(player, "ccnr_rp.error.invalid_argument", String.join("; ", errors));
             return;
         }
-        service().broadcastToAll();
+        // serverconfig 全服生效：编辑者立即全量刷新，其余玩家异步广播
+        broadcastConfigAll(player);
     }
 
     /**
@@ -320,7 +328,13 @@ public final class CharacterService {
      * （各配置文件只读一次，不再逐玩家读盘/序列化）→ 回主线程发包（docs/01 §9.4：发包回主线程）。
      * 连续多次变更时合并为最新一次（与头顶标签刷新同语义的 overload 保护）。
      */
+    /** 全服广播（异步）。 */
     private void broadcastToAll() {
+        broadcastToAll(null);
+    }
+
+    /** 全服广播（异步；skipUuid 非空时跳过该玩家——编辑者已由 broadcastConfigAll 同步刷新）。 */
+    private void broadcastToAll(String skipUuid) {
         if (server == null || CCNRRPMod.users == null) {
             return;
         }
@@ -331,6 +345,9 @@ public final class CharacterService {
         // 主线程快照：逐玩家字段（用户表非线程安全）+ 全服共享数据（在职统计/场景名/头顶标签）
         List<UserSnapshot> snaps = new ArrayList<>(players.size());
         for (ServerPlayer p : players) {
+            if (skipUuid != null && skipUuid.equals(p.getUUID().toString())) {
+                continue;
+            }
             snaps.add(snapshot(p));
         }
         JsonObject occupancy = occupancyJson();
@@ -652,7 +669,7 @@ public final class CharacterService {
             }
         }
         service().sendError(player, "ccnr_rp.manager.crud.ok", kind, action);
-        service().broadcastToAll();
+        broadcastConfigAll(player); // 编辑者立即全量刷新，其余玩家异步广播
     }
 
     /** 管理端影响预检（管理员）：统计用户（按当前职位/阵营）与波/事件/阶段引用。 */
@@ -947,7 +964,7 @@ public final class CharacterService {
                                 && loadout.getAsJsonObject("offhand").size() > 0
                         ? 1
                         : 0);
-        service().broadcastToAll(); // 装备 loadout 属配置数据：全服客户端镜像即时刷新（异步）
+        broadcastConfigAll(player); // 装备 loadout 属配置数据：编辑者立即全量刷新，其余玩家异步广播
         service().sendError(player, "ccnr_rp.profession.saved_full", String.valueOf(slots), professionId);
     }
 
@@ -983,7 +1000,7 @@ public final class CharacterService {
             service().sendError(player, "ccnr_rp.profession.error.config", String.join("; ", errors));
             return;
         }
-        service().broadcastToAll(); // 部署点属配置数据：全服客户端镜像即时刷新（异步）
+        broadcastConfigAll(player); // 部署点属配置数据：编辑者立即全量刷新，其余玩家异步广播
         service().sendError(player, "ccnr_rp.gui.admin.spawn.saved", factionId, String.valueOf(pts.size()));
     }
 
@@ -1020,7 +1037,7 @@ public final class CharacterService {
             service().sendError(player, "ccnr_rp.profession.error.config", String.join("; ", errors));
             return;
         }
-        service().broadcastToAll(); // 职业部署点属配置数据：全服客户端镜像即时刷新（异步）
+        broadcastConfigAll(player); // 职业部署点属配置数据：编辑者立即全量刷新，其余玩家异步广播
         service().sendError(player, "ccnr_rp.gui.admin.spawn.saved", professionId, String.valueOf(pts.size()));
     }
 
@@ -1137,6 +1154,27 @@ public final class CharacterService {
         return sp;
     }
 
+    /** 职业部署点（复活点）→ 客户端 JSON（配置存在则返回对象，否则 null）——管理面板复活点弹窗回显依赖。 */
+    private static com.google.gson.JsonObject professionSpawnJson(JsonObject def) {
+        var fs = com.ccnrcom.rp.faction.FactionProfessions.spawn(def);
+        if (fs == null) {
+            return null;
+        }
+        com.google.gson.JsonObject sp = new com.google.gson.JsonObject();
+        sp.addProperty("rule", fs.rule());
+        com.google.gson.JsonArray pts = new com.google.gson.JsonArray();
+        for (var p : fs.points()) {
+            com.google.gson.JsonObject o = new com.google.gson.JsonObject();
+            o.addProperty("x", p.x());
+            o.addProperty("y", p.y());
+            o.addProperty("z", p.z());
+            o.addProperty("dim", p.dim());
+            pts.add(o);
+        }
+        sp.add("points", pts);
+        return sp;
+    }
+
     /**
      * 构建并下发用户档案列表（K 面板/客户端全量初始化）：
      * {factions, professions(含解锁等级/装备/音乐/简历), settings, admin, userXp, userLevel,
@@ -1226,6 +1264,10 @@ public final class CharacterService {
                     }
                     o.addProperty("radioDisabled", com.ccnrcom.rp.faction.FactionProfessions.radioDisabled(def));
                     o.add("loadout", com.ccnrcom.rp.faction.FactionProfessions.loadout(def));
+                    JsonObject profSpawn = professionSpawnJson(def);
+                    if (profSpawn != null) {
+                        o.add("spawn", profSpawn);
+                    }
                     pa.add(o);
                 });
             }

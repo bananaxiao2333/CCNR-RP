@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.18.36（职业部署点回显修复 + 编辑者保存后立即全量刷新）
+
+- **修复「职业部署点无法保存」（实为无法回显）**：服务端 setProfessionSpawn 落盘正常，但 sendList 下发的
+  职业 JSON 缺 `spawn` 字段（阵营有、职业漏了）→ 客户端镜像无职业部署点 → 复活点弹窗永远显示空，
+  保存后重开也看不到点，表现为「无法保存」。现补 `professionSpawnJson`，职业 `spawn` 随全量列表下发，
+  弹窗正确回显已保存的点。
+- **编辑者保存后立即同步全量刷新**：所有配置保存入口（CRUD/设置/serverconfig/部署点/装备/关系）改为
+  `broadcastConfigAll(player)` —— 编辑者（有编辑权限的管理员）**立即同步拿到全量数据**
+  （sendList+sendManagerState，所见即所得，不依赖异步广播/不被 last-wins 合并），其余玩家走异步广播
+  （跳过编辑者避免重复）。
+- 测试：FactionManagerSaveTest 新增 setProfessionSpawn 落盘保留其它字段路径。
+- 构建：spotlessApply / build -PrunTests / test -PrunTests 全绿。
+
 ## 2.18.35（保存装备不再吞基础配置 + 复活点管理传送按钮）
 
 - **保存装备（loadout）单字段接管**：`/rp profession save` 与管理面板「保存装备」此前走全量 upsert（空串覆盖
