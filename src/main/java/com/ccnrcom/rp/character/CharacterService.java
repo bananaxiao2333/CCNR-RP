@@ -69,6 +69,49 @@ public final class CharacterService {
         }
     }
 
+    // ---- 配置变更全服广播（异步：主线程快照 → 后台构建纯数据 → 回主线程发包；docs/01 §9.4） ----
+
+    /** 配置广播后台构建线程（有界单线程 daemon；只构建纯数据，发包一律回主线程）。 */
+    private static final java.util.concurrent.ExecutorService BROADCASTER =
+            java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "ccnr-rp-config-broadcast");
+                t.setDaemon(true);
+                return t;
+            });
+
+    /** 待发送的全服配置广播载荷（后台组装完成，主线程发送；null=无待发；连续变更后者覆盖前者）。 */
+    private volatile java.util.List<PendingPush> pendingBroadcast;
+
+    /** 主线程快照的逐玩家字段（用户表为普通 HashMap 且玩家访问只能在主线程，后台线程只读快照）。 */
+    private record UserSnapshot(
+            String uuid,
+            boolean admin,
+            boolean panelLocked,
+            long userXp,
+            int userLevel,
+            boolean anySupportRevive,
+            String status,
+            String professionId,
+            String factionId,
+            long cooldownUntil) {}
+
+    /** 单玩家的全服广播载荷（后台组装，主线程发送；tags 全服共享同一 payload）。 */
+    private record PendingPush(
+            String uuid, String listPayload, String managerPayload, String musicPayload, String tagsPayload) {}
+
+    /** 服务端停止时关闭广播构建线程（docs/01 §9.4 对称清理）。 */
+    public static void shutdownBroadcaster() {
+        BROADCASTER.shutdown();
+    }
+
+    /** 配置变更后全服广播（异步；供其他系统（如关系编辑）成功落盘后调用）。 */
+    public static void broadcastConfigAll() {
+        CharacterService s = CCNRRPMod.characters;
+        if (s != null) {
+            s.broadcastToAll();
+        }
+    }
+
     public CharacterService(MinecraftServer server) {
         this.server = server;
     }
@@ -251,8 +294,8 @@ public final class CharacterService {
             service().sendError(player, "ccnr_rp.error.invalid_argument", String.join("; ", errors));
             return;
         }
-        service().sendList(player); // 等级曲线等客户端展示值同步
-        sendManagerState(player);
+        // 等级曲线/头顶标签等 serverconfig 全服生效：异步广播全员（不再只同步操作者）
+        service().broadcastToAll();
     }
 
     public static void onManagerSet(ServerPlayer player, String key, String value) {
@@ -272,28 +315,125 @@ public final class CharacterService {
         service().broadcastToAll();
     }
 
-    /** 管理端变更后同步全员：用户档案 + 管理器状态（阵营/职业/事件/阶段/波）。 */
+    /**
+     * 管理端变更后同步全员（异步）：主线程快照（玩家/用户表/Level 只读一次）→ 后台构建纯数据
+     * （各配置文件只读一次，不再逐玩家读盘/序列化）→ 回主线程发包（docs/01 §9.4：发包回主线程）。
+     * 连续多次变更时合并为最新一次（与头顶标签刷新同语义的 overload 保护）。
+     */
     private void broadcastToAll() {
-        if (server == null) {
+        if (server == null || CCNRRPMod.users == null) {
             return;
         }
         List<ServerPlayer> players = new ArrayList<>(server.getPlayerList().getPlayers());
+        if (players.isEmpty()) {
+            return;
+        }
+        // 主线程快照：逐玩家字段（用户表非线程安全）+ 全服共享数据（在职统计/场景名/头顶标签）
+        List<UserSnapshot> snaps = new ArrayList<>(players.size());
         for (ServerPlayer p : players) {
-            sendList(p);
-            sendManagerState(p);
+            snaps.add(snapshot(p));
+        }
+        JsonObject occupancy = occupancyJson();
+        List<String> camScenes = com.ccnrcom.rp.cmdcam.CamSceneBridge.savedSceneNames(server.overworld());
+        String tagsPayload = playerTagsJson().toString();
+        BROADCASTER.execute(() -> {
+            try {
+                JsonObject sharedList = buildSharedListRoot(occupancy);
+                JsonObject sharedMgr = buildSharedManagerRoot();
+                String music = musicListJson();
+                List<PendingPush> pending = new ArrayList<>(snaps.size());
+                for (UserSnapshot s : snaps) {
+                    JsonObject list = sharedList.deepCopy();
+                    applyUserListFields(list, s);
+                    JsonObject mgr = sharedMgr.deepCopy();
+                    applyManagerUserFields(mgr, s, camScenes);
+                    pending.add(new PendingPush(s.uuid(), list.toString(), mgr.toString(), music, tagsPayload));
+                }
+                pendingBroadcast = pending;
+                if (server != null) {
+                    server.execute(this::flushBroadcast);
+                }
+            } catch (Exception ignored) {
+                // 构建失败丢弃本次广播（下次配置变更会重试）
+            }
+        });
+    }
+
+    /** 主线程发送待发的全服配置广播（每人 list+manager+music+tags，逐人校验在线）。 */
+    private void flushBroadcast() {
+        List<PendingPush> pending = pendingBroadcast;
+        if (pending == null || server == null) {
+            return;
+        }
+        pendingBroadcast = null;
+        for (PendingPush pp : pending) {
+            net.minecraft.server.level.ServerPlayer p =
+                    server.getPlayerList().getPlayer(java.util.UUID.fromString(pp.uuid()));
+            if (p == null
+                    || p.connection == null
+                    || p.connection.connection == null
+                    || !p.connection.connection.isConnected()) {
+                continue;
+            }
+            RpChannels.sendTo(p, new RpPackets.CharacterListS2C(pp.listPayload()));
+            RpChannels.sendTo(p, new RpPackets.ManagerStateS2C(pp.managerPayload()));
+            RpChannels.sendTo(p, new RpPackets.MusicListS2C(pp.musicPayload()));
+            RpChannels.sendTo(p, new RpPackets.PlayerTagsS2C(pp.tagsPayload()));
         }
         com.ccnrcom.rp.assets.AssetLibrary.broadcastManifest();
+    }
+
+    /** 主线程快照逐玩家字段（用户表 HashMap 非线程安全 + 玩家访问，必须在主线程完成）。 */
+    private static UserSnapshot snapshot(ServerPlayer player) {
+        String uuid = player.getUUID().toString();
+        return new UserSnapshot(
+                uuid,
+                com.ccnrcom.rp.util.Permissions.canAdmin(player, com.ccnrcom.rp.util.Permissions.ADMIN_FACTION),
+                !isObserver(player),
+                CCNRRPMod.users.userXp(uuid),
+                CCNRRPMod.users.level(uuid),
+                CCNRRPMod.users.anySupportRevive(uuid),
+                CCNRRPMod.users.status(uuid).name().toLowerCase(java.util.Locale.ROOT),
+                CCNRRPMod.users.professionId(uuid),
+                CCNRRPMod.users.factionId(uuid),
+                CCNRRPMod.users.cooldownUntil(uuid));
+    }
+
+    /** 在职统计快照（主线程构建：用户表非线程安全，后台只读快照嵌入共享载荷）。 */
+    private static JsonObject occupancyJson() {
+        JsonObject occ = new JsonObject();
+        JsonObject occProf = new JsonObject();
+        if (CCNRRPMod.users != null && CCNRRPMod.factions != null) {
+            for (String pid : CCNRRPMod.factions.professionIds()) {
+                occProf.addProperty(pid, CCNRRPMod.users.aliveCountByProfession(pid));
+            }
+            JsonObject occFac = new JsonObject();
+            for (String fid : CCNRRPMod.factions.graph().factions().keySet()) {
+                occFac.addProperty(fid, CCNRRPMod.users.aliveCountByFaction(fid));
+            }
+            occ.add("professions", occProf);
+            occ.add("factions", occFac);
+        }
+        return occ;
     }
 
     private static void sendManagerState(ServerPlayer player) {
         if (CCNRRPMod.managerSettings == null) {
             return;
         }
+        JsonObject pay = buildSharedManagerRoot();
+        applyManagerUserFields(
+                pay, snapshot(player), com.ccnrcom.rp.cmdcam.CamSceneBridge.savedSceneNames(player.level()));
+        RpChannels.sendTo(player, new RpPackets.ManagerStateS2C(pay.toString()));
+        RpChannels.sendTo(player, new RpPackets.MusicListS2C(musicListJson()));
+    }
+
+    /** 管理器状态共享部分（纯数据构建，后台线程只读；各配置文件只读一次，不再逐玩家读盘）。 */
+    private static JsonObject buildSharedManagerRoot() {
         JsonObject pay = new JsonObject();
-        pay.add("settings", CCNRRPMod.managerSettings.toJson());
-        pay.addProperty(
-                "admin",
-                com.ccnrcom.rp.util.Permissions.canAdmin(player, com.ccnrcom.rp.util.Permissions.ADMIN_FACTION));
+        if (CCNRRPMod.managerSettings != null) {
+            pay.add("settings", CCNRRPMod.managerSettings.toJson());
+        }
         JsonArray eva = new JsonArray();
         com.ccnrcom.rp.util.ConfigCrud.items("events.json", "events").forEach(eva::add);
         pay.add("events", eva);
@@ -308,14 +448,17 @@ public final class CharacterService {
         pay.add("limits", lim);
         // serverconfig 程序化设定（管理面板「设定」标签）
         pay.add("serverConfig", com.ccnrcom.rp.config.CCNRRPConfig.values());
-        // CMDCam 已保存场景名（管理面板 CMDCam 场景输入项补全提示；未装/读取失败=空列表）
+        return pay;
+    }
+
+    /** 管理器状态逐玩家字段：admin + CMDCam 场景名补全列表。 */
+    private static void applyManagerUserFields(JsonObject pay, UserSnapshot s, List<String> camScenes) {
+        pay.addProperty("admin", s.admin());
         JsonArray cams = new JsonArray();
-        for (String s : com.ccnrcom.rp.cmdcam.CamSceneBridge.savedSceneNames(player.level())) {
-            cams.add(s);
+        for (String c : camScenes) {
+            cams.add(c);
         }
         pay.add("camScenes", cams);
-        RpChannels.sendTo(player, new RpPackets.ManagerStateS2C(pay.toString()));
-        RpChannels.sendTo(player, new RpPackets.MusicListS2C(musicListJson()));
     }
 
     public static void onManagerCrud(ServerPlayer player, String kind, String action, String payload) {
@@ -809,6 +952,7 @@ public final class CharacterService {
                                 && loadout.getAsJsonObject("offhand").size() > 0
                         ? 1
                         : 0);
+        service().broadcastToAll(); // 装备 loadout 属配置数据：全服客户端镜像即时刷新（异步）
         service().sendError(player, "ccnr_rp.profession.saved_full", String.valueOf(slots), professionId);
     }
 
@@ -844,7 +988,7 @@ public final class CharacterService {
             service().sendError(player, "ccnr_rp.profession.error.config", String.join("; ", errors));
             return;
         }
-        service().sendList(player);
+        service().broadcastToAll(); // 部署点属配置数据：全服客户端镜像即时刷新（异步）
         service().sendError(player, "ccnr_rp.gui.admin.spawn.saved", factionId, String.valueOf(pts.size()));
     }
 
@@ -881,7 +1025,7 @@ public final class CharacterService {
             service().sendError(player, "ccnr_rp.profession.error.config", String.join("; ", errors));
             return;
         }
-        service().sendList(player);
+        service().broadcastToAll(); // 职业部署点属配置数据：全服客户端镜像即时刷新（异步）
         service().sendError(player, "ccnr_rp.gui.admin.spawn.saved", professionId, String.valueOf(pts.size()));
     }
 
@@ -982,8 +1126,18 @@ public final class CharacterService {
      * 构建并下发用户档案列表（K 面板/客户端全量初始化）：
      * {factions, professions(含解锁等级/装备/音乐/简历), settings, admin, userXp, userLevel,
      *  anySupportRevive, status, professionId, factionId, cooldownUntil, levelBase, levelPow, panelLocked}。
+     * 单人同步路径（登录/请求/部署）：共享部分主线程构建一次，逐玩家只补少量字段。
      */
     public void sendList(ServerPlayer player) {
+        JsonObject root = buildSharedListRoot(occupancyJson());
+        applyUserListFields(root, snapshot(player));
+        RpChannels.sendTo(player, new RpPackets.CharacterListS2C(root.toString()));
+        // 全玩家头顶标签数据（旁观者视角显示其他玩家的阵营/职业/等级）
+        sendPlayerTags(player);
+    }
+
+    /** 档案列表共享部分（纯数据构建：阵营/职业/关系/限制/设置/等级曲线等，全服同一份）。 */
+    private static JsonObject buildSharedListRoot(JsonObject occupancy) {
         JsonObject root = new JsonObject();
         JsonArray fa = new JsonArray();
         if (CCNRRPMod.factions != null) {
@@ -1062,24 +1216,11 @@ public final class CharacterService {
             }
         }
         root.add("professions", pa);
-        // 部署人数限制规则 + 当前在职统计（K 面板「限制与在职」展示用）
+        // 部署人数限制规则（K 面板「限制与在职」展示用；在职统计由主线程快照传入，不在此读用户表）
         JsonArray lim = new JsonArray();
         com.ccnrcom.rp.util.ConfigCrud.items("limits.json", "rules").forEach(lim::add);
         root.add("limits", lim);
-        JsonObject occ = new JsonObject();
-        JsonObject occProf = new JsonObject();
-        if (CCNRRPMod.users != null && CCNRRPMod.factions != null) {
-            for (String pid : CCNRRPMod.factions.professionIds()) {
-                occProf.addProperty(pid, CCNRRPMod.users.aliveCountByProfession(pid));
-            }
-            JsonObject occFac = new JsonObject();
-            for (String fid : CCNRRPMod.factions.graph().factions().keySet()) {
-                occFac.addProperty(fid, CCNRRPMod.users.aliveCountByFaction(fid));
-            }
-            occ.add("professions", occProf);
-            occ.add("factions", occFac);
-        }
-        root.add("occupancy", occ);
+        root.add("occupancy", occupancy);
         JsonObject st = new JsonObject();
         if (CCNRRPMod.managerSettings != null) {
             st = CCNRRPMod.managerSettings.toJson();
@@ -1093,21 +1234,20 @@ public final class CharacterService {
         root.addProperty("nametagOffset", com.ccnrcom.rp.config.CCNRRPConfig.NAMETAG_OFFSET.get());
         // 击杀友好提示距聊天区上方的额外间距（服务端权威，客户端遵从）
         root.addProperty("killNoticeOffset", com.ccnrcom.rp.config.CCNRRPConfig.KILL_NOTICE_OFFSET.get());
-        root.addProperty(
-                "admin",
-                com.ccnrcom.rp.util.Permissions.canAdmin(player, com.ccnrcom.rp.util.Permissions.ADMIN_FACTION));
-        root.addProperty("panelLocked", !isObserver(player));
-        String uuid = player.getUUID().toString();
-        root.addProperty("userXp", CCNRRPMod.users.userXp(uuid));
-        root.addProperty("userLevel", CCNRRPMod.users.level(uuid));
-        root.addProperty("anySupportRevive", CCNRRPMod.users.anySupportRevive(uuid));
-        root.addProperty("status", CCNRRPMod.users.status(uuid).name().toLowerCase(java.util.Locale.ROOT));
-        root.addProperty("professionId", CCNRRPMod.users.professionId(uuid));
-        root.addProperty("factionId", CCNRRPMod.users.factionId(uuid));
-        root.addProperty("cooldownUntil", CCNRRPMod.users.cooldownUntil(uuid));
-        RpChannels.sendTo(player, new RpPackets.CharacterListS2C(root.toString()));
-        // 全玩家头顶标签数据（旁观者视角显示其他玩家的阵营/职业/等级）
-        sendPlayerTags(player);
+        return root;
+    }
+
+    /** 档案列表逐玩家字段（主线程快照值写入；后台线程组装载荷时调用）。 */
+    private static void applyUserListFields(JsonObject root, UserSnapshot s) {
+        root.addProperty("admin", s.admin());
+        root.addProperty("panelLocked", s.panelLocked());
+        root.addProperty("userXp", s.userXp());
+        root.addProperty("userLevel", s.userLevel());
+        root.addProperty("anySupportRevive", s.anySupportRevive());
+        root.addProperty("status", s.status());
+        root.addProperty("professionId", s.professionId());
+        root.addProperty("factionId", s.factionId());
+        root.addProperty("cooldownUntil", s.cooldownUntil());
     }
 
     /** 全玩家档案摘要（头顶标签用）：{uuid: {name, professionId, factionId, level}}。只下发非观察者（已部署）玩家。 */
