@@ -891,6 +891,29 @@ public final class FactionManager {
         return List.of("未找到职业: " + professionId);
     }
 
+    /**
+     * 写入职业装备 loadout（「保存装备」专用）：只替换 loadout 字段，不动音乐/项目简历/CMDCam 场景/
+     * 无线电/自部署等其它字段——与部署点管理同款「单字段全量接管」，防止保存装备吞掉基础配置。
+     */
+    public List<String> setProfessionLoadout(String professionId, com.google.gson.JsonObject loadout) {
+        if (FactionProfessions.find(root, professionId).isEmpty()) {
+            return List.of("未找到职业: " + professionId);
+        }
+        JsonObject candidate = root.deepCopy();
+        JsonArray pa = candidate.has("professions") ? candidate.getAsJsonArray("professions") : new JsonArray();
+        for (int i = 0; i < pa.size(); i++) {
+            JsonObject o = pa.get(i).getAsJsonObject();
+            if (!str(o, "id", "").equals(professionId)) {
+                continue;
+            }
+            o.add(
+                    "loadout",
+                    loadout == null ? com.ccnrcom.rp.profession.ProfessionJson.emptyLoadout() : loadout.deepCopy());
+            return commit(candidate);
+        }
+        return List.of("未找到职业: " + professionId);
+    }
+
     private static double dbl(JsonObject o, String key, double def) {
         try {
             return o.has(key) ? o.get(key).getAsDouble() : def;
