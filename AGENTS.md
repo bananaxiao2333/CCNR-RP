@@ -17,6 +17,7 @@ export GRADLE_USER_HOME=/Users/bananaxiao/Documents/MirageV/mod/CCNR-Com/.gradle
 - `com.ccnrcom.rp` 入口 CCNRRPMod；子包按系统划分（见 docs/00 §3）。规则逻辑为**无 MC import 的纯类**，可直接 JUnit 测。
 - 存储分层：serverconfig toml = 调参；config/ccnr_rp/*.json = 管理员可编辑定义（factions/professions/phases/events/animations/spawn_waves）；
   world/ccnr_rp/*.json = 运行时数据（characters/xp_ledger/...）。全部 JSON 原子写（tmp + rename），损坏保留 .bak。
+- **数据库后端（v2.19.0+）**：`com.ccnrcom.rp.data` 提供 JDBC 仓储/微 ORM（SQLite 默认，MySQL 可选）。`config/db.properties` 的 `db.enabled=true` 时，配置文档（config_documents）、用户档案（users/user_pending_xp）、调参（server_settings）、素材（assets）改存库；支持多配置档（config_profiles/meta.active_profile）与 `/rp db` 命令（status/test/migrate/export/flush/connect/profile）。未启用时维持文件行为。详见 docs/12。
 - 网络通道 ccnr_rp:main（SimpleChannel，version=1），P3 起启用；客户端无通道时服务端静默跳过联动（对齐 CCNR-Com ChannelSync 思路）。
 - Corpse（modid=corpse）为可选依赖：ModList 探测，缺失走原生死亡降级；编译期依赖走 libs/ fileTree（版本浮动）。
 

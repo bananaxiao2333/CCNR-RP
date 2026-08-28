@@ -341,5 +341,8 @@
   "ccnr_rp.db.profile.list": "激活配置档: %s | 已注册: %s",
   "ccnr_rp.db.profile.created": "已创建配置档: %s",
   "ccnr_rp.db.profile.selected": "已切换到配置档: %s",
-  "ccnr_rp.db.profile.error": "配置档操作失败（数据库未启用或档不存在）"
+  "ccnr_rp.db.profile.error": "配置档操作失败（数据库未启用或档不存在）",
+  "ccnr_rp.db.connect.ok": "已写入 db.properties（重启服务器生效）",
+  "ccnr_rp.db.export.done": "已导出数据库备份到: %s",
+  "ccnr_rp.db.flush.ok": "已强制刷新写后置（落库）"
 }

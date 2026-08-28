@@ -341,5 +341,8 @@
   "ccnr_rp.db.profile.list": "Active profile: %s | Registered: %s",
   "ccnr_rp.db.profile.created": "Created config profile: %s",
   "ccnr_rp.db.profile.selected": "Switched to config profile: %s",
-  "ccnr_rp.db.profile.error": "Config profile operation failed (database not enabled or profile missing)"
+  "ccnr_rp.db.profile.error": "Config profile operation failed (database not enabled or profile missing)",
+  "ccnr_rp.db.connect.ok": "db.properties written (applies on server restart)",
+  "ccnr_rp.db.export.done": "Exported database backup to: %s",
+  "ccnr_rp.db.flush.ok": "Forced write-behind flush (persisted)"
 }
