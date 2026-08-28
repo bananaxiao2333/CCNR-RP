@@ -337,7 +337,7 @@
   "ccnr_rp.db.test.disabled": "Database not enabled, cannot test",
   "ccnr_rp.db.test.ok": "Database connection test passed",
   "ccnr_rp.db.test.fail": "Database connection test failed",
-  "ccnr_rp.db.migrate.done": "Migrated %s config files to current profile",
+  "ccnr_rp.db.migrate.done": "Migrated %s config files and %s runtime records to current profile",
   "ccnr_rp.db.profile.list": "Active profile: %s | Registered: %s",
   "ccnr_rp.db.profile.created": "Created config profile: %s",
   "ccnr_rp.db.profile.selected": "Switched to config profile: %s",

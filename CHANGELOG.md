@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.19.2（数据库后端 Phase 2：玩家/运行时数据规范化）
+
+- **用户档案关系表**：`users` + `user_pending_xp`；新增 `UserRepository`（事务批量：users upsert + pendingXp 重建）。`UserService` 保持内存 Map 工作状态，DB 启用时 load 从库读回（库空回退磁盘文件，防误清空）、save 经仓储落库；对外 API 不变。
+- **挂起通知/队伍触发**：`PendingNoticeStore`、`SpawnFramework.persistTeamState` 在 DB 启用时改存 `pending_notices` / `team_waves_done` 表（未启用回退磁盘）。
+- **迁移**：`/rp db migrate` 现同时导入 config JSON + `user_profiles.json`（含 pendingXp）/ `pending_notices.json` / `team_wave_done.json`（`RuntimeMigrator`，行级幂等）。
+- 构建：spotlessApply / build -PrunTests / LangFileTest 全绿；新增 `UserRepositoryTest`（临时 SQLite 往返）。zh/en 语言包键成对。
 ## 2.19.1（数据库后端 Phase 1：配置文档入库 + 配置档）
 
 - **配置持久化抽象**：新增 `com.ccnrcom.rp.data.ConfigStore`，把 config/ccnr_rp/*.json 的「读文件/原子写」抽象为「读配置档文档/upsert 配置文档」；DB 启用时源在 `config_documents(profile,config_key,json,updated_at)`，未启用回退磁盘（迁移期兼容）。

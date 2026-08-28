@@ -337,7 +337,7 @@
   "ccnr_rp.db.test.disabled": "数据库未启用，无法测试",
   "ccnr_rp.db.test.ok": "数据库连接测试通过",
   "ccnr_rp.db.test.fail": "数据库连接测试失败",
-  "ccnr_rp.db.migrate.done": "已迁移 %s 个配置文件到当前配置档",
+  "ccnr_rp.db.migrate.done": "已迁移 %s 个配置、%s 条运行时数据到当前配置档",
   "ccnr_rp.db.profile.list": "激活配置档: %s | 已注册: %s",
   "ccnr_rp.db.profile.created": "已创建配置档: %s",
   "ccnr_rp.db.profile.selected": "已切换到配置档: %s",
