@@ -9,7 +9,6 @@ import com.ccnrcom.rp.util.JsonUtil;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -19,7 +18,6 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.loading.FMLPaths;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -118,16 +116,12 @@ public final class SequenceEngine {
 
     // ---------- 配置 ----------
 
-    private Path file() {
-        return FMLPaths.CONFIGDIR.get().resolve("ccnr_rp").resolve("sequences.json");
-    }
-
     public void load() {
         JsonObject d =
                 JsonUtil.readResource("/assets/ccnr_rp/defaults/sequences.json").orElseGet(JsonObject::new);
-        root = JsonUtil.readObject(file()).orElse(d);
+        root = com.ccnrcom.rp.data.ConfigStore.load("sequences.json").orElse(d);
         if (root.size() == 0) {
-            JsonUtil.atomicWrite(file(), d);
+            com.ccnrcom.rp.data.ConfigStore.save("sequences.json", d);
             root = d;
         }
     }

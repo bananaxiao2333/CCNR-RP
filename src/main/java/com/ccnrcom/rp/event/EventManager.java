@@ -7,6 +7,7 @@ package com.ccnrcom.rp.event;
 import com.ccnrcom.rp.CCNRRPMod;
 import com.ccnrcom.rp.animation.AnimationHooks;
 import com.ccnrcom.rp.config.CCNRRPConfig;
+import com.ccnrcom.rp.data.ConfigStore;
 import com.ccnrcom.rp.event.EventModels.EventDefinition;
 import com.ccnrcom.rp.event.EventModels.EventState;
 import com.ccnrcom.rp.event.EventModels.GamePhase;
@@ -17,7 +18,6 @@ import com.ccnrcom.rp.status.CharacterStatus;
 import com.ccnrcom.rp.util.JsonUtil;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -26,7 +26,6 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.loading.FMLPaths;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -100,24 +99,22 @@ public final class EventManager {
         return List.copyOf(events);
     }
 
-    private JsonObject loadOrDefaults(Path file, String resource) {
-        JsonObject root = JsonUtil.readObject(file).orElseGet(JsonObject::new);
+    private JsonObject loadOrDefaults(String configKey, String resource) {
+        JsonObject root = ConfigStore.load(configKey).orElseGet(JsonObject::new);
         if (root.size() == 0) {
             JsonObject d = JsonUtil.readResource(resource).orElseGet(JsonObject::new);
-            JsonUtil.atomicWrite(file, d);
+            ConfigStore.save(configKey, d);
             return d;
         }
         return root;
     }
 
     private List<GamePhase> loadPhases() {
-        Path file = FMLPaths.CONFIGDIR.get().resolve("ccnr_rp").resolve("phases.json");
-        return EventModels.parsePhases(loadOrDefaults(file, "/assets/ccnr_rp/defaults/phases.json"));
+        return EventModels.parsePhases(loadOrDefaults("phases.json", "/assets/ccnr_rp/defaults/phases.json"));
     }
 
     private void loadEvents() {
-        Path file = FMLPaths.CONFIGDIR.get().resolve("ccnr_rp").resolve("events.json");
-        JsonObject root = loadOrDefaults(file, "/assets/ccnr_rp/defaults/events.json");
+        JsonObject root = loadOrDefaults("events.json", "/assets/ccnr_rp/defaults/events.json");
         for (String e : EventModels.parseEvents(root)) {
             LOGGER.error("[CCNR-RP] events.json: {}", e);
         }
