@@ -95,8 +95,11 @@ public final class AssetLibrary {
         return out;
     }
 
-    /** 素材清单 JSON：[{name,size,hash}]（按名称排序，稳定且可对比；哈希按 size+mtime 缓存）。 */
+    /** 素材清单 JSON：[{name,size,hash}]（按名称排序，稳定且可对比；哈希按 size+mtime 缓存）。DB 启用时读 assets 表。 */
     public static String manifestJson() {
+        if (com.ccnrcom.rp.data.AssetRepository.enabled0()) {
+            return dbManifest();
+        }
         JsonArray a = new JsonArray();
         List<Path> fs = files();
         fs.sort((x, y) -> x.getFileName().toString().compareTo(y.getFileName().toString()));
@@ -110,6 +113,22 @@ public final class AssetLibrary {
             } catch (Exception ignored) {
                 // 单个素材读取失败跳过（不阻塞清单）
             }
+        }
+        return a.toString();
+    }
+
+    /** DB 清单（assets 表元数据）。 */
+    private static String dbManifest() {
+        JsonArray a = new JsonArray();
+        java.util.List<com.ccnrcom.rp.data.AssetRepository.AssetMeta> ms =
+                new java.util.ArrayList<>(com.ccnrcom.rp.data.AssetRepository.list());
+        ms.sort((x, y) -> x.name().compareTo(y.name()));
+        for (com.ccnrcom.rp.data.AssetRepository.AssetMeta m : ms) {
+            JsonObject o = new JsonObject();
+            o.addProperty("name", m.name());
+            o.addProperty("size", m.size());
+            o.addProperty("hash", m.sha256() == null ? "" : m.sha256());
+            a.add(o);
         }
         return a.toString();
     }
@@ -162,11 +181,34 @@ public final class AssetLibrary {
         if (player == null || name == null || !NAME_PATTERN.matcher(name).matches()) {
             return;
         }
+        if (com.ccnrcom.rp.data.AssetRepository.enabled0()) {
+            STREAMER.execute(() -> streamFromDb(player, name));
+            return;
+        }
         Path file = resolveFile(name);
         if (file == null) {
             return;
         }
         STREAMER.execute(() -> streamTo(player, file, name));
+    }
+
+    /** DB 素材下发：读 assets 表 BLOB 并分片发送。 */
+    private static void streamFromDb(ServerPlayer player, String name) {
+        try {
+            if (player.connection == null
+                    || player.connection.connection == null
+                    || !player.connection.connection.isConnected()
+                    || !RpChannels.hasChannel(player.connection.connection)) {
+                return;
+            }
+            byte[] data = com.ccnrcom.rp.data.AssetRepository.read(name);
+            if (data == null) {
+                return;
+            }
+            sendParts(player, name, data);
+        } catch (Exception e) {
+            LOGGER.warn("[CCNR-RP] DB 素材下发失败: {} —— {}", name, e.getMessage());
+        }
     }
 
     private static void streamTo(ServerPlayer player, Path file, String name) {
@@ -178,6 +220,14 @@ public final class AssetLibrary {
                 return; // 已掉线/无通道：放弃下发
             }
             byte[] data = Files.readAllBytes(file);
+            sendParts(player, name, data);
+        } catch (Exception e) {
+            LOGGER.warn("[CCNR-RP] 素材读取失败: {} —— {}", name, e.getMessage());
+        }
+    }
+
+    private static void sendParts(ServerPlayer player, String name, byte[] data) {
+        try {
             int total = Math.max(1, (data.length + PART_SIZE - 1) / PART_SIZE);
             for (int i = 0; i < total; i++) {
                 if (player.connection == null || !player.connection.connection.isConnected()) {

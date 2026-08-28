@@ -118,6 +118,7 @@ final class DbCommand {
         java.nio.file.Path worldDir =
                 source.getServer().getWorldPath(new net.minecraft.world.level.storage.LevelResource("ccnr_rp"));
         int runtime = com.ccnrcom.rp.data.RuntimeMigrator.migrate(db, worldDir);
+        int assets = migrateAssets();
         // serverconfig 调参：把当前（toml 种子）值写入 server_settings（幂等）
         com.google.gson.JsonObject sc = com.ccnrcom.rp.config.CCNRRPConfig.values();
         for (String k : com.ccnrcom.rp.config.CCNRRPConfig.keys()) {
@@ -132,6 +133,57 @@ final class DbCommand {
         broadcast(source);
         source.sendSuccess(() -> Component.translatable("ccnr_rp.db.migrate.done", configs, runtimeCount), false);
         return 1;
+    }
+
+    /** 迁移 config/ccnr_rp/audio/*.ogg 与 textures/*.png 到 assets 表。 */
+    private static int migrateAssets() {
+        int n = 0;
+        java.nio.file.Path audio = com.ccnrcom.rp.assets.AssetLibrary.audioDir();
+        java.nio.file.Path textures = com.ccnrcom.rp.assets.AssetLibrary.texturesDir();
+        n += importDir(audio, "music");
+        n += importDir(textures, "icon");
+        return n;
+    }
+
+    private static int importDir(java.nio.file.Path dir, String kind) {
+        int n = 0;
+        if (dir == null || !java.nio.file.Files.isDirectory(dir)) {
+            return 0;
+        }
+        try (var s = java.nio.file.Files.list(dir)) {
+            for (java.nio.file.Path p : s.toList()) {
+                if (!java.nio.file.Files.isRegularFile(p)) {
+                    continue;
+                }
+                String name = p.getFileName().toString();
+                if ("music".equals(kind) && !name.endsWith(".ogg")) {
+                    continue;
+                }
+                if ("icon".equals(kind) && !name.endsWith(".png")) {
+                    continue;
+                }
+                byte[] data = java.nio.file.Files.readAllBytes(p);
+                String sha = sha256(data);
+                com.ccnrcom.rp.data.AssetRepository.save(name, kind, data, sha);
+                n++;
+            }
+        } catch (Exception e) {
+            // 跳过
+        }
+        return n;
+    }
+
+    private static String sha256(byte[] data) {
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            StringBuilder sb = new StringBuilder();
+            for (byte b : md.digest(data)) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            return "";
+        }
     }
 
     private static int profileList(CommandSourceStack source) {

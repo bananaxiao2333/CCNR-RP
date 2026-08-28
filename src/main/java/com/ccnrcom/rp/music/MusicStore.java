@@ -46,9 +46,18 @@ public final class MusicStore {
         return null;
     }
 
-    /** 已上传音乐名列表（按名称排序）。 */
+    /** 已上传音乐名列表（按名称排序）。DB 启用时读 assets 表。 */
     public static List<String> list() {
         List<String> out = new ArrayList<>();
+        if (com.ccnrcom.rp.data.AssetRepository.enabled0()) {
+            for (com.ccnrcom.rp.data.AssetRepository.AssetMeta m : com.ccnrcom.rp.data.AssetRepository.list()) {
+                if ("music".equals(m.kind())) {
+                    out.add(m.name());
+                }
+            }
+            out.sort(String::compareTo);
+            return out;
+        }
         try {
             Path dir = audioDir();
             if (Files.isDirectory(dir)) {
@@ -65,8 +74,13 @@ public final class MusicStore {
         return out;
     }
 
-    /** 保存音乐（覆盖同名文件，临时文件+rename 原子写）。 */
+    /** 保存音乐（覆盖同名文件，临时文件+rename 原子写；DB 启用时存 assets 表）。 */
     public static void save(String name, byte[] bytes) throws Exception {
+        if (com.ccnrcom.rp.data.AssetRepository.enabled0()) {
+            String sha = sha256(bytes);
+            com.ccnrcom.rp.data.AssetRepository.save(name, "music", bytes, sha);
+            return;
+        }
         Path dir = audioDir();
         Files.createDirectories(dir);
         Path target = dir.resolve(name);
@@ -78,5 +92,15 @@ public final class MusicStore {
             Files.deleteIfExists(tmp);
             throw e;
         }
+    }
+
+    private static String sha256(byte[] data) throws Exception {
+        java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+        byte[] d = md.digest(data);
+        StringBuilder sb = new StringBuilder();
+        for (byte b : d) {
+            sb.append(String.format("%02x", b));
+        }
+        return sb.toString();
     }
 }
