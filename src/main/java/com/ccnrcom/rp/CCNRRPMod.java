@@ -78,6 +78,8 @@ public class CCNRRPMod {
         database = new com.ccnrcom.rp.data.Database(com.ccnrcom.rp.data.DbConfig.load(
                 net.minecraftforge.fml.loading.FMLPaths.CONFIGDIR.get().resolve("db.properties")));
         database.connect();
+        // serverconfig 调参：数据库启用时先从 server_settings（当前配置档）覆盖各 ConfigValue 运行时值
+        com.ccnrcom.rp.config.CCNRRPConfig.applyDbOverrides();
         managerSettings = new com.ccnrcom.rp.config.ManagerSettings();
         // 素材库（服务器权威：音乐/阵营图标）——首次启动写入内嵌默认图标
         com.ccnrcom.rp.assets.AssetLibrary.ensureDefaults();

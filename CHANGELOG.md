@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.19.3（数据库后端 Phase 3：serverconfig 调参入库）
+
+- **调参入库**：`server_settings(profile,key,value,type)` 表 + `ServerSettingsStore`。`CCNRRPConfig.applyDbOverrides()` 于启动（各 manager 构造前）从当前配置档覆盖各 `ConfigValue` 运行时值；`set()` 于 DB 启用时写库（保留 Forge SPEC 为运行时持有者，避免与 ModConfig 机制冲突）。
+- **迁移**：`/rp db migrate` 把当前（toml 种子）调参值写入 `server_settings`（幂等）。
+- 构建：spotlessApply / build -PrunTests / LangFileTest 全绿（新增 `ServerSettingsStore.enabled/save/loadAll`，CCNRRPConfig 拆分 applyValue 供复用）。
 ## 2.19.2（数据库后端 Phase 2：玩家/运行时数据规范化）
 
 - **用户档案关系表**：`users` + `user_pending_xp`；新增 `UserRepository`（事务批量：users upsert + pendingXp 重建）。`UserService` 保持内存 Map 工作状态，DB 启用时 load 从库读回（库空回退磁盘文件，防误清空）、save 经仓储落库；对外 API 不变。

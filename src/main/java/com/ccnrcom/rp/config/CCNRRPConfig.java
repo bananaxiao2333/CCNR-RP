@@ -10,6 +10,8 @@ import net.minecraftforge.common.ForgeConfigSpec.ConfigValue;
 
 /** CCNR-RP 服务端调参配置（serverconfig/ccnr_rp-server.toml）。 */
 public final class CCNRRPConfig {
+    private static final org.apache.logging.log4j.Logger LOGGER = org.apache.logging.log4j.LogManager.getLogger();
+
     public static final ForgeConfigSpec SPEC;
 
     /** 角色死亡后冷却时长（分钟）。 */
@@ -113,8 +115,22 @@ public final class CCNRRPConfig {
         return o;
     }
 
-    /** 设置单个 serverconfig 项并落盘；返回错误（空=成功）。 */
+    /** 设置单个 serverconfig 项并落盘；DB 启用时写库（server_settings），否则写 Forge toml。返回错误（空=成功）。 */
     public static java.util.List<String> set(String key, String value) {
+        java.util.List<String> errs = applyValue(key, value);
+        if (!errs.isEmpty()) {
+            return errs;
+        }
+        if (com.ccnrcom.rp.data.ServerSettingsStore.enabled()) {
+            com.ccnrcom.rp.data.ServerSettingsStore.save(key, value.trim(), typeOf(key));
+        } else {
+            SPEC.save();
+        }
+        return java.util.List.of();
+    }
+
+    /** 应用单个键值到对应 ConfigValue（不改持久化）。返回错误（空=成功）。 */
+    private static java.util.List<String> applyValue(String key, String value) {
         try {
             switch (key) {
                 case "deathCooldownMinutes" -> DEATH_COOLDOWN_MINUTES.set(Integer.parseInt(value.trim()));
@@ -134,10 +150,29 @@ public final class CCNRRPConfig {
                     return java.util.List.of("未知配置项: " + key);
                 }
             }
-            SPEC.save();
             return java.util.List.of();
         } catch (NumberFormatException e) {
             return java.util.List.of("配置值需为数字: " + value);
         }
+    }
+
+    private static String typeOf(String key) {
+        return switch (key) {
+            case "enabled", "friendlyNotice" -> "bool";
+            default -> "number";
+        };
+    }
+
+    /** 数据库启用时，从 server_settings（当前配置档）覆盖各 ConfigValue 运行时值。于各 manager 构造前调用。 */
+    public static void applyDbOverrides() {
+        if (!com.ccnrcom.rp.data.ServerSettingsStore.enabled()) {
+            return;
+        }
+        for (var e : com.ccnrcom.rp.data.ServerSettingsStore.loadAll().entrySet()) {
+            applyValue(e.getKey(), e.getValue());
+        }
+        LOGGER.info(
+                "[CCNR-RP] 已应用数据库调参覆盖（{} 项）",
+                com.ccnrcom.rp.data.ServerSettingsStore.loadAll().size());
     }
 }
