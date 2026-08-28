@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.19.4（数据库后端 Phase 4：资源文件（音乐/图标）入库）
+
+- **素材 BLOB 入库**：`assets(name,kind,data,size,sha256,updated_at)` 表 + `AssetRepository`（list/read/save/delete）。`AssetLibrary` 在 DB 启用时清单发自 `assets` 表、素材下发读 BLOB（`streamFromDb`）；`MusicStore` 上传/列表改走库（校验逻辑保留纯逻辑）。客户端 audio/ 本地缓存与 AssetManifest/AssetPart 网络包不变。
+- **迁移**：`/rp db migrate` 新增导入 `config/ccnr_rp/audio/*.ogg` 与 `textures/*.png`（含 sha256，幂等）。
+- 构建：spotlessApply / build -PrunTests / LangFileTest 全绿；新增 `AssetRepositoryTest`（临时 SQLite 往返）。
 ## 2.19.3（数据库后端 Phase 3：serverconfig 调参入库）
 
 - **调参入库**：`server_settings(profile,key,value,type)` 表 + `ServerSettingsStore`。`CCNRRPConfig.applyDbOverrides()` 于启动（各 manager 构造前）从当前配置档覆盖各 `ConfigValue` 运行时值；`set()` 于 DB 启用时写库（保留 Forge SPEC 为运行时持有者，避免与 ModConfig 机制冲突）。
