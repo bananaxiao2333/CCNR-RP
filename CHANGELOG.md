@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.19.5（数据库后端 Phase 5：全链路收尾）
+
+- **命令补全**：新增 `/rp db connect (sqlite <file>|mysql <host,port,db,user,pass>)`（写 db.properties，重启生效）、`/rp db export <dir>`（库→本地备份：配置/调参/用户档案/素材）、`/rp db flush`（强制写后置落库）。zh/en 语言包键成对。
+- **文档**：新增 `docs/12-数据库设计.md`（架构/表结构/配置档/命令/迁移/失败模式）；更新 `docs/00` §4 路径表、`README`、`AGENTS.md`（数据存储说明）。
+- **测试**：新增 `ConfigStoreTest`（DB 路径往返 + 配置档切换隔离 + copyProfile）。
+- 构建：spotlessApply / build -PrunTests / LangFileTest 全绿；全部 DB 仓储以临时 SQLite 头less 往返验证（配置/用户/素材/调参/配置档）。
 ## 2.19.4（数据库后端 Phase 4：资源文件（音乐/图标）入库）
 
 - **素材 BLOB 入库**：`assets(name,kind,data,size,sha256,updated_at)` 表 + `AssetRepository`（list/read/save/delete）。`AssetLibrary` 在 DB 启用时清单发自 `assets` 表、素材下发读 BLOB（`streamFromDb`）；`MusicStore` 上传/列表改走库（校验逻辑保留纯逻辑）。客户端 audio/ 本地缓存与 AssetManifest/AssetPart 网络包不变。
