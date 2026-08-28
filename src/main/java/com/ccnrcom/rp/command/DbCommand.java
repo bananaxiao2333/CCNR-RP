@@ -118,6 +118,14 @@ final class DbCommand {
         java.nio.file.Path worldDir =
                 source.getServer().getWorldPath(new net.minecraft.world.level.storage.LevelResource("ccnr_rp"));
         int runtime = com.ccnrcom.rp.data.RuntimeMigrator.migrate(db, worldDir);
+        // serverconfig 调参：把当前（toml 种子）值写入 server_settings（幂等）
+        com.google.gson.JsonObject sc = com.ccnrcom.rp.config.CCNRRPConfig.values();
+        for (String k : com.ccnrcom.rp.config.CCNRRPConfig.keys()) {
+            if (sc.has(k)) {
+                String typ = (k.equals("enabled") || k.equals("friendlyNotice")) ? "bool" : "number";
+                com.ccnrcom.rp.data.ServerSettingsStore.save(k, sc.get(k).getAsString(), typ);
+            }
+        }
         final int configs = cfg;
         final int runtimeCount = runtime;
         ConfigReloader.reloadAll();
