@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.19.1（数据库后端 Phase 1：配置文档入库 + 配置档）
+
+- **配置持久化抽象**：新增 `com.ccnrcom.rp.data.ConfigStore`，把 config/ccnr_rp/*.json 的「读文件/原子写」抽象为「读配置档文档/upsert 配置文档」；DB 启用时源在 `config_documents(profile,config_key,json,updated_at)`，未启用回退磁盘（迁移期兼容）。
+- **配置档**：`config_profiles` + `meta.active_profile`；新增 `/rp db profile list|create <id>|select <id>`（运行中热切换并重载全部管理模块、`broadcastConfigAll` 刷新客户端）与 `/rp db migrate`（本地配置 JSON 幂等迁入当前配置档）。
+- **管理器切库**：`ConfigCrud` 与 FactionManager / ManagerSettings / EventManager / SpawnFramework / SequenceEngine / AnimationEngine / ExperienceService 的读写改经 ConfigStore；为 ExperienceService / AnimationEngine 补公开 `reload()`。
+- **热重载钩子**：`ConfigReloader.reloadAll()` 统一调用各管理器 reload/load；`Database.connect()` 播种 `config_profiles`（ensureProfiles）。
+- 构建：spotlessApply / build -PrunTests / LangFileTest 全绿；FactionManagerSaveTest 适配（移除已删除的 file 字段注入）。zh/en 语言包键成对。
 ## 2.19.0（数据库后端 Phase 0：基础设施与依赖）
 
 - **数据库后端接入（P0 打底）**：引入 SQLite（默认，内嵌，jarJar 打进 mod jar）与 MySQL（可选）JDBC 驱动；新增 `com.ccnrcom.rp.data` 包骨架。

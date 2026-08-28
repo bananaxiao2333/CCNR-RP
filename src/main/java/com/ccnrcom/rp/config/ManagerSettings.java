@@ -4,31 +4,26 @@
  */
 package com.ccnrcom.rp.config;
 
-import com.ccnrcom.rp.util.JsonUtil;
+import com.ccnrcom.rp.data.ConfigStore;
 import com.google.gson.JsonObject;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.List;
-import net.minecraftforge.fml.loading.FMLPaths;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 /**
- * CCNR-RP 管理器设置（config/ccnr_rp/settings.json，管理员在游戏内用「管理面板」修改）：
+ * CCNR-RP 管理器设置（config/ccnr_rp/settings.json / 库配置文档，管理员在游戏内用「管理面板」修改）：
  * - forceObserving  : 入服强制观察者状态（默认开启）
  * - openPanelOnJoin : 入服默认打开角色面板（选择部署）
- * - forceRetain     : 强制保留角色（转生/弃演/离服 → 直接判定死亡并留遗体）
- * - firstJoinAutoDeploy : 首次入服自动部署（默认开启；职业 id 见 firstJoinProfession）
- * - firstJoinProfession : 首次入服自动部署的职业 id（默认 m5_intern，管理面板可编辑）
+ * - forceRetain     : 强制保留角色
+ * - firstJoinAutoDeploy / firstJoinProfession : 首次入服自动部署
+ * P1 起经 {@link ConfigStore}：DB 启用时读/写库配置文档，否则读/写磁盘。
  */
 public final class ManagerSettings {
     private static final Logger LOGGER = LogManager.getLogger();
 
-    private final Path file;
     private JsonObject state = defaults();
 
     public ManagerSettings() {
-        this.file = FMLPaths.CONFIGDIR.get().resolve("ccnr_rp").resolve("settings.json");
         load();
     }
 
@@ -49,20 +44,18 @@ public final class ManagerSettings {
 
     public void load() {
         try {
-            if (Files.exists(file)) {
-                JsonObject read = JsonUtil.readObject(file).orElse(null);
-                if (read != null) {
-                    state = read;
-                }
+            JsonObject read = ConfigStore.load("settings.json").orElse(null);
+            if (read != null) {
+                state = read;
             }
         } catch (Exception e) {
-            LOGGER.warn("[CCNR-RP] settings.json 读取失败，使用默认值: {}", e.getMessage());
+            LOGGER.warn("[CCNR-RP] settings 读取失败，使用默认值: {}", e.getMessage());
         }
         // 补齐缺失字段（默认值），保证新版本字段自动出现
         JsonObject merged = defaults();
         state.entrySet().forEach(e -> merged.add(e.getKey(), e.getValue()));
         state = merged;
-        JsonUtil.atomicWrite(file, state);
+        ConfigStore.save("settings.json", state);
     }
 
     public boolean forceObserving() {
@@ -149,7 +142,7 @@ public final class ManagerSettings {
             }
             state.addProperty(key, "true".equalsIgnoreCase(value));
         }
-        if (!JsonUtil.atomicWrite(file, state)) {
+        if (!ConfigStore.save("settings.json", state)) {
             return List.of("设置写入失败");
         }
         return List.of();

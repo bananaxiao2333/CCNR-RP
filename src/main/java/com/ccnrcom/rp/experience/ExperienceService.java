@@ -15,7 +15,6 @@ import com.ccnrcom.rp.user.UserService;
 import com.ccnrcom.rp.util.JsonUtil;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -26,7 +25,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.loading.FMLPaths;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -51,7 +49,6 @@ public final class ExperienceService {
 
     private final MinecraftServer server;
     private final PendingNoticeStore pending;
-    private final Path rulesFile;
     private List<CompiledRule> rules = List.of();
     private long tickCounter = 0;
     private long aliveEmitCounter = 0;
@@ -65,18 +62,18 @@ public final class ExperienceService {
         this.server = server;
         var worldDir = server.getWorldPath(new net.minecraft.world.level.storage.LevelResource("ccnr_rp"));
         this.pending = new PendingNoticeStore(worldDir);
-        this.rulesFile = FMLPaths.CONFIGDIR.get().resolve("ccnr_rp").resolve("experience_rules.json");
         loadRules();
     }
 
     // ------------------------------------------------------------------ 规则存取
 
     private void loadRules() {
-        JsonObject root = JsonUtil.readObject(rulesFile).orElse(null);
+        JsonObject root =
+                com.ccnrcom.rp.data.ConfigStore.load("experience_rules.json").orElse(null);
         if (root == null || !root.has("rules") || !root.get("rules").isJsonArray()) {
             // 缺失/损坏：写默认规则（贴近 v2 默认体验：值班/击杀/阵亡）
             List<ExperienceRule> defaults = ExperienceRule.DEFAULT_RULES;
-            JsonUtil.atomicWrite(rulesFile, ExperienceRule.toJson(defaults));
+            com.ccnrcom.rp.data.ConfigStore.save("experience_rules.json", ExperienceRule.toJson(defaults));
             LOGGER.warn("[CCNR-RP] 经验规则缺失/损坏，已写入默认规则（{} 条）", defaults.size());
             this.rules = defaults.stream().map(this::compile).toList();
             return;
@@ -93,10 +90,15 @@ public final class ExperienceService {
             }
         }
         for (String e : errors) {
-            LOGGER.error("[CCNR-RP] {}: {}", rulesFile, e);
+            LOGGER.error("[CCNR-RP] experience_rules.json: {}", e);
         }
         this.rules = ok.stream().map(this::compile).toList();
         LOGGER.info("[CCNR-RP] 经验规则加载完成：{} 条生效，{} 条跳过", rules.size(), errors.size());
+    }
+
+    /** 热重载经验规则（配置档切换/管理器 CRUD 后调用）。 */
+    public void reload() {
+        loadRules();
     }
 
     private CompiledRule compile(ExperienceRule r) {
@@ -165,7 +167,7 @@ public final class ExperienceService {
                 default -> errors.add("未知操作: " + action);
             }
             if (errors.isEmpty()) {
-                JsonUtil.atomicWrite(rulesFile, ExperienceRule.toJson(next));
+                com.ccnrcom.rp.data.ConfigStore.save("experience_rules.json", ExperienceRule.toJson(next));
                 this.rules = next.stream().map(this::compile).toList();
                 broadcastRules();
                 LOGGER.info("[CCNR-RP] 经验规则已更新：{} 条生效", rules.size());

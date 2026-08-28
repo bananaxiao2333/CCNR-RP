@@ -81,6 +81,8 @@ public final class Database {
             conn = DriverManager.getConnection(config.jdbcUrl(), config.user(), config.pass());
             schemaReady = DbSchema.bootstrap(conn, dialect);
             if (schemaReady) {
+                ConfigStore.ensureProfiles();
+
                 LOGGER.info("[CCNR-RP] 数据库已连接: {}（profile={}）", config.mode(), config.profile());
             } else {
                 LOGGER.error("[CCNR-RP] 数据库连接成功但 schema 初始化失败");

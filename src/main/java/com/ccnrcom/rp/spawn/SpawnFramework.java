@@ -16,7 +16,6 @@ import com.ccnrcom.rp.spawn.SpawnModels.Wave;
 import com.ccnrcom.rp.status.CharacterStatus;
 import com.ccnrcom.rp.util.JsonUtil;
 import com.google.gson.JsonObject;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -33,7 +32,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.GameType;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.loading.FMLPaths;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -90,13 +88,13 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
     }
 
     private void loadWaves() {
-        Path file = FMLPaths.CONFIGDIR.get().resolve("ccnr_rp").resolve("spawn_waves.json");
-        JsonObject root = JsonUtil.readObject(file).orElseGet(() -> {
-            JsonObject d = JsonUtil.readResource("/assets/ccnr_rp/defaults/spawn_waves.json")
-                    .orElseGet(JsonObject::new);
-            JsonUtil.atomicWrite(file, d);
-            return d;
-        });
+        JsonObject root = com.ccnrcom.rp.data.ConfigStore.load("spawn_waves.json")
+                .orElseGet(() -> {
+                    JsonObject d = JsonUtil.readResource("/assets/ccnr_rp/defaults/spawn_waves.json")
+                            .orElseGet(JsonObject::new);
+                    com.ccnrcom.rp.data.ConfigStore.save("spawn_waves.json", d);
+                    return d;
+                });
         List<String> errors = SpawnModels.parseWaves(root, waves);
         errors.forEach(e -> LOGGER.error("[CCNR-RP] spawn_waves.json: {}", e));
     }

@@ -4,6 +4,7 @@
  */
 package com.ccnrcom.rp.util;
 
+import com.ccnrcom.rp.data.ConfigStore;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -12,7 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 import net.minecraftforge.fml.loading.FMLPaths;
 
-/** config/ccnr_rp/*.json 通用 CRUD（事件/阶段/刷新波等数组段读写，原子写盘）。 */
+/** config/ccnr_rp/*.json 通用 CRUD（事件/阶段/刷新波等数组段读写）。P1 起经 ConfigStore：DB 启用时读写库配置文档，否则读写磁盘。 */
 public final class ConfigCrud {
 
     private ConfigCrud() {}
@@ -24,7 +25,7 @@ public final class ConfigCrud {
     /** 读取数组段（不存在时返回空列表，不写盘）。 */
     public static List<JsonObject> items(String fileName, String arrayKey) {
         List<JsonObject> out = new ArrayList<>();
-        JsonObject root = JsonUtil.readObject(file(fileName)).orElse(new JsonObject());
+        JsonObject root = ConfigStore.load(fileName).orElse(new JsonObject());
         if (!root.has(arrayKey) || !root.get(arrayKey).isJsonArray()) {
             return out;
         }
@@ -42,7 +43,7 @@ public final class ConfigCrud {
             return List.of("缺少 id");
         }
         String id = item.get("id").getAsString();
-        JsonObject root = JsonUtil.readObject(file(fileName)).orElseGet(JsonObject::new);
+        JsonObject root = ConfigStore.load(fileName).orElseGet(JsonObject::new);
         if (!root.has("version")) {
             root.addProperty("version", 1);
         }
@@ -63,7 +64,7 @@ public final class ConfigCrud {
         if (!replaced) {
             arr.add(item);
         }
-        if (!JsonUtil.atomicWrite(file(fileName), root)) {
+        if (!ConfigStore.save(fileName, root)) {
             return List.of("配置文件写入失败");
         }
         return List.of();
@@ -71,7 +72,7 @@ public final class ConfigCrud {
 
     /** 删除：返回错误列表（空=成功）。 */
     public static List<String> delete(String fileName, String arrayKey, String id) {
-        JsonObject root = JsonUtil.readObject(file(fileName)).orElse(new JsonObject());
+        JsonObject root = ConfigStore.load(fileName).orElse(new JsonObject());
         if (!root.has(arrayKey) || !root.get(arrayKey).isJsonArray()) {
             return List.of("未找到: " + id);
         }
@@ -81,7 +82,7 @@ public final class ConfigCrud {
                     && arr.get(i).getAsJsonObject().has("id")
                     && arr.get(i).getAsJsonObject().get("id").getAsString().equals(id)) {
                 arr.remove(i);
-                if (!JsonUtil.atomicWrite(file(fileName), root)) {
+                if (!ConfigStore.save(fileName, root)) {
                     return List.of("配置文件写入失败");
                 }
                 return List.of();
@@ -92,6 +93,6 @@ public final class ConfigCrud {
 
     /** 整份配置（客户端管理器快照用）。 */
     public static JsonObject root(String fileName) {
-        return JsonUtil.readObject(file(fileName)).orElse(new JsonObject());
+        return ConfigStore.load(fileName).orElse(new JsonObject());
     }
 }

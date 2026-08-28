@@ -8,13 +8,11 @@ import com.ccnrcom.rp.network.RpChannels;
 import com.ccnrcom.rp.network.RpPackets;
 import com.ccnrcom.rp.util.JsonUtil;
 import com.google.gson.JsonObject;
-import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraftforge.fml.loading.FMLPaths;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -30,12 +28,19 @@ public final class AnimationEngine {
     private final Map<String, String> hookBindings = new LinkedHashMap<>();
 
     public AnimationEngine() {
-        Path file = FMLPaths.CONFIGDIR.get().resolve("ccnr_rp").resolve("animations.json");
-        JsonObject root = JsonUtil.readObject(file).orElseGet(JsonObject::new);
+        reload();
+    }
+
+    /** 重新加载动画序列与钩子绑定（配置档切换/管理器 CRUD 后调用）。 */
+    public void reload() {
+        sequences.clear();
+        hookBindings.clear();
+        JsonObject root =
+                com.ccnrcom.rp.data.ConfigStore.load("animations.json").orElseGet(JsonObject::new);
         if (root.size() == 0) {
             root = JsonUtil.readResource("/assets/ccnr_rp/defaults/animations.json")
                     .orElseGet(JsonObject::new);
-            JsonUtil.atomicWrite(file, root);
+            com.ccnrcom.rp.data.ConfigStore.save("animations.json", root);
         }
         List<String> errors = AnimationModels.parseAll(root, sequences);
         errors.forEach(e -> LOGGER.error("[CCNR-RP] animations.json: {}", e));

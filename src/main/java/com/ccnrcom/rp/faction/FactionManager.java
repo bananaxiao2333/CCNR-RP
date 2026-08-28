@@ -4,6 +4,7 @@
  */
 package com.ccnrcom.rp.faction;
 
+import com.ccnrcom.rp.data.ConfigStore;
 import com.ccnrcom.rp.faction.FactionModels.Faction;
 import com.ccnrcom.rp.faction.FactionModels.FactionGroup;
 import com.ccnrcom.rp.faction.FactionModels.ParseResult;
@@ -12,11 +13,9 @@ import com.ccnrcom.rp.util.JsonUtil;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import net.minecraftforge.fml.loading.FMLPaths;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -28,25 +27,22 @@ import org.apache.logging.log4j.Logger;
 public final class FactionManager {
     private static final Logger LOGGER = LogManager.getLogger();
 
-    private final Path file;
     private JsonObject root;
     private FactionGraph graph =
             FactionGraph.parse(List.of(), List.of(), List.of()).graph();
 
-    public FactionManager() {
-        this.file = FMLPaths.CONFIGDIR.get().resolve("ccnr_rp").resolve("factions.json");
-    }
+    public FactionManager() {}
 
     /** 加载（文件缺失→生成默认；解析失败→空图+日志）。 */
     public void load() {
-        Optional<JsonObject> cached = JsonUtil.readObject(file);
+        Optional<JsonObject> cached = ConfigStore.load("factions.json");
         if (cached.isPresent()) {
             this.root = cached.get();
         } else {
             this.root = JsonUtil.readResource("/assets/ccnr_rp/defaults/factions.json")
                     .orElseGet(this::emptyRoot);
-            JsonUtil.atomicWrite(file, root);
-            LOGGER.info("[CCNR-RP] 已生成默认阵营配置: {}", file);
+            ConfigStore.save("factions.json", root);
+            LOGGER.info("[CCNR-RP] 已生成默认阵营配置: factions.json");
         }
         reloadFromRoot();
     }
@@ -223,7 +219,7 @@ public final class FactionManager {
         if (!result.success()) {
             return result.errors();
         }
-        JsonUtil.atomicWrite(file, candidate);
+        ConfigStore.save("factions.json", candidate);
         this.root = candidate;
         this.graph = result.graph();
         return List.of();
@@ -363,7 +359,7 @@ public final class FactionManager {
         if (!result.success()) {
             return result.errors();
         }
-        JsonUtil.atomicWrite(file, candidate);
+        ConfigStore.save("factions.json", candidate);
         this.root = candidate;
         this.graph = result.graph();
         return List.of();
@@ -426,7 +422,7 @@ public final class FactionManager {
         if (!result.success()) {
             return result.errors();
         }
-        JsonUtil.atomicWrite(file, candidate);
+        ConfigStore.save("factions.json", candidate);
         this.root = candidate;
         this.graph = result.graph();
         return List.of();
@@ -453,7 +449,7 @@ public final class FactionManager {
         if (!result.success()) {
             return result.errors();
         }
-        JsonUtil.atomicWrite(file, candidate);
+        ConfigStore.save("factions.json", candidate);
         this.root = candidate;
         this.graph = result.graph();
         return List.of();
@@ -500,7 +496,7 @@ public final class FactionManager {
         if (!result.success()) {
             return result.errors();
         }
-        JsonUtil.atomicWrite(file, candidate);
+        ConfigStore.save("factions.json", candidate);
         this.root = candidate;
         this.graph = result.graph();
         return List.of();
@@ -563,7 +559,7 @@ public final class FactionManager {
         if (!errors.isEmpty()) {
             return errors;
         }
-        if (!JsonUtil.atomicWrite(file, candidate)) {
+        if (!ConfigStore.save("factions.json", candidate)) {
             return List.of("配置文件写入失败");
         }
         this.root = candidate;
@@ -606,7 +602,7 @@ public final class FactionManager {
             } else {
                 o.remove("radio");
             }
-            if (!JsonUtil.atomicWrite(file, candidate)) {
+            if (!ConfigStore.save("factions.json", candidate)) {
                 return List.of("配置文件写入失败");
             }
             this.root = candidate;
@@ -621,7 +617,7 @@ public final class FactionManager {
         if (!FactionProfessions.delete(candidate, id)) {
             return List.of("未找到职业: " + id);
         }
-        if (!JsonUtil.atomicWrite(file, candidate)) {
+        if (!ConfigStore.save("factions.json", candidate)) {
             return List.of("配置文件写入失败");
         }
         this.root = candidate;
@@ -737,7 +733,7 @@ public final class FactionManager {
 
     /** 写盘 + 重载图谱。 */
     private List<String> commit(JsonObject candidate) {
-        if (!JsonUtil.atomicWrite(file, candidate)) {
+        if (!ConfigStore.save("factions.json", candidate)) {
             return List.of("配置文件写入失败");
         }
         this.root = candidate;
@@ -759,7 +755,7 @@ public final class FactionManager {
 
     /** 重新从盘读取。 */
     public void reload() {
-        JsonUtil.readObject(file).ifPresent(o -> {
+        ConfigStore.load("factions.json").ifPresent(o -> {
             this.root = o;
             reloadFromRoot();
         });

@@ -10,8 +10,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import java.lang.reflect.Field;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
 /** 阵营表单保存回归：updateFaction 只覆盖表单字段，radio/spawn/professions 等原数据必须保留（防止「保存清空其他数据」回归）。 */
@@ -119,11 +117,6 @@ class FactionManagerSaveTest {
         Field rootF = c.getDeclaredField("root");
         rootF.setAccessible(true);
         rootF.set(mgr, root);
-        Field fileF = c.getDeclaredField("file");
-        fileF.setAccessible(true);
-        Path tmp = Files.createTempFile("factions-test", ".json");
-        Files.deleteIfExists(tmp);
-        fileF.set(mgr, tmp);
         java.lang.reflect.Method reload = c.getDeclaredMethod("reloadFromRoot");
         reload.setAccessible(true);
         reload.invoke(mgr);
@@ -235,8 +228,6 @@ class FactionManagerSaveTest {
     @SuppressWarnings("unchecked")
     void updateFactionPreservesOtherFields() throws Exception {
         JsonObject root = sampleRoot();
-        Path tmp = Files.createTempFile("factions-test", ".json");
-        Files.deleteIfExists(tmp);
 
         // 绕过构造器（FMLPaths）分配实例
         Object mgr;
@@ -254,9 +245,6 @@ class FactionManagerSaveTest {
         Field rootF = c.getDeclaredField("root");
         rootF.setAccessible(true);
         rootF.set(mgr, root);
-        Field fileF = c.getDeclaredField("file");
-        fileF.setAccessible(true);
-        fileF.set(mgr, tmp);
         // 重建 graph
         java.lang.reflect.Method reload = c.getDeclaredMethod("reloadFromRoot");
         reload.setAccessible(true);
