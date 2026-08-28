@@ -330,5 +330,11 @@
   "ccnr_rp.spawn.list.item": "%s | mode=%s | enabled=%s | count=%s | teams=%s",
   "ccnr_rp.spawn.triggered": "Wave triggered: %s",
   "ccnr_rp.spawn.enabled": "Wave set: %s -> %s",
-  "ccnr_rp.spawn.not_found": "Wave not found: %s"
+  "ccnr_rp.spawn.not_found": "Wave not found: %s",
+  "ccnr_rp.command.usage.db": "Database: /rp db status | test",
+  "ccnr_rp.db.status.disabled": "Database disabled (db.enabled=false or no config/db.properties); using local file storage",
+  "ccnr_rp.db.status.enabled": "Database enabled: backend=%s, profile=%s, pass=%s",
+  "ccnr_rp.db.test.disabled": "Database not enabled, cannot test",
+  "ccnr_rp.db.test.ok": "Database connection test passed",
+  "ccnr_rp.db.test.fail": "Database connection test failed"
 }

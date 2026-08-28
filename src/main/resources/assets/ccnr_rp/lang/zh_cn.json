@@ -330,5 +330,11 @@
   "ccnr_rp.spawn.list.item": "%s | 模式=%s | 启用=%s | 数量=%s | 队伍=%s",
   "ccnr_rp.spawn.triggered": "已触发刷新波: %s",
   "ccnr_rp.spawn.enabled": "刷新波已设置: %s → %s",
-  "ccnr_rp.spawn.not_found": "未找到刷新波: %s"
+  "ccnr_rp.spawn.not_found": "未找到刷新波: %s",
+  "ccnr_rp.command.usage.db": "数据库: /rp db status | test",
+  "ccnr_rp.db.status.disabled": "数据库未启用（config/db.properties 中 db.enabled=false 或无该文件）；当前使用本地文件存储",
+  "ccnr_rp.db.status.enabled": "数据库已启用：后端=%s，配置档=%s，密码=%s",
+  "ccnr_rp.db.test.disabled": "数据库未启用，无法测试",
+  "ccnr_rp.db.test.ok": "数据库连接测试通过",
+  "ccnr_rp.db.test.fail": "数据库连接测试失败"
 }
