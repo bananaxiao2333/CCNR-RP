@@ -345,6 +345,29 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
     }
 
     private void persistTeamState() {
+        com.ccnrcom.rp.data.Database db = com.ccnrcom.rp.CCNRRPMod.database;
+        if (db != null && db.enabled()) {
+            try {
+                db.write(c -> {
+                    try (java.sql.PreparedStatement del =
+                            c.prepareStatement("DELETE FROM " + db.dialect().quote("team_waves_done"))) {
+                        del.executeUpdate();
+                    }
+                    try (java.sql.PreparedStatement ins =
+                            c.prepareStatement("INSERT INTO " + db.dialect().quote("team_waves_done") + " ("
+                                    + db.dialect().quote("team_id") + ") VALUES (?)")) {
+                        for (String k : teamTriggered.keySet()) {
+                            ins.setString(1, k);
+                            ins.addBatch();
+                        }
+                        ins.executeBatch();
+                    }
+                });
+            } catch (Exception e) {
+                LOGGER.error("[CCNR-RP] team_waves_done 保存失败: {}", e.toString());
+            }
+            return;
+        }
         JsonObject root = new JsonObject();
         JsonObject map = new JsonObject();
         teamTriggered.forEach((k, v) -> map.addProperty(k, v));

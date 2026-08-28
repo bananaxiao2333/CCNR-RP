@@ -131,9 +131,13 @@ public final class UserService {
 
     private final Path file;
     private final Map<String, UserProfile> profiles = new HashMap<>();
+    /** 数据库仓储（DB 启用时非空；否则 null，走磁盘文件）。 */
+    private final com.ccnrcom.rp.data.UserRepository dbRepo;
 
     public UserService(Path worldDir) {
         this.file = worldDir.resolve("user_profiles.json");
+        com.ccnrcom.rp.data.Database db = CCNRRPMod.database;
+        this.dbRepo = (db != null && db.enabled()) ? new com.ccnrcom.rp.data.UserRepository(db) : null;
         load();
     }
 
@@ -141,6 +145,14 @@ public final class UserService {
 
     private void load() {
         profiles.clear();
+        if (dbRepo != null) {
+            java.util.Map<String, UserProfile> fromDb = dbRepo.loadAll();
+            if (!fromDb.isEmpty()) {
+                profiles.putAll(fromDb);
+                return;
+            }
+            // 数据库为空 → 回退磁盘文件（迁移兼容，避免误清空）。
+        }
         JsonUtil.readObject(file).ifPresent(root -> {
             if (root.has("users")) {
                 root.getAsJsonObject("users").entrySet().forEach(e -> {
@@ -184,6 +196,10 @@ public final class UserService {
     }
 
     public void save() {
+        if (dbRepo != null) {
+            dbRepo.saveAll(new HashMap<>(profiles));
+            return;
+        }
         JsonObject root = new JsonObject();
         root.addProperty("version", 3);
         JsonObject users = new JsonObject();

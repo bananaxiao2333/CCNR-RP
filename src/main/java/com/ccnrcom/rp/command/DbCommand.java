@@ -107,18 +107,22 @@ final class DbCommand {
             source.sendSuccess(() -> Component.translatable("ccnr_rp.db.test.disabled"), false);
             return 1;
         }
-        int n = 0;
+        int cfg = 0;
         for (String key : CONFIG_KEYS) {
             JsonObject disk = JsonUtil.readObject(ConfigCrud.file(key)).orElse(null);
             if (disk != null) {
                 ConfigStore.save(key, disk);
-                n++;
+                cfg++;
             }
         }
-        final int migratedCount = n;
+        java.nio.file.Path worldDir =
+                source.getServer().getWorldPath(new net.minecraft.world.level.storage.LevelResource("ccnr_rp"));
+        int runtime = com.ccnrcom.rp.data.RuntimeMigrator.migrate(db, worldDir);
+        final int configs = cfg;
+        final int runtimeCount = runtime;
         ConfigReloader.reloadAll();
         broadcast(source);
-        source.sendSuccess(() -> Component.translatable("ccnr_rp.db.migrate.done", migratedCount), false);
+        source.sendSuccess(() -> Component.translatable("ccnr_rp.db.migrate.done", configs, runtimeCount), false);
         return 1;
     }
 
