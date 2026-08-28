@@ -1,0 +1,17 @@
+/*
+ * Copyright (c) 2026 CCNR
+ * SPDX-License-Identifier: MIT
+ */
+package com.ccnrcom.rp.data.orm;
+
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+
+/** 记录组件/字段到表的列映射；缺省用组件名作为列名。 */
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.FIELD, ElementType.RECORD_COMPONENT, ElementType.PARAMETER})
+public @interface Column {
+    String value() default "";
+}

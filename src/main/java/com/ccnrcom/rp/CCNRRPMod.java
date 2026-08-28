@@ -50,6 +50,8 @@ public class CCNRRPMod {
     public static com.ccnrcom.rp.spawn.SpawnFramework spawnFramework;
     /** 动画引擎（P7）。 */
     public static com.ccnrcom.rp.animation.AnimationEngine animationEngine;
+    /** 数据库后端（P0 起）；未启用（db.enabled=false）时为 disabled 实例。 */
+    public static com.ccnrcom.rp.data.Database database;
 
     public CCNRRPMod() {
         ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, CCNRRPConfig.SPEC);
@@ -72,6 +74,10 @@ public class CCNRRPMod {
 
     @SubscribeEvent
     public void onServerAboutToStart(ServerAboutToStartEvent event) {
+        // 数据库后端：配置读取 + 连接（各 manager 构造前；未启用时 connect() 返回 false 无副作用）
+        database = new com.ccnrcom.rp.data.Database(com.ccnrcom.rp.data.DbConfig.load(
+                net.minecraftforge.fml.loading.FMLPaths.CONFIGDIR.get().resolve("db.properties")));
+        database.connect();
         managerSettings = new com.ccnrcom.rp.config.ManagerSettings();
         // 素材库（服务器权威：音乐/阵营图标）——首次启动写入内嵌默认图标
         com.ccnrcom.rp.assets.AssetLibrary.ensureDefaults();
@@ -159,6 +165,9 @@ public class CCNRRPMod {
 
     @SubscribeEvent
     public void onServerStopping(ServerStoppingEvent event) {
+        if (database != null) {
+            database.disconnect(); // 关闭数据库连接与写线程（对称清理）
+        }
         com.ccnrcom.rp.character.CharacterService.shutdownBroadcaster(); // 关闭配置广播后台线程（docs/01 §9.4 对称清理）
         if (users != null) {
             users.save();
@@ -191,6 +200,7 @@ public class CCNRRPMod {
         users = null;
         factions = null;
         managerSettings = null;
+        database = null;
         LOGGER.info("[CCNR-RP] 服务端运行时清理完成");
     }
 }

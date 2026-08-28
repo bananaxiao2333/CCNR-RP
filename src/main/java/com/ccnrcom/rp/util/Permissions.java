@@ -31,6 +31,8 @@ public final class Permissions {
             new PermissionNode<>("ccnrrp", "admin.kill", PermissionTypes.BOOLEAN, (player, uuid, context) -> false);
     public static final PermissionNode<Boolean> ADMIN_XP =
             new PermissionNode<>("ccnrrp", "admin.xp", PermissionTypes.BOOLEAN, (player, uuid, context) -> false);
+    public static final PermissionNode<Boolean> ADMIN_DB =
+            new PermissionNode<>("ccnrrp", "admin.db", PermissionTypes.BOOLEAN, (player, uuid, context) -> false);
 
     private Permissions() {}
 
@@ -45,7 +47,8 @@ public final class Permissions {
                 ADMIN_ANIMATION,
                 ADMIN_SPAWN,
                 ADMIN_KILL,
-                ADMIN_XP);
+                ADMIN_XP,
+                ADMIN_DB);
     }
 
     /** 管理资格：OP（>= 2 级）或拥有对应权限节点。 */

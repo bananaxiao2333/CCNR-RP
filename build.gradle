@@ -66,6 +66,14 @@ dependencies {
     // 版本随 libs/ 内文件名浮动（scripts/fetch-corpse.sh 解析最新版）。
     compileOnly fileTree(dir: 'libs', include: 'corpse-forge-1.20.1-*.jar')
 
+    // ---- 数据库后端（P0 起）：SQLite 默认（内嵌，打进 mod jar），MySQL 可选（网络后端）----
+    implementation 'org.xerial:sqlite-jdbc:3.45.3.0'
+    implementation 'com.mysql:mysql-connector-j:8.3.0'
+    // 打包进 mod jar（jarJar）以便单文件部署；MySQL 连接器较大，如需也可加入
+    jarJar('org.xerial:sqlite-jdbc:3.45.3.0') {
+        jarJar.ranged(it, '[3.45.3.0,)')
+    }
+
     // ---- 测试（JUnit5；离线开发环境不自动跑，显式 `-PrunTests` 才执行）----
     testImplementation platform('org.junit:junit-bom:5.11.4')
     testImplementation 'org.junit.jupiter:junit-jupiter'

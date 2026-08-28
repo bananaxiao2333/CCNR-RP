@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.19.0（数据库后端 Phase 0：基础设施与依赖）
+
+- **数据库后端接入（P0 打底）**：引入 SQLite（默认，内嵌，jarJar 打进 mod jar）与 MySQL（可选）JDBC 驱动；新增 `com.ccnrcom.rp.data` 包骨架。
+- **核心类**：`DbConfig`（config/db.properties 读取/校验/密码掩码）、`DbType`、`SqlDialect`（占位符/upsert/标识符引用，SQLite 与 MySQL 差异化）、`DbSchema`（CREATE TABLE IF NOT EXISTS + schema_version，全部表跨库类型一致）、`Database`（connect/disconnect 生命周期、写后置单线程 executor、主线程读）、注解微 ORM（`@Table/@Id/@Column/@JsonColumn/@Blob` + `SqlMapper<T>`，仅支持 record）。
+- **生命周期接线**：`CCNRRPMod` 于 ServerAboutToStart 连接数据库（各 manager 构造前）、ServerStopping 断开（对称清理）；未启用（db.enabled=false）时全部为空操作，不影响现有文件存储。
+- **命令与权限**：新增 `/rp db status`、`/rp db test`（OP≥2 或 `ccnrrp.admin.db`），zh/en 语言包键成对。
+- 构建：spotlessApply / build -PrunTests / LangFileTest 全绿；新增 SqlDialectTest / DbConfigTest / SqlMapperTest（内存 SQLite roundtrip）。
 ## 2.18.43（国际化文本整理：统一 CCNR 机构语境 + 术语对齐）
 
 - **统一世界语境为「CCNR 机构」**：消除历史遗留的「项目/设施→机构」不一致（含 `RpTheme` 主题注释 SCP:NET → CCNR:NET）。
