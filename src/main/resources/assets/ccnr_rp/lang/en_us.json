@@ -346,6 +346,7 @@
   "ccnr_rp.admin.profession.applied": "Spawned directly as %s (faction %s, not bound to a character)",
   "ccnr_rp.spawn.recruit.title": "Recruit Offers",
   "ccnr_rp.spawn.recruit.accepted_header": "Accepted players",
+  "ccnr_rp.spawn.recruit.roster_header": "Wave %s · Joined %s / Need %s",
   "ccnr_rp.spawn.recruit.you_conscript": "Conscript invite: %s (%s) - join or decline",
   "ccnr_rp.spawn.recruit.kind_wave": "Resurrect",
   "ccnr_rp.spawn.recruit.kind_conscript": "FORCED CONSCRIPT",

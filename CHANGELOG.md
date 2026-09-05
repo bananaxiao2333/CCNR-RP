@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.21.5（复活波已加入名单实时同步 + 名单立绘显示玩家本人皮肤）
+
+- **背包「已加入玩家」名单实时刷新**：原背包右上角列表只显示「本玩家自己」已同意的邀请（本地 `OFFERS` 过滤），
+  其他人加入时不变，表现为「不刷新」。现改为服务端权威的整波名单：`RecruitManager` 维护每个触发实例（groupId）的
+  已加入名单，有人接受 / 离服（取消接受）/ 结算时向该波全部候选推送 `RecruitRosterS2C`（展示 id + 目标数 + 已加入条目），
+  客户端 `RecruitOverlayHud` 按 `groupId` 存名单并在背包右上角绘制，头部显示「已加入 x / 需要 y」。
+  名单按触发实例增量推送（不每 tick 全量广播）；结算 / 取消时推空名单清除，离服从广播目标移除后重推受影响组，
+  客户端登出清空全部名单（对称清理）。
+- **名单立绘显示对应玩家的本人皮肤**：`CharacterPreview.renderPlayerSkin`（新增）识别 `user-<uuid>` 取该玩家
+  `PlayerInfo.getProfile()`（带 skin textures 的 GameProfile），渲染其本人外观 + 职位装备，不再清一色用本地玩家皮肤；
+  非玩家身份（征召兵 UID）回退通用立绘。
+- 网络：`RecruitOfferS2C` 增加 `groupId`（名单归属）；新增 `RecruitRosterS2C`（整波已加入名单整表推送）。
+- 文档：docs/09 补充「已加入名单实时同步」说明。
+- 构建：spotlessApply / build / test -PrunTests 全绿。
+
 ## 2.21.4（原版音乐和音效设置注入本 mod 音乐音量滑块）
 
 - **在原版「音乐和音效设置」（SoundOptionsScreen）注入本 mod 音乐音量滑块**：独立于原版「音乐」音量，

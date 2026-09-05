@@ -24,9 +24,21 @@ public final class ClientPacketHandlers {
 
     public static void onRecruitOffer(RpPackets.RecruitOfferS2C msg) {
         RecruitOverlayHud.add(
-                msg.offerId, msg.charId, msg.charName, msg.professionId, msg.initialTicks, msg.waveId, msg.kind);
+                msg.offerId,
+                msg.groupId,
+                msg.charId,
+                msg.charName,
+                msg.professionId,
+                msg.initialTicks,
+                msg.waveId,
+                msg.kind);
         // 不再强制弹邀请菜单（避免影响战斗）；仅当菜单已打开时刷新。
         RecruitPopupScreen.refreshIfOpen();
+    }
+
+    /** 整波已加入名单（服务端权威，有人接受/离服/结算时推送）。 */
+    public static void onRecruitRoster(RpPackets.RecruitRosterS2C msg) {
+        RecruitOverlayHud.setRoster(msg.groupId, msg.waveId, msg.target, msg.entries);
     }
 
     public static void onAnimation(String payload) {

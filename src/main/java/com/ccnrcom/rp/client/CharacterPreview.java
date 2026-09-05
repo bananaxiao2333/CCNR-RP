@@ -70,6 +70,51 @@ public final class CharacterPreview {
         InventoryScreen.renderEntityInInventoryFollowsMouse(g, cx, cy + scale, scale, 0.0F, 0.0F, p);
     }
 
+    /** 按「对应玩家本人皮肤」渲染立绘（已加入名单/已同意列表用）：识别 user-<uuid> 取该玩家皮肤，再装配 loadout 装备。
+     *  不再清一色用本地玩家皮肤——每个候选显示自己的外观。非玩家身份（如征召兵 UID）回退到通用渲染。 */
+    public static void renderPlayerSkin(
+            GuiGraphics g, int cx, int cy, int scale, String charId, String name, JsonObject loadout) {
+        Minecraft mc = Minecraft.getInstance();
+        ClientLevel level = mc.level;
+        if (level == null || charId == null || charId.isBlank()) {
+            return;
+        }
+        UUID uuid = playerUuid(charId);
+        if (uuid == null) {
+            renderPortrait(g, cx, cy, scale, charId, name, loadout); // 非玩家身份：回退通用立绘
+            return;
+        }
+        if (name == null || name.isBlank()) {
+            name = "AGENT";
+        }
+        GameProfile gp = null;
+        PlayerInfo info = mc.getConnection() != null ? mc.getConnection().getPlayerInfo(uuid) : null;
+        if (info != null) {
+            gp = info.getProfile(); // 带 textures 属性 → 渲染该玩家皮肤
+        }
+        if (gp == null) {
+            gp = new GameProfile(uuid, name);
+        }
+        PreviewPlayer p = new PreviewPlayer(level, gp);
+        p.setCustomNameVisible(false);
+        p.setCustomName(null);
+        equipFromLoadout(p, loadout);
+        InventoryScreen.renderEntityInInventoryFollowsMouse(g, cx, cy + scale, scale, 0.0F, 0.0F, p);
+    }
+
+    /** 从 charId 提取玩家 UUID（v2 唯一身份：user-<uuid>）；非玩家身份返回 null。 */
+    private static UUID playerUuid(String charId) {
+        if (charId == null || charId.isBlank()) {
+            return null;
+        }
+        String s = charId.startsWith("user-") ? charId.substring(5) : charId;
+        try {
+            return UUID.fromString(s);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     private static AbstractClientPlayer entity(ClientLevel level, JsonObject c, JsonObject loadout) {
         String id = str(c, "id");
         String name = str(c, "name");

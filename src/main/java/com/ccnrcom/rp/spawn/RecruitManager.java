@@ -51,6 +51,7 @@ public final class RecruitManager {
             String kind,
             String charId,
             String charName,
+            String professionId,
             String playerUuid,
             long deadlineMs,
             boolean done) {}
@@ -60,6 +61,9 @@ public final class RecruitManager {
     private final Map<String, List<String>> accepted = new HashMap<>(); // groupId -> 已加入 charId
     private final Map<String, Integer> targets = new HashMap<>(); // groupId -> 需要人数
     private final Map<String, String> displayIds = new HashMap<>(); // groupId -> 展示 id
+    private final Map<String, List<RpPackets.RecruitRosterS2C.RosterEntry>> rosters =
+            new HashMap<>(); // groupId -> 已加入名单（展示）
+    private final Map<String, List<ServerPlayer>> groupPlayers = new HashMap<>(); // groupId -> 收到邀请的候选（名单广播目标）
     private final Set<String> conscriptGroups = new HashSet<>();
     private final Set<String> finished = new HashSet<>();
     private int counter = 0;
@@ -103,6 +107,9 @@ public final class RecruitManager {
                 || !o.playerUuid().equals(player.getUUID().toString())) {
             return;
         }
+        String identity = o.charId(); // 候选本人身份（user-<uuid>），名单皮肤/立绘用
+        String prof = o.professionId();
+        String nm = o.charName();
         offers.put(
                 offerId,
                 new Offer(
@@ -111,7 +118,8 @@ public final class RecruitManager {
                         o.waveId(),
                         o.kind(),
                         charId,
-                        o.charName(),
+                        nm,
+                        prof,
                         o.playerUuid(),
                         o.deadlineMs(),
                         true));
@@ -119,6 +127,8 @@ public final class RecruitManager {
         list.add(charId);
         int target = targets.getOrDefault(o.groupId(), 1);
         String displayName = charNameOf(player, charId);
+        addRoster(o.groupId(), identity, nm, prof);
+        broadcastRoster(o.groupId());
         listener.onRecruitAccepted(displayName, o.waveId(), list.size(), target);
         if (list.size() >= target) {
             finishWave(o.groupId(), true); // 人满 → 提前部署
@@ -140,6 +150,7 @@ public final class RecruitManager {
             long timeoutSec) {
         targets.put(groupId, Math.max(1, target));
         accepted.put(groupId, new ArrayList<>());
+        rosters.put(groupId, new ArrayList<>());
         displayIds.put(groupId, displayId);
         long timeoutMs = Math.max(10, timeoutSec) * 1000L;
         int sent = 0;
@@ -150,11 +161,22 @@ public final class RecruitManager {
             long deadline = System.currentTimeMillis() + timeoutMs;
             offers.put(
                     oid,
-                    new Offer(oid, groupId, displayId, kind, c.charId(), c.name(), c.playerUuid(), deadline, false));
+                    new Offer(
+                            oid,
+                            groupId,
+                            displayId,
+                            kind,
+                            c.charId(),
+                            c.name(),
+                            c.professionId(),
+                            c.playerUuid(),
+                            deadline,
+                            false));
             RpChannels.sendTo(
                     p,
                     new RpPackets.RecruitOfferS2C(
                             oid,
+                            groupId,
                             c.charId(),
                             c.name(),
                             c.professionId(),
@@ -171,7 +193,44 @@ public final class RecruitManager {
                             factionDisplayName(c.professionId())));
             sent++;
         }
+        // 记录实际收到邀请的候选玩家（名单广播目标）；名单为空时不推（等首位接受者加入再推送）。
+        groupPlayers.put(groupId, new ArrayList<>(players.subList(0, sent)));
         LOGGER.info("[CCNR-RP] 邀请 {} 人（需要 {} 人）: {} [{}] kind={}", sent, target, displayId, groupId, kind);
+    }
+
+    /** 把某候选人加入「已加入名单」名单（按 charId 去重，防止重复接受时叠加）。 */
+    private void addRoster(String groupId, String charId, String charName, String professionId) {
+        List<RpPackets.RecruitRosterS2C.RosterEntry> rr = rosters.computeIfAbsent(groupId, k -> new ArrayList<>());
+        if (rr.stream().noneMatch(e -> e.charId().equals(charId))) {
+            rr.add(new RpPackets.RecruitRosterS2C.RosterEntry(charId, charName, professionId));
+        }
+    }
+
+    /** 向该分组全部候选推送当前已加入名单（服务端权威；客户端据此显示背包右上角已加入玩家列表）。 */
+    private void broadcastRoster(String groupId) {
+        List<ServerPlayer> candidates = groupPlayers.get(groupId);
+        if (candidates == null || candidates.isEmpty()) {
+            return;
+        }
+        List<RpPackets.RecruitRosterS2C.RosterEntry> entries = rosters.getOrDefault(groupId, List.of());
+        String display = displayIds.getOrDefault(groupId, groupId);
+        int targetN = targets.getOrDefault(groupId, 1);
+        RpPackets.RecruitRosterS2C msg =
+                new RpPackets.RecruitRosterS2C(groupId, display, targetN, List.copyOf(entries));
+        for (ServerPlayer p : candidates) {
+            RpChannels.sendTo(p, msg);
+        }
+    }
+
+    /** 推送清空名单（结算/取消时用），客户端据此移除该分组的已加入列表。 */
+    private void clearRoster(String groupId, String displayId, List<ServerPlayer> candidates) {
+        if (candidates == null || candidates.isEmpty()) {
+            return;
+        }
+        RpPackets.RecruitRosterS2C msg = new RpPackets.RecruitRosterS2C(groupId, displayId, 0, List.of());
+        for (ServerPlayer p : candidates) {
+            RpChannels.sendTo(p, msg);
+        }
     }
 
     /** 职位显示名（服务端解析，避免邀请广播露出内部 ID；无则回退原始 id）。 */
@@ -247,12 +306,15 @@ public final class RecruitManager {
                         o.kind(),
                         o.charId(),
                         o.charName(),
+                        o.professionId(),
                         o.playerUuid(),
                         o.deadlineMs(),
                         true));
         List<String> list = accepted.computeIfAbsent(o.groupId(), k -> new ArrayList<>());
         list.add(o.charId());
         int target = targets.getOrDefault(o.groupId(), 1);
+        addRoster(o.groupId(), o.charId(), o.charName(), o.professionId());
+        broadcastRoster(o.groupId());
         listener.onRecruitAccepted(o.charName(), o.waveId(), list.size(), target);
         if (list.size() >= target) {
             finishWave(o.groupId(), true); // 人满 → 提前部署
@@ -277,13 +339,27 @@ public final class RecruitManager {
                 mine.add(o);
             }
         }
+        Set<String> touched = new HashSet<>();
         for (Offer o : mine) {
             offers.remove(o.id());
             if (o.done() && o.kind() != null && !"conscript".equals(o.kind())) {
-                // 取消接受：从该分组已加入名单移除
+                // 取消接受：从该分组已加入名单移除（部署用 + 展示用名单纯净）
                 accepted.getOrDefault(o.groupId(), new ArrayList<>()).remove(o.charId());
+                List<RpPackets.RecruitRosterS2C.RosterEntry> rr = rosters.get(o.groupId());
+                if (rr != null) {
+                    rr.removeIf(e -> e.charId().equals(o.charId()));
+                    touched.add(o.groupId());
+                }
             }
             listener.onOfferDiscarded(o.charId(), o.waveId()); // 视同拒绝：征召兵角色清理
+        }
+        // 从各分组名单广播目标中移除该玩家（离服不再收名单更新）
+        for (List<ServerPlayer> ps : groupPlayers.values()) {
+            ps.removeIf(p -> p.getUUID().toString().equals(playerUuid));
+        }
+        // 重新推送受影响分组的最新名单，让其余候选看到人数回落
+        for (String g : touched) {
+            broadcastRoster(g);
         }
         // 无剩余邀请的分组由 onTick 结算（无人加入 → 失败）
     }
@@ -295,9 +371,14 @@ public final class RecruitManager {
         try {
             String displayId = displayIds.getOrDefault(groupId, groupId);
             List<String> ids = List.copyOf(accepted.getOrDefault(groupId, List.of()));
+            List<ServerPlayer> candidates = groupPlayers.get(groupId);
+            // 结算：先向候选推送清空名单（客户端据此移除背包已加入列表），再清理本分组 bookkeeping。
+            clearRoster(groupId, displayId, candidates);
             offers.values().removeIf(o -> o.groupId().equals(groupId));
             targets.remove(groupId);
             accepted.remove(groupId);
+            rosters.remove(groupId);
+            groupPlayers.remove(groupId);
             displayIds.remove(groupId);
             if (conscriptGroups.remove(groupId)) {
                 LOGGER.info("[CCNR-RP] 征召 {} 结算：已加入 {} 人（人满={}）", displayId, ids.size(), full);

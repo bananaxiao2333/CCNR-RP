@@ -346,6 +346,7 @@
   "ccnr_rp.admin.profession.applied": "已以职业 %s 直接上场（阵营 %s，不绑定角色）",
   "ccnr_rp.spawn.recruit.title": "招募请求",
   "ccnr_rp.spawn.recruit.accepted_header": "已同意玩家",
+  "ccnr_rp.spawn.recruit.roster_header": "复活波 %s · 已加入 %s / 需要 %s",
   "ccnr_rp.spawn.recruit.you_conscript": "征召邀请：%s（%s）——选择加入或拒绝",
   "ccnr_rp.spawn.recruit.kind_wave": "复活波",
   "ccnr_rp.spawn.recruit.kind_conscript": "强制征召",
