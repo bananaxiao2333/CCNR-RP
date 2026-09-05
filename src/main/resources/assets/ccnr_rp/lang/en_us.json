@@ -62,6 +62,7 @@
   "ccnr_rp.gui.admin.relation.pick_faction": "Select faction…",
   "ccnr_rp.gui.admin.relation.hint": "from/to support multiple factions or groups; empty to = internal relation",
   "ccnr_rp.gui.admin.group.list": "Faction groups (batch relation containers)",
+  "ccnr_rp.gui.admin.group.name": "Display name (shown)",
   "ccnr_rp.gui.admin.group.id": "Group id (unique)",
   "ccnr_rp.gui.admin.group.members": "Member factions (comma-separated ids)",
   "ccnr_rp.gui.admin.group.members_hint": "inject a faction below, or type ids separated by commas",

@@ -77,6 +77,18 @@ class CinematicRelationsTest {
     }
 
     @Test
+    void mergesUniformGroupToDisplayName() {
+        // 组 g1 设置外显名称 "North"：合并条目用外显名称而非 id
+        List<JsonObject> out = collapse(
+                List.of(new FactionGroup("g1", "North", List.of("b", "c"))),
+                List.of(new RelationRule(List.of("a"), List.of("b", "c"), RelationType.FRIENDLY)),
+                "a");
+        assertEquals(1, out.size());
+        assertEquals("North", out.get(0).get("name").getAsString());
+        assertEquals("friendly", out.get(0).get("type").getAsString());
+    }
+
+    @Test
     void allNeutralYieldsEmpty() {
         assertEquals(0, collapse(List.of(), List.of(), "a").size());
     }

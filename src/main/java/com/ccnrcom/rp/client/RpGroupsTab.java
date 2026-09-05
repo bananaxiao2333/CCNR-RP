@@ -29,6 +29,7 @@ public final class RpGroupsTab {
 
     private EditBox idBox;
     private EditBox membersBox;
+    private EditBox nameBox;
     private int selIndex = -1;
     private String notice = "";
     private long noticeUntil = 0;
@@ -61,20 +62,26 @@ public final class RpGroupsTab {
         int ew = px2 - ex - 12;
         ddW = Math.max(60, Math.min(ew - INJECT_W - 6, ew * 55 / 100));
         if (idBox == null) {
-            idBox = new EditBox(Minecraft.getInstance().font, ex, listY1 + 38, ew, 18, Component.literal("id"));
+            nameBox = new EditBox(Minecraft.getInstance().font, ex, listY1 + 26, ew, 18, Component.literal("name"));
+            nameBox.setMaxLength(64);
+            idBox = new EditBox(Minecraft.getInstance().font, ex, listY1 + 72, ew, 18, Component.literal("id"));
             idBox.setMaxLength(64);
             membersBox =
-                    new EditBox(Minecraft.getInstance().font, ex, listY1 + 94, ew, 18, Component.literal("members"));
+                    new EditBox(Minecraft.getInstance().font, ex, listY1 + 120, ew, 18, Component.literal("members"));
             membersBox.setMaxLength(2048);
         } else {
+            nameBox.setX(ex);
+            nameBox.setY(listY1 + 26);
+            nameBox.setWidth(ew);
             idBox.setX(ex);
+            idBox.setY(listY1 + 72);
             idBox.setWidth(ew);
-            idBox.setY(listY1 + 38);
             membersBox.setX(ex);
+            membersBox.setY(listY1 + 120);
             membersBox.setWidth(ew);
-            membersBox.setY(listY1 + 94);
         }
         // rebuild 会先 clearWidgets 清空全部控件，输入框必须每次重新注册
+        screen.addXpWidget(nameBox);
         screen.addXpWidget(idBox);
         screen.addXpWidget(membersBox);
         ddOpen = false;
@@ -93,7 +100,7 @@ public final class RpGroupsTab {
     }
 
     private int actionY() {
-        return listY1 + 130;
+        return listY1 + 150;
     }
 
     private List<JsonObject> groups() {
@@ -123,6 +130,9 @@ public final class RpGroupsTab {
 
     private void clearEditor() {
         selIndex = -1;
+        if (nameBox != null) {
+            nameBox.setValue("");
+        }
         if (idBox != null) {
             idBox.setValue("");
         }
@@ -138,6 +148,7 @@ public final class RpGroupsTab {
         }
         JsonObject g = groups.get(index);
         selIndex = index;
+        nameBox.setValue(str(g, "name", ""));
         idBox.setValue(str(g, "id", ""));
         membersBox.setValue(join(idList(g, "members")));
     }
@@ -208,7 +219,7 @@ public final class RpGroupsTab {
     // ---------- 阵营下拉注入 ----------
 
     private int ddY() {
-        return listY1 + 72;
+        return listY1 + 102;
     }
 
     private int ddPopupTop() {
@@ -295,6 +306,7 @@ public final class RpGroupsTab {
     private JsonObject editorPayload() {
         JsonObject p = new JsonObject();
         p.addProperty("id", idBox.getValue().trim());
+        p.addProperty("name", nameBox.getValue().trim());
         JsonArray members = new JsonArray();
         for (String s : membersBox.getValue().split(",")) {
             if (!s.isBlank()) {
@@ -373,8 +385,13 @@ public final class RpGroupsTab {
                 g.fill(listX1, ry, listX2, ry + ROW_H, 0x1FFFFFFF);
             }
             String id = str(grp, "id", "");
+            String name = str(grp, "name", id);
+            if (name.isBlank()) {
+                name = id;
+            }
             List<String> members = idList(grp, "members");
-            String raw = id + " (" + members.size() + ")";
+            String raw = name.equals(id) ? name : name + " (" + id + ")";
+            raw += " (" + members.size() + ")";
             int labelMax = (listX2 - listX1) - 4 - 6;
             String label = clip(font, raw, Math.max(20, labelMax));
             g.drawString(font, label, listX1 + 4, ry + 5, sel ? RpTheme.ACCENT_TEXT : RpTheme.TEXT_PRIMARY);
@@ -382,8 +399,9 @@ public final class RpGroupsTab {
         g.disableScissor();
 
         int ex = editorX();
-        g.drawString(font, tr("ccnr_rp.gui.admin.group.id"), ex, listY1 + 4, RpTheme.TEXT_SECONDARY);
-        g.drawString(font, tr("ccnr_rp.gui.admin.group.members"), ex, listY1 + 60, RpTheme.TEXT_SECONDARY);
+        g.drawString(font, tr("ccnr_rp.gui.admin.group.name"), ex, listY1 + 4, RpTheme.TEXT_SECONDARY);
+        g.drawString(font, tr("ccnr_rp.gui.admin.group.id"), ex, listY1 + 48, RpTheme.TEXT_SECONDARY);
+        g.drawString(font, tr("ccnr_rp.gui.admin.group.members"), ex, listY1 + 94, RpTheme.TEXT_SECONDARY);
         drawDropdown(g, mx, my);
         int ay = actionY();
         int aw = 64;
@@ -410,8 +428,9 @@ public final class RpGroupsTab {
             g.drawCenteredString(font, Component.literal(notice), (px1 + px2) / 2, py2 - 24, RpTheme.TEXT_SECONDARY);
         }
         g.drawString(font, tr("ccnr_rp.gui.admin.group.members_hint"), ex, py2 - 40, RpTheme.TEXT_DIM);
-        g.fill(ex - 1, listY1 + 37, ex + (px2 - ex - 12) + 1, listY1 + 57, 0x99383838);
-        g.fill(ex - 1, listY1 + 93, ex + (px2 - ex - 12) + 1, listY1 + 113, 0x99383838);
+        g.fill(ex - 1, listY1 + 25, ex + (px2 - ex - 12) + 1, listY1 + 45, 0x99383838);
+        g.fill(ex - 1, listY1 + 71, ex + (px2 - ex - 12) + 1, listY1 + 91, 0x99383838);
+        g.fill(ex - 1, listY1 + 121, ex + (px2 - ex - 12) + 1, listY1 + 141, 0x99383838);
     }
 
     public void renderOverlay(GuiGraphics g, int mx, int my) {

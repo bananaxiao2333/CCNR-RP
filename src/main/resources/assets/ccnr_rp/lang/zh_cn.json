@@ -62,6 +62,7 @@
   "ccnr_rp.gui.admin.relation.pick_faction": "选择阵营…",
   "ccnr_rp.gui.admin.relation.hint": "from/to 支持多个阵营或组；留空 to = 内部关系（两两互设）",
   "ccnr_rp.gui.admin.group.list": "阵营组（关系批量容器）",
+  "ccnr_rp.gui.admin.group.name": "外显名称（展示用）",
   "ccnr_rp.gui.admin.group.id": "组 id（唯一）",
   "ccnr_rp.gui.admin.group.members": "成员阵营（逗号分隔 id）",
   "ccnr_rp.gui.admin.group.members_hint": "下方注入阵营，或逗号分隔输入 id",

@@ -95,13 +95,18 @@ public final class FactionManager {
             if (!o.has("id")) {
                 return ParseResult.failure(List.of("groups[" + i + "]: 缺少 id"));
             }
+            String gid = o.get("id").getAsString();
+            String gname = str(o, "name", gid);
+            if (gname.isBlank()) {
+                gname = gid;
+            }
             List<String> members = new ArrayList<>();
             if (o.has("memberIds")) {
                 for (JsonElement e : o.getAsJsonArray("memberIds")) {
                     members.add(e.getAsString());
                 }
             }
-            groups.add(new FactionGroup(o.get("id").getAsString(), members));
+            groups.add(new FactionGroup(gid, gname, members));
         }
         List<RelationRule> rules = new ArrayList<>();
         JsonArray ra = root.has("relations") ? root.getAsJsonArray("relations") : new JsonArray();
@@ -483,18 +488,26 @@ public final class FactionManager {
         return sa.equals(sb);
     }
 
-    /** 创建阵营组并落盘。 */
-    public List<String> createGroup(String id, List<String> members) {
+    /** 创建阵营组并落盘（name 为外显名称，空则回退 id）。 */
+    public List<String> createGroup(String id, String name, List<String> members) {
         if (graph.factions().containsKey(id) || graph.groups().containsKey(id)) {
             return List.of("阵营或组已存在: " + id);
         }
-        return commitGroups(id, members);
+        return commitGroups(id, name, members);
     }
 
-    /** 更新阵营组成员并落盘（组不存在返回错误）。 */
-    public List<String> updateGroup(String id, List<String> members) {
+    /** 兼容调用：创建阵营组，无外显名称（name 回退 id）。 */
+    public List<String> createGroup(String id, List<String> members) {
+        return createGroup(id, id, members);
+    }
+
+    /** 更新阵营组成员并落盘（组不存在返回错误；name 空则回退 id）。 */
+    public List<String> updateGroup(String id, String name, List<String> members) {
         if (!graph.groups().containsKey(id)) {
             return List.of("未找到阵营组: " + id);
+        }
+        if (name == null || name.isBlank()) {
+            name = id;
         }
         JsonObject candidate = root.deepCopy();
         JsonArray groups = candidate.has("groups") ? candidate.getAsJsonArray("groups") : new JsonArray();
@@ -509,6 +522,7 @@ public final class FactionManager {
                 JsonArray memberIds = new JsonArray();
                 members.forEach(memberIds::add);
                 o.add("memberIds", memberIds);
+                o.addProperty("name", name);
                 ParseResult result = parse(candidate);
                 if (!result.success()) {
                     return result.errors();
@@ -545,7 +559,7 @@ public final class FactionManager {
         return List.of();
     }
 
-    private List<String> commitGroups(String id, List<String> members) {
+    private List<String> commitGroups(String id, String name, List<String> members) {
         JsonObject candidate = root.deepCopy();
         JsonArray groups = candidate.has("groups") ? candidate.getAsJsonArray("groups") : new JsonArray();
         candidate.add("groups", groups);
@@ -556,6 +570,9 @@ public final class FactionManager {
         }
         JsonObject g = new JsonObject();
         g.addProperty("id", id);
+        if (name != null && !name.isBlank()) {
+            g.addProperty("name", name);
+        }
         JsonArray memberIds = new JsonArray();
         members.forEach(memberIds::add);
         g.add("memberIds", memberIds);

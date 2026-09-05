@@ -29,8 +29,8 @@
     {"id": "logistics", "name": "后勤与供应链", "color": "#795548", "description": "物资保障" }
   ],
   "groups": [
-    {"id": "qsec_group", "memberIds": ["quantum_science", "madison"]},
-    {"id": "sec_force", "memberIds": ["qdf", "qsa", "qso"]}
+    {"id": "qsec_group", "name": "量子科学组", "memberIds": ["quantum_science", "madison"]},
+    {"id": "sec_force", "name": "安全部队", "memberIds": ["qdf", "qsa", "qso"]}
   ],
   "relations": [
     {"from": ["sec_force"], "to": ["qsec_group"], "type": "friendly"},
@@ -41,6 +41,9 @@
 }
 ```
 首次启动若缺失默认写入精简样板示例（3 个样例阵营 + 4 个样例职业，字段结构同上）。
+
+- `groups[]` 的 `name` 为可选**外显名称**（管理面板「阵营组」页签可编辑；缺省回退 `id`，仅用于展示，
+  不参与 id 引用与关系解析）。入场电影「阵营关系」行按组合并时展示该外显名称。
 
 ## 4. 命令（OP≥2 或 ccnnrp.admin.faction）
 `/rp faction list`、`/rp faction relation <a> <b>`、`/rp faction relation set <a> <b> <hostile|neutral|friendly>`、

@@ -38,9 +38,11 @@ public final class CinematicRelations {
      * @return 有序的 {@code {name, type}} 列表；保首见顺序，同「名称+关系」去重
      */
     public static List<JsonObject> collapse(FactionGraph graph, String myFactionId) {
-        // 阵营 → 首个归属组（组与阵营共享 id 命名空间，首个非空归属即可）
+        // 阵营 → 首个归属组（组与阵营共享 id 命名空间，首个非空归属即可）；组 → 外显名称（回退 id）
         Map<String, String> facGroupId = new HashMap<>();
+        Map<String, String> groupLabel = new HashMap<>();
         for (FactionModels.FactionGroup grp : graph.groups().values()) {
+            groupLabel.put(grp.id(), grp.name() == null || grp.name().isBlank() ? grp.id() : grp.name());
             for (String m : grp.memberIds()) {
                 facGroupId.putIfAbsent(m, grp.id());
             }
@@ -82,7 +84,7 @@ public final class CinematicRelations {
             String gid = facGroupId.get(other.id());
             if (gid != null && groupUniform.containsKey(gid)) {
                 if (handled.add(gid)) {
-                    put(merged, gid, groupUniform.get(gid));
+                    put(merged, groupLabel.get(gid), groupUniform.get(gid));
                 }
                 handled.add(other.id());
                 continue;
