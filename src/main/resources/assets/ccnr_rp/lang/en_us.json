@@ -263,6 +263,8 @@
   "ccnr_rp.gui.admin.music.uploading": "Uploading music...",
   "ccnr_rp.gui.admin.music.ok": "Music uploaded: %s",
   "ccnr_rp.gui.admin.music.fail": "Music upload failed: %s",
+  "ccnr_rp.audio.music_volume": "CCNR-RP Music",
+  "ccnr_rp.audio.music_volume.tooltip": "Volume of this mod's music, independent of the vanilla Music volume",
   "ccnr_rp.gui.admin.field.profile": "Profile (shown in entrance cinematic)",
   "ccnr_rp.manager.crud.ok": "%s %s OK",
   "ccnr_rp.gui.admin.setting.force_observing": "Force observer on join",

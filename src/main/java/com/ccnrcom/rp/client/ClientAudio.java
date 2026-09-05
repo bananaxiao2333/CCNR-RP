@@ -13,8 +13,6 @@ import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.Clip;
 import javax.sound.sampled.FloatControl;
-import net.minecraft.client.Minecraft;
-import net.minecraft.sounds.SoundSource;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -30,6 +28,8 @@ public final class ClientAudio {
 
     private static Clip active;
     private static Thread activeThread;
+    /** 本 mod 音乐音量（0..1；由客户端配置与原版「音乐和音效设置」滑块驱动，播放中可实时调整）。 */
+    private static volatile float musicVolume = 0.55f;
 
     private ClientAudio() {}
 
@@ -53,9 +53,9 @@ public final class ClientAudio {
             return;
         }
         stop();
-        // 音量 = 底盘 0.55 × 原版「音乐」音量：在客户端主线程读取（背景线程不碰 MC 对象）。
-        // 让玩家在「音乐和音效设置」里用「音乐」滑块即可调节本 mod 的出场音乐（0=静音，默认 1.0 不变）。
-        final float musicVol = Minecraft.getInstance().options.getSoundSourceVolume(SoundSource.MUSIC);
+        // 音量来自客户端配置（原版「音乐和音效设置」里的本 mod 滑块）：客户端主线程读取（背景线程不碰配置对象）。
+        musicVolume =
+                com.ccnrcom.rp.config.CCNRRPClientConfig.MUSIC_VOLUME.get().floatValue();
         Thread t = new Thread(
                 () -> {
                     try {
@@ -66,12 +66,12 @@ public final class ClientAudio {
                                 active = clip;
                             }
                             FloatControl gain = (FloatControl) clip.getControl(FloatControl.Type.MASTER_GAIN);
-                            gain.setValue(gain.getMaximum() * 0.55f * musicVol);
+                            gain.setValue(gain.getMaximum() * musicVolume);
                             clip.start();
                             // 60 秒后淡出（1.5s）
                             Thread.sleep(60_000L);
                             if (clip.isRunning() && same(clip)) {
-                                fadeOut(clip, gain, musicVol, 1500);
+                                fadeOut(clip, gain, 1500);
                             }
                         }
                     } catch (Exception e) {
@@ -88,6 +88,21 @@ public final class ClientAudio {
         t.setDaemon(true);
         activeThread = t;
         t.start();
+    }
+
+    /** 实时调整本 mod 音乐音量（0..1）：正在播放则同步更新增益，未播放则以新值作为下次播放音量。 */
+    public static void setVolume(float v) {
+        musicVolume = v;
+        synchronized (ClientAudio.class) {
+            if (active != null && active.isRunning()) {
+                try {
+                    FloatControl gain = (FloatControl) active.getControl(FloatControl.Type.MASTER_GAIN);
+                    gain.setValue(gain.getMaximum() * v);
+                } catch (Exception ignored) {
+                    // 增益调整失败不致命：下次播放生效
+                }
+            }
+        }
     }
 
     /** OGG 用 Minecraft 自带 OggAudioStream（原生 STB Vorbis，立体声正确）解码；其余格式（WAV/AIFF 等）走 AudioSystem。 */
@@ -116,12 +131,12 @@ public final class ClientAudio {
         }
     }
 
-    private static void fadeOut(Clip clip, FloatControl gain, float musicVol, long ms) {
+    private static void fadeOut(Clip clip, FloatControl gain, long ms) {
         long steps = 20;
         try {
             float max = gain.getMaximum();
             for (int i = 0; i < steps && clip.isRunning(); i++) {
-                gain.setValue(max * 0.55f * musicVol * (1f - (i + 1f) / steps));
+                gain.setValue(max * musicVolume * (1f - (i + 1f) / steps));
                 Thread.sleep(ms / steps);
             }
         } catch (Exception ignored) {

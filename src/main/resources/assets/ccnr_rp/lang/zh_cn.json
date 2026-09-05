@@ -263,6 +263,8 @@
   "ccnr_rp.gui.admin.music.uploading": "音乐上传中…",
   "ccnr_rp.gui.admin.music.ok": "音乐已上传：%s",
   "ccnr_rp.gui.admin.music.fail": "音乐上传失败：%s",
+  "ccnr_rp.audio.music_volume": "CCNR-RP 音乐音量",
+  "ccnr_rp.audio.music_volume.tooltip": "本 mod 出场音乐的音量，独立于原版「音乐」音量",
   "ccnr_rp.gui.admin.field.profile": "职业画像（入场电影展示）",
   "ccnr_rp.manager.crud.ok": "%s %s 成功",
   "ccnr_rp.gui.admin.setting.force_observing": "强制观察者入服",

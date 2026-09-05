@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.21.4（原版音乐和音效设置注入本 mod 音乐音量滑块）
+
+- **在原版「音乐和音效设置」（SoundOptionsScreen）注入本 mod 音乐音量滑块**：独立于原版「音乐」音量，
+  经 `ScreenEvent.Init.Post` 找到改屏幕的 `OptionsList` 追加一条 `addBig` 滑块（`ccnr_rp.audio.music_volume`）；
+  拖动即写客户端配置 `config/ccnr_rp-client.toml` 的 `audio.musicVolume`（范围 0..1，默认 0.55 保持原响度），
+  并实时更新正在播放的出场音乐增益（`ClientAudio.setVolume`）。
+- **本 mod 音乐音量改由该独立滑块控制**：新增 `CCNRRPClientConfig`（CLIENT 配置）存储音量，出场音乐
+  播放前在客户端主线程读取；替代 2.21.3 的「跟随原版音乐音量」方案（改为真正独立的音量控制）。
+- 构建：spotlessApply / build / test -PrunTests 全绿。
+
 ## 2.21.3（列表表头布局统一 + 本 mod 音乐跟随原版音量）
 
 - **统一修复管理面板列表表头与首行重叠**：阵营/职业/事件/阶段/波次/限制列表、阵营组、经验规则、关系管理等
@@ -9,6 +19,7 @@
 - **本 mod 音乐音量跟随原版「音乐」音量**：出场音乐原先以固定 0.55 增益播放，不受原版音量控制；
   现改为在客户端主线程读取原版「音乐」音量（`SoundSource.MUSIC`），按 `0.55 × 音乐音量` 设定增益，
   玩家在「音乐和音效设置」里用「音乐」滑块即可调节本 mod 的出场音乐（0=静音，默认不变）。
+  *（该方案已被 2.21.4 的独立音量滑块取代。）*
 - 构建：spotlessApply / build / test -PrunTests 全绿。
 
 ## 2.21.2（阵营组外显名称 + 页签排序）
