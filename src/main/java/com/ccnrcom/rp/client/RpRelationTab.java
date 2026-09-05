@@ -518,7 +518,7 @@ public final class RpRelationTab {
             String tag = typeTag(type);
             int labelMax = (listX2 - listX1) - 4 - 6 - font.width(tag) - 6;
             String label = clip(font, raw, Math.max(20, labelMax));
-            g.drawString(font, label, listX1 + 4, ry + 5, sel ? 0xFFFFFFFF : RpTheme.TEXT_PRIMARY);
+            g.drawString(font, label, listX1 + 4, ry + 5, sel ? RpTheme.ACCENT_TEXT : RpTheme.TEXT_PRIMARY);
             g.drawString(font, tag, listX1 + 4 + font.width(label) + 6, ry + 5, typeColor(type));
         }
         g.disableScissor();
@@ -640,7 +640,7 @@ public final class RpRelationTab {
                 y + DD_H,
                 3f,
                 open || hov ? RpTheme.PANEL_BORDER_BRIGHT : RpTheme.PANEL_BORDER,
-                open ? 0xA83A3F4A : RpTheme.PANEL_BG_ALT);
+                open ? 0xA83A3A3A : RpTheme.PANEL_BG_ALT);
         List<JsonObject> facs = ClientCharacterState.factions();
         String label = facs.isEmpty() || idx < 0 || idx >= facs.size()
                 ? tr("ccnr_rp.gui.admin.relation.pick_faction")

@@ -117,7 +117,7 @@ public final class RpIcons {
     public static void badge(GuiGraphics g, int cx, int cy, int r, String icon, int tier, boolean selected) {
         int ring = selected ? RpTheme.RED_LINE : RpTheme.tierColor(tier);
         ring(g, cx, cy, r, ring, 0xFF2E2E2E);
-        polygon(g, cx, cy, r - 1, icon, selected ? 0xFFFFFFFF : ring, 0xFF10181E);
+        polygon(g, cx, cy, r - 1, icon, selected ? 0xFFFFFFFF : ring, 0xFF161616);
         int n = Math.max(2, r / 4);
         g.fill(cx + r - n - 1, cy + r - n - 1, cx + r, cy + r, ring);
     }

@@ -187,7 +187,7 @@ public final class RpRulesTab {
             }
             boolean en = !r.has("enabled") || r.get("enabled").getAsBoolean();
             g.drawString(font, en ? "●" : "○", listX1 + 6, y1 + 6, en ? RpTheme.GREEN : RpTheme.TEXT_DIM, true);
-            g.drawString(font, str(r, "id"), listX1 + 18, y1 + 6, s ? 0xFFFFFFFF : RpTheme.TEXT_PRIMARY);
+            g.drawString(font, str(r, "id"), listX1 + 18, y1 + 6, s ? RpTheme.ACCENT_TEXT : RpTheme.TEXT_PRIMARY);
             String ev = str(r, "eventId");
             g.drawString(font, ev, listX2 - font.width(ev) - 6, y1 + 6, RpTheme.TEXT_DIM);
         }

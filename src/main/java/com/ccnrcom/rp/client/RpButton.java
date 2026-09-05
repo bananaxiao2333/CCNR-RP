@@ -11,9 +11,9 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.network.chat.Component;
 
 /**
- * 终端按钮（扁平化 + 发光边框）：
- * primary=青色边框发光（主操作）/ secondary=暗青灰边（次级）/ danger=红边框（危险操作）。
- * 选中状态（红底白字+红色高亮线）由列表绘制承担，按钮本身不承载选中态。
+ * 终端按钮（扁平化 + 发光边框，对齐前端按钮风格）：
+ * primary=白底黑字（主操作，反白）/ secondary=暗底灰边白字（次级）/ danger=红边框红字（危险操作）。
+ * 选中状态（白底黑字）由列表绘制承担，按钮本身不承载选中态。
  */
 public final class RpButton extends Button {
     private final int fill;
@@ -45,7 +45,7 @@ public final class RpButton extends Button {
         this.fgHover = fgHover;
     }
 
-    /** 主操作：青边青字（发光边框）。 */
+    /** 主操作：白底黑字（反白，对齐前端主按钮）。 */
     public static RpButton primary(int x, int y, int w, int h, Component label, OnPress onPress) {
         return new RpButton(
                 x,
@@ -54,15 +54,15 @@ public final class RpButton extends Button {
                 h,
                 label,
                 onPress,
-                0xB0343434,
-                0xD03C3C3C,
-                RpTheme.CYAN_DIM,
+                0xFFFFFFFF,
+                0xFFDADADA,
                 RpTheme.CYAN,
-                RpTheme.CYAN,
-                0xFFFFFFFF);
+                RpTheme.ACCENT_HOVER,
+                RpTheme.ACCENT_TEXT,
+                0xFF000000);
     }
 
-    /** 次级：暗青灰边白字。 */
+    /** 次级：暗底灰边白字。 */
     public static RpButton secondary(int x, int y, int w, int h, Component label, OnPress onPress) {
         return new RpButton(
                 x,
@@ -98,7 +98,7 @@ public final class RpButton extends Button {
 
     /** 弹窗内静态绘制按钮（非 widget，交给父屏手动命中）。 */
     public static void draw(GuiGraphics g, int x1, int y1, int x2, int y2, String label, int border, boolean primary) {
-        RpRoundRect.outlined(g, x1, y1, x2, y2, 6f, border, primary ? 0xB0343434 : 0xA8323232);
+        RpRoundRect.outlined(g, x1, y1, x2, y2, 6f, border, primary ? 0xFFFFFFFF : 0xA8323232);
         Font f2 = Minecraft.getInstance().font;
         int tw = f2.width(label);
         g.drawString(
@@ -106,7 +106,7 @@ public final class RpButton extends Button {
                 label,
                 x1 + (x2 - x1 - tw) / 2,
                 y1 + (y2 - y1 - 8) / 2,
-                primary ? RpTheme.CYAN : RpTheme.TEXT_PRIMARY,
+                primary ? RpTheme.ACCENT_TEXT : RpTheme.TEXT_PRIMARY,
                 true);
     }
 

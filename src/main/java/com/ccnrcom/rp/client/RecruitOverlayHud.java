@@ -101,7 +101,7 @@ public final class RecruitOverlayHud {
         for (OfferEntry o : toRender) {
             int w = 120;
             int h = 44;
-            RpRoundRect.fill(gfx, x, y, x + w, y + h, 8f, o.accepted() ? 0xEE1F4D33 : 0xEE3A3A3A);
+            RpRoundRect.fill(gfx, x, y, x + w, y + h, 8f, o.accepted() ? 0xEE1A1A1A : 0xEE3A3A3A);
             // 左侧类型色条（与弹窗一致：征召红/指定编制金/通用选岗青；已同意=绿）
             int kc = o.accepted()
                     ? RpTheme.STATUS_ALIVE
@@ -174,7 +174,7 @@ public final class RecruitOverlayHud {
         y += 16;
         for (OfferEntry o : accepted) {
             int h = 24;
-            RpRoundRect.outlined(gfx, x, y, x + 140, y + h, 5f, RpTheme.PANEL_BORDER, 0xEE1F4D33);
+            RpRoundRect.outlined(gfx, x, y, x + 140, y + h, 5f, RpTheme.PANEL_BORDER, 0xEE1A1A1A);
             CharacterPreview.renderPortrait(
                     gfx,
                     x + 13,

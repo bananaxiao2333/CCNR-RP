@@ -2196,7 +2196,11 @@ public class RpAdminScreen extends Screen {
                     ? "🔒 " + stepSummary(s) + "（只读，触发来源 " + str(s, "source") + "）"
                     : "[" + idx + "] " + stepSummary(s);
             g.drawString(
-                    font, label, rX1 + 6, ry + 5, sel ? 0xFFFFFFFF : (anchor ? RpTheme.CYAN : RpTheme.TEXT_PRIMARY));
+                    font,
+                    label,
+                    rX1 + 6,
+                    ry + 5,
+                    sel ? RpTheme.ACCENT_TEXT : (anchor ? RpTheme.CYAN : RpTheme.TEXT_PRIMARY));
             // 5 元素：x1,y1,x2,y2,absIdx（绝对下标，供点击映射；锚点含 ↑↓ 不含 删）
             sqStepBounds.add(new int[] {rX1, ry, rX2, ry + 20, idx});
             int bx = rX2 + 4;
@@ -3214,7 +3218,7 @@ public class RpAdminScreen extends Screen {
                         Component.translatable(TABS[i]).getString(),
                         (b[0] + b[2]) / 2,
                         b[1] + 6,
-                        sel ? 0xFFFFFFFF : RpTheme.TEXT_SECONDARY);
+                        sel ? RpTheme.ACCENT_TEXT : RpTheme.TEXT_SECONDARY);
             }
             g.disableScissor();
 
@@ -3716,17 +3720,22 @@ public class RpAdminScreen extends Screen {
                 // 限制行：主文案 = 类型 + 目标；右侧上限
                 main = str(item, "type", "") + (str(item, "target", "").isBlank() ? "" : " / " + str(item, "target"));
             }
-            g.drawString(font, main, fx, b[1] + 1, sel ? 0xFFFFFFFF : RpTheme.TEXT_PRIMARY, true);
-            g.drawString(font, str(item, "id"), fx, b[1] + 11, sel ? 0xFFFFFFFF : RpTheme.TEXT_DIM, true);
+            g.drawString(font, main, fx, b[1] + 1, sel ? RpTheme.ACCENT_TEXT : RpTheme.TEXT_PRIMARY, true);
+            g.drawString(font, str(item, "id"), fx, b[1] + 11, sel ? RpTheme.ACCENT_TEXT : RpTheme.TEXT_DIM, true);
             if (tab == TAB_LIMITS) {
                 String lim = "上限 " + num(item, "limit", 0);
                 g.drawString(
-                        font, lim, b[2] - 8 - font.width(lim), b[1] + 1, sel ? 0xFFFFFFFF : RpTheme.STATUS_ALIVE, true);
+                        font,
+                        lim,
+                        b[2] - 8 - font.width(lim),
+                        b[1] + 1,
+                        sel ? RpTheme.ACCENT_TEXT : RpTheme.STATUS_ALIVE,
+                        true);
             }
             // 职业缺装备设定 → 右侧小标记
             if (tab == TAB_PROFESSION && isProfessionLoadoutEmpty(item)) {
                 String warn = "缺装备";
-                g.drawString(font, warn, b[2] - 8 - font.width(warn), b[1] + 11, 0xFFFF8C42, true);
+                g.drawString(font, warn, b[2] - 8 - font.width(warn), b[1] + 11, 0xFFB4B4B4, true);
             }
         }
         RpScrollbar.draw(g, listX2 - 6, listY1, listY2, items.size(), maxVisible, off);
@@ -3906,8 +3915,8 @@ public class RpAdminScreen extends Screen {
                         hov ? RpTheme.PANEL_BG_ALT : (i % 2 == 0 ? RpTheme.PANEL_BG : 0x00000000));
             }
             int fx = b[0] + 5;
-            g.drawString(font, str(p, "name"), fx, b[1] + 1, sel ? 0xFFFFFFFF : RpTheme.TEXT_PRIMARY, true);
-            g.drawString(font, str(p, "id"), fx, b[1] + 11, sel ? 0xFFFFFFFF : RpTheme.TEXT_DIM, true);
+            g.drawString(font, str(p, "name"), fx, b[1] + 1, sel ? RpTheme.ACCENT_TEXT : RpTheme.TEXT_PRIMARY, true);
+            g.drawString(font, str(p, "id"), fx, b[1] + 11, sel ? RpTheme.ACCENT_TEXT : RpTheme.TEXT_DIM, true);
         }
     }
 
@@ -3932,8 +3941,9 @@ public class RpAdminScreen extends Screen {
                         b[3] + 1,
                         hov ? RpTheme.PANEL_BG_ALT : (i % 2 == 0 ? RpTheme.PANEL_BG : 0x00000000));
             }
-            g.drawString(font, str(f, "name"), b[0] + 5, b[1] + 2, sel ? 0xFFFFFFFF : RpTheme.TEXT_PRIMARY, true);
-            g.drawString(font, str(f, "id"), b[0] + 5, b[1] + 12, sel ? 0xFFFFFFFF : RpTheme.TEXT_DIM, true);
+            g.drawString(
+                    font, str(f, "name"), b[0] + 5, b[1] + 2, sel ? RpTheme.ACCENT_TEXT : RpTheme.TEXT_PRIMARY, true);
+            g.drawString(font, str(f, "id"), b[0] + 5, b[1] + 12, sel ? RpTheme.ACCENT_TEXT : RpTheme.TEXT_DIM, true);
         }
     }
 

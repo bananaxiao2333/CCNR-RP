@@ -54,7 +54,7 @@ public final class DeployNoticeBanner {
         int y = 22;
         int hh = 26;
         // 顶部居中横幅：绿色主题 + 左侧状态条 + 阵营徽章
-        RpRoundRect.fill(g, x, y, x + bw, y + hh, 8f, 0xEE1F4D33);
+        RpRoundRect.fill(g, x, y, x + bw, y + hh, 8f, 0xEE1A1A1A);
         RpRoundRect.fill(g, x, y, x + 3, y + hh, 8f, RpTheme.STATUS_ALIVE);
         JsonObject fac = factionById(factionId);
         if (fac != null) {

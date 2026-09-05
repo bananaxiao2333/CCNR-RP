@@ -4,7 +4,7 @@
 
 CCNR 服务器 RolePlay 模组：围绕 **量子科学设施（CCNR 机构）** 世界观，提供
 阵营关系 / 职业与装备 / 角色管理 / 状态与遗体 / 经验结算 / 阶段事件 / 动画演出 / 人物刷新 八大系统，
-并以 **"CCNR:NET 机密终端"** 风格的三栏网格作为核心界面。
+并以 **"CCNR:NET 机密终端"**（黑白灰军用终端，对齐在线管理面板）风格的三栏网格作为核心界面。
 
 [![Release](https://img.shields.io/github/v/release/bananaxiao2333/CCNR-RP?label=Release&color=brightgreen)](https://github.com/bananaxiao2333/CCNR-RP/releases)
 [![Build](https://img.shields.io/github/actions/workflow/status/bananaxiao2333/CCNR-RP/build.yml?branch=main&label=Build)](https://github.com/bananaxiao2333/CCNR-RP/actions)
@@ -33,7 +33,7 @@ CCNR 服务器 RolePlay 模组：围绕 **量子科学设施（CCNR 机构）** 
 
 ## 特色亮点
 
-- **"CCNR:NET 机密终端"三栏网格**（按 `K` 打开）：左栏机构徽章（按 tier 着色——🟡 金=1 级 / 🔵 蓝=2 级 / 🟢 青=3 级）、中栏角色档案、右栏详细资料（3D 模型预览 + 战术装备槽 + 皮肤上传 + 创建表单）。
+- **"CCNR:NET 机密终端"三栏网格**（按 `K` 打开）：左栏机构徽章（按 tier 灰阶——⬜ 亮=1 级 / 🌫 中灰=2 级 / ⬛ 暗灰=3 级）、中栏角色档案、右栏详细资料（3D 模型预览 + 战术装备槽 + 皮肤上传 + 创建表单）。
 - **完整状态机**：观察 → 激活 → 部署 → 存活 → 死亡 → 冷却 → 复活；掉线判死、复活后强制旁观者、冷却锁定，均由服务端强制。
 - **服务器素材中央下发**：阵营出场音乐与徽章图标全部由服务器控制，客户端进服按哈希自动增量下载缓存，无需手动分发。
 - **部署入场电影**：先播 CMDCam 标题文字电影，动画完毕后再传送出生点；出场音乐按 **启动器指定 > 职业 > 阵营** 优先级解析。

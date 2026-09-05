@@ -187,7 +187,7 @@ public final class XpHudOverlay {
         var font = Minecraft.getInstance().font;
         String sign = it.value() >= 0 ? "+" : "-";
         String text = sign + Math.abs(it.value()) + " " + it.title();
-        int base = it.value() >= 0 ? 0xFF35E07A : 0xFFFF4C4C;
+        int base = it.value() >= 0 ? 0xFFB4B4B4 : 0xFFFF4C4C;
         int color = (base & 0x00FFFFFF) | ((alpha & 0xFF) << 24);
         g.drawCenteredString(font, net.minecraft.network.chat.Component.literal(text), cx, y, color);
     }
