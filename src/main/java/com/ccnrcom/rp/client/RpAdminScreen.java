@@ -29,13 +29,13 @@ public class RpAdminScreen extends Screen {
     private static final int TAB_SETTINGS = 0;
     private static final int TAB_PROFESSION = 1;
     private static final int TAB_FACTION = 2;
-    private static final int TAB_EVENT = 3;
-    private static final int TAB_PHASE = 4;
-    private static final int TAB_WAVE = 5;
-    private static final int TAB_LIMITS = 6;
-    private static final int TAB_XP = 7;
-    private static final int TAB_RELATION = 8;
-    private static final int TAB_GROUPS = 9;
+    private static final int TAB_GROUPS = 3;
+    private static final int TAB_EVENT = 4;
+    private static final int TAB_PHASE = 5;
+    private static final int TAB_WAVE = 6;
+    private static final int TAB_LIMITS = 7;
+    private static final int TAB_XP = 8;
+    private static final int TAB_RELATION = 9;
 
     private int tab = TAB_SETTINGS;
     /** 经验规则页签（经验系统 v3）：自包含编辑器；首次使用才构造（避免构造期 this 逃逸）。 */
@@ -277,13 +277,13 @@ public class RpAdminScreen extends Screen {
         "ccnr_rp.gui.admin.tab.settings",
         "ccnr_rp.gui.admin.tab.profession",
         "ccnr_rp.gui.admin.tab.faction",
+        "ccnr_rp.gui.admin.tab.groups",
         "ccnr_rp.gui.admin.tab.event",
         "ccnr_rp.gui.admin.tab.phase",
         "ccnr_rp.gui.admin.tab.wave",
         "ccnr_rp.gui.admin.tab.limits",
         "ccnr_rp.gui.admin.tab.xp",
-        "ccnr_rp.gui.admin.tab.relation",
-        "ccnr_rp.gui.admin.tab.groups"
+        "ccnr_rp.gui.admin.tab.relation"
     };
 
     /** 限制类型（部署人数上限规则）：GLOBAL=通用角色上限（职业无专属时兜底）/ FACTION=阵营上限 / PROFESSION=职业上限。 */

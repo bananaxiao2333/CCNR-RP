@@ -559,6 +559,7 @@ public final class CharacterService {
             }
             case "group" -> {
                 String id = str(p, "id", "");
+                String gname = str(p, "name", id);
                 java.util.List<String> members = new java.util.ArrayList<>();
                 if (p.has("memberIds") && p.get("memberIds").isJsonArray()) {
                     for (com.google.gson.JsonElement e : p.getAsJsonArray("memberIds")) {
@@ -566,8 +567,8 @@ public final class CharacterService {
                     }
                 }
                 switch (action) {
-                    case "create" -> errors = CCNRRPMod.factions.createGroup(id, members);
-                    case "update" -> errors = CCNRRPMod.factions.updateGroup(id, members);
+                    case "create" -> errors = CCNRRPMod.factions.createGroup(id, gname, members);
+                    case "update" -> errors = CCNRRPMod.factions.updateGroup(id, gname, members);
                     case "delete" -> errors = CCNRRPMod.factions.deleteGroup(id);
                     default -> errors = List.of("未知操作: " + action);
                 }
@@ -1254,6 +1255,7 @@ public final class CharacterService {
                     CCNRRPMod.factions.graph().groups().values()) {
                 JsonObject o = new JsonObject();
                 o.addProperty("id", g.id());
+                o.addProperty("name", g.name());
                 JsonArray members = new JsonArray();
                 g.memberIds().forEach(members::add);
                 o.add("members", members);

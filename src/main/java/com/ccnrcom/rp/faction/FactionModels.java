@@ -27,8 +27,16 @@ public final class FactionModels {
         }
     }
 
-    /** 阵营组：批量声明关系的容器。 */
-    public record FactionGroup(String id, List<String> memberIds) {}
+    /**
+     * 阵营组：批量声明关系的容器。name 为外显名称（缺省回退 id；管理面板可编辑）。
+     * 组与阵营共享 id 命名空间（name 仅用于展示，不参与 id 引用）。
+     */
+    public record FactionGroup(String id, String name, List<String> memberIds) {
+        /** 兼容无外显名称的构造（name 回退为 id）。 */
+        public FactionGroup(String id, List<String> memberIds) {
+            this(id, id, memberIds);
+        }
+    }
 
     /**
      * 关系声明（多对多）：from/to 各为一个 id 列表，列表项可以是阵营 id 或组 id（组自动展开为成员）；

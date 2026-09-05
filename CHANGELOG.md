@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.21.2（阵营组外显名称 + 页签排序）
+
+- **阵营组「外显名称」可编辑**：`groups[]` 新增可选 `name` 字段（缺省回退 id，仅展示用，不参与 id 引用/关系解析）。
+  「阵营组」页签新增「名称」输入框（列表按外显名称显示，id 与名称不同时并列展示）；服务端
+  `FactionGroup`/`parse`/`createGroup`/`updateGroup`/`commitGroups` 全链路透传 `name` 并落盘；
+  `buildSharedListRoot` 下发 `name` 供客户端镜像。入场电影「阵营关系」行按组合并时展示该外显名称。
+- **管理面板页签排序**：将「阵营组」页签移到「阵营」旁（原在末尾）；同步重排 `TAB_*` 常量与 `TABS` 数组。
+- 文档：docs/02 补充 `groups[].name` 说明。
+- 构建：spotlessApply / build / test -PrunTests（新增 `CinematicRelationsTest` 外显名称用例）全绿。
+
 ## 2.21.1（入场电影阵营关系按组合并）
 
 - **入场电影「阵营关系」行按「阵营组 + 关系」合并可合并项**：原来逐阵营罗列所有非中立关系（阵营多时一行过长）；
