@@ -6,6 +6,7 @@ package com.ccnrcom.rp;
 
 import com.ccnrcom.rp.character.CharacterService;
 import com.ccnrcom.rp.command.RpCommand;
+import com.ccnrcom.rp.config.CCNRRPClientConfig;
 import com.ccnrcom.rp.config.CCNRRPConfig;
 import com.ccnrcom.rp.faction.FactionManager;
 import com.ccnrcom.rp.network.RpChannels;
@@ -55,6 +56,7 @@ public class CCNRRPMod {
 
     public CCNRRPMod() {
         ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, CCNRRPConfig.SPEC);
+        ModLoadingContext.get().registerConfig(ModConfig.Type.CLIENT, CCNRRPClientConfig.SPEC);
         IEventBus modBus = FMLJavaModLoadingContext.get().getModEventBus();
         modBus.addListener(this::commonSetup);
         RpChannels.register();

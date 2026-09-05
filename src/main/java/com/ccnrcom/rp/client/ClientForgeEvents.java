@@ -5,8 +5,14 @@
 package com.ccnrcom.rp.client;
 
 import com.ccnrcom.rp.CCNRRPMod;
+import com.ccnrcom.rp.config.CCNRRPClientConfig;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.OptionInstance;
+import net.minecraft.client.gui.components.OptionsList;
+import net.minecraft.client.gui.screens.SoundOptionsScreen;
+import net.minecraft.network.chat.Component;
 import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.client.event.ScreenEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
@@ -138,6 +144,41 @@ public final class ClientForgeEvents {
                 event.getCamera(),
                 event.getPartialTick(),
                 Minecraft.getInstance().renderBuffers().bufferSource());
+    }
+
+    /**
+     * 在原版「音乐和音效设置」（SoundOptionsScreen）注入一条本 mod 音乐音量滑块：独立于原版「音乐」音量，
+     * 播放时按客户端配置（config/ccnr_rp-client.toml 的 audio.musicVolume，也可在此滑块调整）设定增益，
+     * 拖动即时生效（正在播放则同步改增益）。
+     */
+    @SubscribeEvent
+    public static void onSoundOptionsInit(ScreenEvent.Init.Post event) {
+        if (!(event.getScreen() instanceof SoundOptionsScreen)) {
+            return;
+        }
+        OptionsList list = null;
+        for (net.minecraft.client.gui.components.events.GuiEventListener l : event.getListenersList()) {
+            if (l instanceof OptionsList) {
+                list = (OptionsList) l;
+                break;
+            }
+        }
+        if (list == null) {
+            return;
+        }
+        OptionInstance<Double> option = new OptionInstance<>(
+                "ccnr_rp.audio.music_volume",
+                OptionInstance.cachedConstantTooltip(Component.translatable("ccnr_rp.audio.music_volume.tooltip")),
+                (caption, value) -> Component.empty()
+                        .append(caption)
+                        .append(Component.literal(": " + Math.round(value * 100f) + "%")),
+                OptionInstance.UnitDouble.INSTANCE,
+                CCNRRPClientConfig.MUSIC_VOLUME.get(),
+                value -> {
+                    CCNRRPClientConfig.MUSIC_VOLUME.set(value);
+                    ClientAudio.setVolume(value.floatValue());
+                });
+        list.addBig(option);
     }
 
     /** 事件横幅滚轮：鼠标悬停横幅区域时横向滚动（并拦截向下传递）。 */
