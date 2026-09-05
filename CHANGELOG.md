@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.20.0（界面主题迁移：黑白灰军用终端）
+
+- **界面主题 v4**：in-game UI 视觉统一为「黑白灰军用终端」，与 Web 管理面板（ccnr-rp-gui）对齐——近黑底 / 白·灰等宽文字 / 细灰边 / 白=强调（选中反白）/ 红=警示危险 / 灰阶徽章（机构等级）。替换原 v3「CCNR:NET 机密终端」（冷暗金属底 / 青色主色 / 金·蓝徽章）。
+- **设计系统**：`RpTheme` 调色板 v3→v4（OVERLAY/BG/PANEL/BORDER/TEXT/CYAN/GREEN/GOLD/STATUS 全量中性化→白灰+红）；tierColor/statusColor/selectedBar(反白)/scanline(白) 同步；`RpButton` primary=白底黑字、secondary=暗底灰边白字、danger=红边红字；`RpIcons`/`RpScrollbar` 经 CYAN→白 自动跟随。
+- **非中性色清理**：各屏幕散落的青 #45D8F2、蓝 #3D7BFF、金 #FFC84C、橙 #FF8C42、暗绿 #1F4D33、近黑蓝 #10181E/#15181E/#3A3F4A → 白/灰/红（RpAdminScreen / RpRulesTab / RpRelationTab / CharacterManagementScreen / StatusHud / XpHudOverlay / DeployNoticeBanner / RecruitOverlayHud / FactionGraphScreen / PlayerNametagRenderer / ClientPacketHandlers）；选中行文字白→深（`sel ? ACCENT_TEXT`）保证反白可读。
+- **边界**：仅改视觉层（颜色/描边/选中态/文字层级），不触碰布局/几何/行为/配置/网络/存档。
+- **文档**：新增 `docs/14-界面主题设计.md`（设计语言/令牌/前端映射/组件/边界/验收）；README、`RpTheme` Javadoc 同步为黑白灰军用终端。
+- 构建：spotlessApply / build / test -PrunTests / LangFileTest 全绿。
+
 ## 2.19.5（数据库后端 Phase 5：全链路收尾）
 
 - **命令补全**：新增 `/rp db connect (sqlite <file>|mysql <host,port,db,user,pass>)`（写 db.properties，重启生效）、`/rp db export <dir>`（库→本地备份：配置/调参/用户档案/素材）、`/rp db flush`（强制写后置落库）。zh/en 语言包键成对。
