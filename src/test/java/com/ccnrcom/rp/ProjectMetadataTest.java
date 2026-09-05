@@ -68,6 +68,28 @@ class ProjectMetadataTest {
             assertTrue(toml.contains("modId=\"ccnr_rp\""), "mods.toml 缺少 ccnr_rp 声明");
             assertTrue(toml.contains("modId=\"corpse\""), "mods.toml 缺少 Corpse 依赖声明");
             assertTrue(toml.contains("mandatory=false"), "mods.toml 缺少 Corpse 可选依赖（mandatory=false）");
+            // 项目品牌：必须有 logoFile 指向图标，且描述不得仍是「骨架/开发中」过期文案
+            assertTrue(toml.contains("logoFile=\"icon.png\""), "mods.toml 缺少 logoFile 图标声明");
+            assertTrue(toml.contains("CNR 机构") || toml.contains("RolePlay"), "mods.toml 描述仍为过期骨架文案");
+        }
+    }
+
+    @Test
+    void modIconBundled() throws Exception {
+        try (InputStream in = getClass().getResourceAsStream("/icon.png")) {
+            assertNotNull(in, "mods.toml logoFile 指向的 icon.png 资源缺失");
+            byte[] head = in.readNBytes(8);
+            assertEquals(8, head.length);
+            assertTrue(
+                    head[0] == (byte) 0x89
+                            && head[1] == 'P'
+                            && head[2] == 'N'
+                            && head[3] == 'G'
+                            && head[4] == 0x0D
+                            && head[5] == 0x0A
+                            && head[6] == 0x1A
+                            && head[7] == 0x0A,
+                    "icon.png 不是有效 PNG");
         }
     }
 }

@@ -249,7 +249,7 @@ class FactionManagerSaveTest {
         java.lang.reflect.Method reload = c.getDeclaredMethod("reloadFromRoot");
         reload.setAccessible(true);
         reload.invoke(mgr);
-        // 更新（模拟表单保存 8 字段）
+        // 更新（模拟表单保存 10 字段，含入场电影开关）
         java.lang.reflect.Method upd = c.getMethod(
                 "updateFaction",
                 String.class,
@@ -259,9 +259,11 @@ class FactionManagerSaveTest {
                 String.class,
                 int.class,
                 String.class,
-                String.class);
-        java.util.List<String> errors =
-                (java.util.List<String>) upd.invoke(mgr, "qdf", "新名字", "#00FF00", "新描述", "hex", 2, "audio/new.wav", "");
+                String.class,
+                boolean.class,
+                boolean.class);
+        java.util.List<String> errors = (java.util.List<String>)
+                upd.invoke(mgr, "qdf", "新名字", "#00FF00", "新描述", "hex", 2, "audio/new.wav", "", true, false);
         assertTrue(errors.isEmpty(), () -> errors.toString());
         JsonObject after = (JsonObject) rootF.get(mgr);
         JsonObject f2 = after.getAsJsonArray("factions").get(0).getAsJsonObject();

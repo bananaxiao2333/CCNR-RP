@@ -242,7 +242,7 @@ public final class FactionGraphScreen extends Screen {
         ly += 12;
         legendLine(g, 10, ly, RpTheme.RED, "ccnr_rp.gui.admin.graph.hostile");
         ly += 12;
-        legendLine(g, 10, ly, RpTheme.GREEN, "ccnr_rp.gui.admin.graph.friendly");
+        legendLine(g, 10, ly, RpTheme.FRIENDLY, "ccnr_rp.gui.admin.graph.friendly");
         ly += 16;
         g.drawString(font, Component.translatable("ccnr_rp.gui.admin.graph.hint"), 10, ly, RpTheme.TEXT_DIM);
 
@@ -265,7 +265,7 @@ public final class FactionGraphScreen extends Screen {
             return RpTheme.RED;
         }
         if (t == RelationType.FRIENDLY) {
-            return RpTheme.GREEN;
+            return RpTheme.FRIENDLY;
         }
         return 0xFFFFFFFF; // 中立 = 白
     }

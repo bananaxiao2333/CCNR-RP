@@ -84,7 +84,9 @@ public final class FactionManager {
                     str(o, "icon", "hex"),
                     Math.max(1, Math.min(3, intOf(o, "tier", 2))),
                     str(o, "music", ""),
-                    str(o, "cmdcamScene", "")));
+                    str(o, "cmdcamScene", ""),
+                    boolOf(o, "cinematicBlackScreen", true),
+                    boolOf(o, "cinematicCompact", false)));
         }
         List<FactionGroup> groups = new ArrayList<>();
         JsonArray ga = root.has("groups") ? root.getAsJsonArray("groups") : new JsonArray();
@@ -168,6 +170,14 @@ public final class FactionManager {
                         && o.get(key).isJsonPrimitive()
                         && o.get(key).getAsJsonPrimitive().isNumber()
                 ? o.get(key).getAsInt()
+                : def;
+    }
+
+    private static boolean boolOf(JsonObject o, String key, boolean def) {
+        return o.has(key)
+                        && o.get(key).isJsonPrimitive()
+                        && o.get(key).getAsJsonPrimitive().isBoolean()
+                ? o.get(key).getAsBoolean()
                 : def;
     }
 
@@ -478,6 +488,64 @@ public final class FactionManager {
         if (graph.factions().containsKey(id) || graph.groups().containsKey(id)) {
             return List.of("阵营或组已存在: " + id);
         }
+        return commitGroups(id, members);
+    }
+
+    /** 更新阵营组成员并落盘（组不存在返回错误）。 */
+    public List<String> updateGroup(String id, List<String> members) {
+        if (!graph.groups().containsKey(id)) {
+            return List.of("未找到阵营组: " + id);
+        }
+        JsonObject candidate = root.deepCopy();
+        JsonArray groups = candidate.has("groups") ? candidate.getAsJsonArray("groups") : new JsonArray();
+        for (int i = 0; i < groups.size(); i++) {
+            JsonObject o = groups.get(i).getAsJsonObject();
+            if (str(o, "id", "").equals(id)) {
+                for (String m : members) {
+                    if (!graph.factions().containsKey(m)) {
+                        return List.of("成员不是已知阵营: " + m);
+                    }
+                }
+                JsonArray memberIds = new JsonArray();
+                members.forEach(memberIds::add);
+                o.add("memberIds", memberIds);
+                ParseResult result = parse(candidate);
+                if (!result.success()) {
+                    return result.errors();
+                }
+                ConfigStore.save("factions.json", candidate);
+                this.root = candidate;
+                this.graph = result.graph();
+                return List.of();
+            }
+        }
+        return List.of("未找到阵营组: " + id);
+    }
+
+    /** 删除阵营组并落盘（引用该组的其余组不展开为组内关系，仅删除该容器）。 */
+    public List<String> deleteGroup(String id) {
+        if (!graph.groups().containsKey(id)) {
+            return List.of("未找到阵营组: " + id);
+        }
+        JsonObject candidate = root.deepCopy();
+        JsonArray groups = candidate.has("groups") ? candidate.getAsJsonArray("groups") : new JsonArray();
+        for (int i = groups.size() - 1; i >= 0; i--) {
+            if (str(groups.get(i).getAsJsonObject(), "id", "").equals(id)) {
+                groups.remove(i);
+                break;
+            }
+        }
+        ParseResult result = parse(candidate);
+        if (!result.success()) {
+            return result.errors();
+        }
+        ConfigStore.save("factions.json", candidate);
+        this.root = candidate;
+        this.graph = result.graph();
+        return List.of();
+    }
+
+    private List<String> commitGroups(String id, List<String> members) {
         JsonObject candidate = root.deepCopy();
         JsonArray groups = candidate.has("groups") ? candidate.getAsJsonArray("groups") : new JsonArray();
         candidate.add("groups", groups);
@@ -637,7 +705,9 @@ public final class FactionManager {
             String icon,
             int tier,
             String music,
-            String cmdcamScene) {
+            String cmdcamScene,
+            boolean cinematicBlackScreen,
+            boolean cinematicCompact) {
         if (id == null || !ID_PATTERN.matcher(id).matches()) {
             return List.of("阵营 id 仅允许小写字母/数字/下划线，1-32 字符");
         }
@@ -656,6 +726,8 @@ public final class FactionManager {
         o.addProperty("tier", Math.max(1, Math.min(3, tier)));
         putMusic(o, music);
         putCamScene(o, cmdcamScene);
+        o.addProperty("cinematicBlackScreen", cinematicBlackScreen);
+        o.addProperty("cinematicCompact", cinematicCompact);
         fa.add(o);
         return commit(candidate);
     }
@@ -669,7 +741,9 @@ public final class FactionManager {
             String icon,
             int tier,
             String music,
-            String cmdcamScene) {
+            String cmdcamScene,
+            boolean cinematicBlackScreen,
+            boolean cinematicCompact) {
         if (!graph.factions().containsKey(id)) {
             return List.of("未找到阵营: " + id);
         }
@@ -685,6 +759,8 @@ public final class FactionManager {
                 o.addProperty("tier", Math.max(1, Math.min(3, tier)));
                 putMusic(o, music);
                 putCamScene(o, cmdcamScene);
+                o.addProperty("cinematicBlackScreen", cinematicBlackScreen);
+                o.addProperty("cinematicCompact", cinematicCompact);
                 return commit(candidate);
             }
         }

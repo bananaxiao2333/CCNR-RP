@@ -179,13 +179,13 @@ public class CharacterManagementScreen extends Screen {
                 // 等级未达标：按钮置红并提示需要等级
                 deploy.setMessage(Component.translatable("ccnr_rp.gui.character.need_level", unlockLevel(p)));
             } else if (profFull || facFull) {
-                // 空位不足：禁用并提示限制（优先职业上限，其次阵营上限）
+                // 空位不足：禁用并提示限制（优先职业上限，其次阵营上限）——[ FULL occ/lim ]
                 if (profFull) {
                     deploy.setMessage(
-                            Component.translatable("ccnr_rp.spawn.limit.profession_full", str(p, "name"), profLimit));
+                            Component.translatable("ccnr_rp.gui.character.deploy.full", profOccupied, profLimit));
                 } else {
-                    deploy.setMessage(Component.translatable(
-                            "ccnr_rp.spawn.limit.faction_full", factionName(p, factionMeta), facLimit));
+                    deploy.setMessage(
+                            Component.translatable("ccnr_rp.gui.character.deploy.full", facOccupied, facLimit));
                 }
                 deploy.active = false;
             } else if (!observing && !alive) {
@@ -414,7 +414,10 @@ public class CharacterManagementScreen extends Screen {
     @Override
     public void render(GuiGraphics g, int mx, int my, float partial) {
         renderBackground(g);
-        RpTheme.terminalPanel(g, px1, py1, px2, py2, RpTheme.RADIUS_LARGE);
+        // 完整终端框（近黑底 + 灰描边 + 四角角标 + 顶部高光 rail）
+        RpTheme.terminalFrame(g, px1, py1, px2, py2, RpTheme.RADIUS_LARGE);
+        // 面板网格叠层（背景纹理，内容层之上不再叠加，保证文字可读性与参考一致的「电子屏」质感）
+        RpTheme.gridOverlay(g, px1 + 4, py1 + 4, px2 - 4, py2 - 4);
         renderHeader(g, mx, my);
         renderColHeaders(g);
         renderNav(g, mx, my);
@@ -422,6 +425,8 @@ public class CharacterManagementScreen extends Screen {
         renderDetail(g, mx, my);
         renderNotice(g);
         super.render(g, mx, my, partial);
+        // CRT 扫描线（在内容层之上，低透明度屏幕质感；对齐前端 body::before）
+        RpTheme.scanlines(g, px1, py1, px2, py2);
         if (!confirmDeployId.isEmpty()) {
             renderKillConfirm(g, mx, my);
         }
@@ -429,11 +434,12 @@ public class CharacterManagementScreen extends Screen {
 
     private void renderHeader(GuiGraphics g, int mx, int my) {
         int y = hdrY1 + 5;
-        RpIcons.badge(g, px1 + 17, hdrY1 + 10, 8, "hex", 1, false);
-        String head = Component.translatable("ccnr_rp.gui.character.db_header")
+        // Reference header: [CCNR]  TERMINAL  LV.x // STATUS: y   |   [ ADMIN ]  X
+        g.drawString(font, "[CCNR]", px1 + 14, y, RpTheme.TEXT_SECONDARY, true);
+        String head = Component.translatable("ccnr_rp.gui.character.term_title")
                 .getString()
                 .toUpperCase(Locale.ROOT);
-        g.drawString(font, head, px1 + 30, y, RpTheme.CYAN, true);
+        g.drawString(font, head, px1 + 14 + font.width("[CCNR]") + 16, y, RpTheme.CYAN, true);
         String statusLabel =
                 switch (ClientCharacterState.userStatus()) {
                     case ALIVE -> Component.translatable("ccnr_rp.gui.character.status.alive")
@@ -443,8 +449,14 @@ public class CharacterManagementScreen extends Screen {
                     default -> Component.translatable("ccnr_rp.gui.character.status.observing")
                             .getString();
                 };
-        String lvl = "Lv " + userLevel() + "  " + statusLabel;
-        g.drawString(font, lvl, px1 + 30 + font.width(head) + 40, y, RpTheme.TEXT_SECONDARY, true);
+        String lvl = "LV." + userLevel() + " // STATUS: " + statusLabel;
+        g.drawString(
+                font,
+                lvl,
+                px1 + 14 + font.width("[CCNR]") + 16 + font.width(head) + 24,
+                y,
+                RpTheme.TEXT_SECONDARY,
+                true);
         g.fill(px1 + 8, hdrY2 - 1, px2 - 8, hdrY2, RpTheme.CYAN_DIM);
         // 管理按钮（管理员可开管理面板）
         boolean mgrHover = my >= mgrY1 && my <= mgrY2 && mx >= mgrX1 && mx <= mgrX2;
@@ -453,7 +465,7 @@ public class CharacterManagementScreen extends Screen {
         }
         g.drawString(
                 font,
-                Component.translatable("ccnr_rp.gui.character.manage").getString(),
+                Component.translatable("ccnr_rp.gui.character.admin_btn").getString(),
                 mgrX1 + 4,
                 hdrY1 + 4,
                 ClientCharacterState.isAdmin() ? RpTheme.CYAN : RpTheme.TEXT_DIM,
@@ -477,7 +489,8 @@ public class CharacterManagementScreen extends Screen {
         g.drawString(
                 font,
                 RpTheme.tag(Component.translatable("ccnr_rp.gui.character.position_list")
-                                .getString()) + " (" + filtered().size() + ")",
+                                .getString()) + " "
+                        + RpTheme.tag(String.valueOf(filtered().size())),
                 mlX1,
                 y,
                 RpTheme.TEXT_DIM);
@@ -528,8 +541,8 @@ public class CharacterManagementScreen extends Screen {
                 RpIcons.badge(g, b[0] + 12, b[1] + 11, 8, "target", 2, sel);
                 g.drawString(
                         font,
-                        Component.translatable("ccnr_rp.gui.character.filter.all")
-                                .getString(),
+                        RpTheme.tag(Component.translatable("ccnr_rp.gui.character.filter.all")
+                                .getString()),
                         b[0] + 25,
                         b[1] + 7,
                         sel ? RpTheme.ACCENT_TEXT : RpTheme.TEXT_SECONDARY,
@@ -543,7 +556,7 @@ public class CharacterManagementScreen extends Screen {
                 }
                 g.drawString(
                         font,
-                        name,
+                        RpTheme.tag(name),
                         b[0] + 25,
                         b[1] + 7,
                         sel ? RpTheme.ACCENT_TEXT : (noAvail ? RpTheme.RED_LINE : RpTheme.TEXT_SECONDARY),
@@ -640,23 +653,35 @@ public class CharacterManagementScreen extends Screen {
         int x = rlX1;
         int w = rlX2 - rlX1;
         int y = bodyY1;
-        RpTheme.card(g, x, y, x + w, y + 44, 8f, RpTheme.PANEL_BG);
+        // Reference detail header: name / ID // FACTION / [ LV.REQ | CURRENT ] / PERSONNEL // FACTION
+        int cardH = 80;
+        RpTheme.card(g, x, y, x + w, y + cardH, 8f, RpTheme.PANEL_BG);
         if (p == null) {
-            g.drawString(font, "— 选择一个职位 —", x + 10, y + 18, RpTheme.TEXT_DIM, true);
-            g.drawString(font, "点选职位后可按部署", x + 10, y + 30, RpTheme.TEXT_DIM);
+            g.drawString(
+                    font,
+                    Component.translatable("ccnr_rp.gui.character.detail.empty").getString(),
+                    x + 10,
+                    y + 18,
+                    RpTheme.TEXT_DIM,
+                    true);
+            g.drawString(
+                    font,
+                    Component.translatable("ccnr_rp.gui.character.detail.empty_hint")
+                            .getString(),
+                    x + 10,
+                    y + 30,
+                    RpTheme.TEXT_DIM);
             return;
         }
         g.drawString(font, str(p, "name"), x + 8, y + 5, RpTheme.CYAN, true);
         String facName = factionName(p, factionMeta);
-        g.drawString(
-                font,
-                "ID " + str(p, "id") + "  /  " + facName,
-                x + 8 + font.width(str(p, "name")) + 10,
-                y + 7,
-                RpTheme.TEXT_DIM);
+        String idLine = Component.translatable("ccnr_rp.gui.character.term_id", str(p, "id"), facName)
+                .getString();
+        g.drawString(font, idLine, x + 8, y + 19, RpTheme.TEXT_DIM);
         boolean met = userLevel() >= unlockLevel(p);
-        String req = "需求等级：Lv " + unlockLevel(p) + "（当前 Lv " + userLevel() + "）";
-        g.drawString(font, req, x + 8, y + 24, met ? RpTheme.STATUS_ALIVE : RpTheme.RED_LINE);
+        String req = Component.translatable("ccnr_rp.gui.character.term_lvl", unlockLevel(p), userLevel())
+                .getString();
+        g.drawString(font, req, x + 8, y + 31, met ? RpTheme.STATUS_ALIVE : RpTheme.RED_LINE);
         // 部署限制与当前在职（全局性限制预览；服务端 deploy 统一入口强校验）
         // 与部署按钮同条件：在职数按「不含本人」计算（在场换岗不重复占位），职业或阵营任一满即标红
         String profId = str(p, "id");
@@ -668,28 +693,30 @@ public class CharacterManagementScreen extends Screen {
         int facLimit = ClientCharacterState.factionLimit(facId);
         int profOcc = ClientCharacterState.professionOccupied(profId) - (selfInProf ? 1 : 0);
         int facOcc = ClientCharacterState.factionOccupied(facId) - (selfInFac ? 1 : 0);
-        StringBuilder lim = new StringBuilder("在职 ");
-        if (profLimit >= 0) {
-            lim.append(profOcc).append("/").append(profLimit).append(" 职业");
-        } else {
-            lim.append(profOcc).append("（职业不限）");
-        }
+        String per = Component.translatable(
+                        "ccnr_rp.gui.character.term_personnel", profOcc, profLimit >= 0 ? profLimit : "∞")
+                .getString();
         if (facLimit >= 0) {
-            lim.append("  ·  阵营 ").append(facOcc).append("/").append(facLimit);
+            per += Component.translatable("ccnr_rp.gui.character.term_personnel_fac", facOcc, facLimit)
+                    .getString();
+        } else {
+            per += Component.translatable("ccnr_rp.gui.character.term_personnel_unlim", facOcc)
+                    .getString();
         }
         boolean profFull = profLimit >= 0 && profOcc >= profLimit;
         boolean facFull = facLimit >= 0 && facOcc >= facLimit;
-        g.drawString(
-                font, lim.toString(), x + 8, y + 36, (profFull || facFull) ? RpTheme.RED_LINE : RpTheme.STATUS_ALIVE);
+        g.drawString(font, per, x + 8, y + 43, (profFull || facFull) ? RpTheme.RED_LINE : RpTheme.STATUS_ALIVE);
         g.drawString(
                 font,
-                Component.translatable("ccnr_rp.gui.character.preview").getString(),
+                "// "
+                        + Component.translatable("ccnr_rp.gui.character.section.preview")
+                                .getString(),
                 x + 8,
-                y + 48,
+                y + 55,
                 RpTheme.TEXT_DIM,
                 true);
         JsonObject loadout = loadoutOf(p);
-        int contentTop = bodyY1 + 50;
+        int contentTop = y + cardH + 2;
         // 项目简历（职业 profile，可选）：展示在战术装备预览之下、部署按钮之上；未配置的职位不占位
         String profile = str(p, "profile");
         List<String> resumeLines = profile.isBlank() ? List.of() : wrapText(profile, w - 16);
@@ -726,8 +753,17 @@ public class CharacterManagementScreen extends Screen {
         renderHoloBase(g, x + modelW / 2, contentTop, contentBottom, cy, scale);
         CharacterPreview.render(g, x + modelW / 2, cy, scale, ch, loadout);
         g.disableScissor();
-        // 战术装备实物预览（职位 loadout：头/胸/腿/靴/武器，悬停显示词条）
-        renderEquipList(g, x + modelW + 8, x + w - 8, contentTop, contentBottom, loadout, mx, my);
+        // 战术装备实物预览（职位 loadout：头/胸/腿/靴/武器，悬停显示词条）——EQUIPMENT 区块
+        int equipTop = contentTop + 10;
+        g.drawString(
+                font,
+                Component.translatable("ccnr_rp.gui.character.section.equipment")
+                        .getString(),
+                x + modelW + 8,
+                contentTop,
+                RpTheme.TEXT_DIM,
+                true);
+        renderEquipList(g, x + modelW + 8, x + w - 8, equipTop, contentBottom, loadout, mx, my);
         // 项目简历（装备预览之下、部署按钮之上）
         if (resumeLineCount > 0) {
             renderProfileResume(g, x, w, contentBottom, deployY, resumeLines, resumeLineCount);
@@ -744,13 +780,15 @@ public class CharacterManagementScreen extends Screen {
         g.fill(x + 2, top + 1, x + w - 2, top + 2, RpTheme.PANEL_BORDER);
         g.drawString(
                 font,
-                Component.translatable("ccnr_rp.gui.character.profile").getString(),
+                "// "
+                        + Component.translatable("ccnr_rp.gui.character.section.profile")
+                                .getString(),
                 x + 2,
-                top + 6,
+                top + 5,
                 RpTheme.TEXT_DIM,
                 true);
         g.enableScissor(x, top, x + w, bottom);
-        int ly = top + 17;
+        int ly = top + 16;
         for (int i = 0; i < lineCount; i++) {
             g.drawString(font, lines.get(i), x + 2, ly, RpTheme.TEXT_SECONDARY);
             ly += 10;
@@ -936,7 +974,9 @@ public class CharacterManagementScreen extends Screen {
 
     private void renderNotice(GuiGraphics g) {
         if (!notice.isBlank() && System.currentTimeMillis() < noticeUntil) {
-            g.drawCenteredString(font, "[ 系统 ] " + notice, (px1 + px2) / 2, py2 - 20, RpTheme.RED_LINE);
+            String prefix =
+                    "[ " + Component.translatable("ccnr_rp.gui.admin.system").getString() + " ] ";
+            g.drawCenteredString(font, prefix + notice, (px1 + px2) / 2, py2 - 20, RpTheme.RED_LINE);
         }
     }
 

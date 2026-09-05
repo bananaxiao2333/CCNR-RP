@@ -7,9 +7,15 @@ modId="ccnr_rp"
 version="${file.jarVersion}"
 displayName="CCNR-RP"
 authors="CCNR"
-description='''CCNR-RP（RolePlay）模组框架（Forge 1.20.1）
+logoFile="icon.png"
+description='''CCNR-RP 角色扮演模组（Forge 1.20.1）
 
-当前仅为项目骨架，功能开发中。'''
+围绕量子科学设施「CCNR 机构」世界观的 RolePlay 模组，提供八大系统：
+阵营关系 / 职业与装备 / 角色管理 / 状态与遗体 / 经验结算 /
+阶段事件 / 动画演出 / 人物刷新。
+
+界面采用「CCNR:NET 机密终端」风格（黑白灰军用终端，对齐在线管理面板）的三栏网格。
+按 K 打开角色管理终端，/rp 查看指令列表。'''
 
 [[dependencies.ccnr_rp]]
     modId="forge"

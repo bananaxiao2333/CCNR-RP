@@ -16,6 +16,7 @@ import java.util.List;
 public final class ClientCharacterState {
     private static final List<JsonObject> characters = new ArrayList<>();
     private static final List<JsonObject> factions = new ArrayList<>();
+    private static final List<JsonObject> groups = new ArrayList<>();
     private static final List<JsonObject> professions = new ArrayList<>();
     private static JsonObject settings = new JsonObject();
     private static JsonObject serverConfig = new JsonObject();
@@ -126,6 +127,14 @@ public final class ClientCharacterState {
         if (root.has("professions")) {
             for (JsonElement e : root.getAsJsonArray("professions")) {
                 professions.add(e.getAsJsonObject());
+            }
+        }
+        groups.clear();
+        if (root.has("groups") && root.get("groups").isJsonArray()) {
+            for (JsonElement e : root.getAsJsonArray("groups")) {
+                if (e.isJsonObject()) {
+                    groups.add(e.getAsJsonObject());
+                }
             }
         }
         deployLimits.clear();
@@ -391,6 +400,11 @@ public final class ClientCharacterState {
 
     public static synchronized List<JsonObject> factions() {
         return List.copyOf(factions);
+    }
+
+    /** 阵营组（服务端顶层数组；管理面板组编辑器列举用）。 */
+    public static synchronized List<JsonObject> groups() {
+        return List.copyOf(groups);
     }
 
     public static synchronized List<JsonObject> professions() {

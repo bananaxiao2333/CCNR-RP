@@ -52,6 +52,26 @@ public final class CinematicController {
         return data != null;
     }
 
+    /** 是否播放入场全屏黑（阵营配置 cinematicBlackScreen；缺省 true）。 */
+    private static boolean blackScreen() {
+        return bool("cinematicBlackScreen", true);
+    }
+
+    /** 是否用入场电影「简洁模式」（阵营配置 cinematicCompact；缺省 false）。 */
+    private static boolean compact() {
+        return bool("cinematicCompact", false);
+    }
+
+    private static boolean bool(String key, boolean def) {
+        try {
+            return data != null && data.has(key) && data.get(key).isJsonPrimitive()
+                    ? data.get(key).getAsBoolean()
+                    : def;
+        } catch (Exception e) {
+            return def;
+        }
+    }
+
     public static void start(JsonObject payload) {
         data = payload;
         startMs = System.currentTimeMillis();
@@ -255,8 +275,9 @@ public final class CinematicController {
             textA = Math.max(0f, 1.0f - (now - fadeStart) / (float) T_TEXT_FADE);
         }
 
-        // 全屏黑（覆盖 HUD）
-        if (blackA > 0f) {
+        // 全屏黑（覆盖 HUD；阵营配置 cinematicBlackScreen=false 时跳过，仅保留文字/图标）
+        boolean blackOn = blackScreen();
+        if (blackOn && blackA > 0f) {
             int a = Math.round(blackA * 255f) << 24;
             g.fill(0, 0, w, h, 0x00000000 | a);
         }
@@ -275,34 +296,54 @@ public final class CinematicController {
         }
         int ta = (int) (textA * 255f);
         int cy = RpTheme.alphaBlend(RpTheme.CYAN, ta);
-        int cp = RpTheme.alphaBlend(RpTheme.TEXT_PRIMARY, ta);
         int cs = RpTheme.alphaBlend(RpTheme.TEXT_SECONDARY, ta);
 
+        boolean compact = compact();
+
         // 阵营图标（突然出现）
+        int iconRight = 0; // 简洁模式：图标占左缘，文本右移避免重叠；完整模式不偏移
         if (now >= T_BLACK_HOLD) {
-            int r = Math.max(40, Math.min(w, h) / 10);
-            int iconY = (int) (h * 0.30);
-            RpIcons.bigBadge(g, w / 2, iconY, r, str(data, "icon"), tier(), ta);
-            if (textA > 0f) {
-                String fn = str(data, "factionName");
-                g.drawCenteredString(Minecraft.getInstance().font, "▌ " + fn + " ▌", w / 2, iconY + r + 14, cs);
+            if (compact) {
+                // 简洁模式：图标缩小、移到左下方，与左对齐文字锚点对齐（不再居于顶端）
+                int r2 = Math.max(20, Math.min(w, h) / 26);
+                int iconX = (int) (w * 0.05) + r2 + 2;
+                int iconY = (int) (h * 0.64); // 与主标题同一行
+                RpIcons.bigBadge(g, iconX, iconY, r2, str(data, "icon"), tier(), ta);
+                iconRight = iconX + r2 + 12;
+                if (textA > 0f) {
+                    String fn = str(data, "factionName");
+                    g.drawString(Minecraft.getInstance().font, fn, iconRight, iconY - 6, cs);
+                }
+            } else {
+                // 完整模式：图标居中，位于屏幕中上部
+                int r = Math.max(40, Math.min(w, h) / 10);
+                int iconY = (int) (h * 0.30);
+                RpIcons.bigBadge(g, w / 2, iconY, r, str(data, "icon"), tier(), ta);
+                if (textA > 0f) {
+                    String fn = str(data, "factionName");
+                    g.drawCenteredString(Minecraft.getInstance().font, fn, w / 2, iconY + r + 14, cs);
+                }
             }
         }
 
-        // 副标题：逐行打字（行宽不足时自动换行；阵营关系按类型着色）
+        // 文字布局：完整模式 → 屏幕中部居中（标题 3.4x / 副标题 1.4x）；
+        // 简洁模式 → 信息缩小并移到左下方、靠左对齐（标题 2.0x / 副标题 0.9x），图标居左、文字右移避免重叠。
         long titleStart = T_BLACK_HOLD + T_ICON_HOLD;
-        float lineScale = 1.4f;
-        int maxW = Math.max(80, (int) ((w - 40) / lineScale));
+        boolean centered = !compact;
+        int anchorX = compact ? iconRight : w / 2;
+        float lineScale = compact ? 0.9f : 1.4f;
+        int rowH = compact ? 16 : ROW_H;
+        int maxW = Math.max(80, (int) ((w - anchorX - 40) / lineScale));
         int[] rowCounts = new int[texts.size()];
         for (int i = 0; i < texts.size(); i++) {
             rowCounts[i] = wrapRanges(texts.get(i), maxW).size();
         }
         long lineStart = titleStart + (long) title.length() * T_TYPE_MS + T_LINE_GAP;
-        int ly = (int) (h * 0.57);
+        int ly = compact ? (int) (h * 0.74) : (int) (h * 0.57);
         int[] segColors = {
             cs,
             RpTheme.alphaBlend(RpTheme.RED, ta),
-            RpTheme.alphaBlend(RpTheme.GREEN, ta),
+            RpTheme.alphaBlend(RpTheme.FRIENDLY, ta),
             RpTheme.alphaBlend(0xFFFFFFFF, ta),
         };
         for (int i = 0; i < segLines.size(); i++) {
@@ -312,23 +353,29 @@ public final class CinematicController {
                 String typed = text.substring(0, c);
                 int ry = ly;
                 for (int[] range : wrapRanges(typed, maxW)) {
-                    renderRow(g, w, ry, typed, range[0], range[1], segLines.get(i), segColors, lineScale);
-                    ry += ROW_H;
+                    renderRow(
+                            g, anchorX, ry, typed, range[0], range[1], segLines.get(i), segColors, lineScale, centered);
+                    ry += rowH;
                 }
             }
-            ly += rowCounts[i] * ROW_H;
+            ly += rowCounts[i] * rowH;
             lineStart += (long) text.length() * T_TYPE_MS + T_LINE_GAP;
         }
 
-        // 主标题：职业（打字）——屏幕正中央，绘于最上层（徽标位置不变）
+        // 主标题：职业（打字）。完整模式屏幕正中央；简洁模式左下方（对齐信息第一行上方），靠左对齐。绘于最上层。
         int tc = typedCount(title, titleStart, now);
         if (tc > 0) {
             String typed = title.substring(0, tc);
-            float scale = 3.4f;
+            float scale = compact ? 2.0f : 3.4f;
+            float ty = compact ? (float) (h * 0.64) : h * 0.50f;
             g.pose().pushPose();
-            g.pose().translate(w / 2f, h * 0.50f, 0f);
+            g.pose().translate(anchorX, ty, 0f);
             g.pose().scale(scale, scale, 1f);
-            g.drawCenteredString(Minecraft.getInstance().font, typed, 0, 0, cy);
+            if (centered) {
+                g.drawCenteredString(Minecraft.getInstance().font, typed, 0, 0, cy);
+            } else {
+                g.drawString(Minecraft.getInstance().font, typed, 0, 0, cy);
+            }
             g.pose().popPose();
         }
     }
@@ -337,18 +384,27 @@ public final class CinematicController {
     private static final int ROW_H = 21;
 
     /**
-     * 绘制副标题一行：按片段着色、整行居中。range 为 [start,end) 字符区间（相对整行文本，
-     * 只取已打字前缀内的部分）。
+     * 绘制副标题一行：按片段着色。range 为 [start,end) 字符区间（相对整行文本，只取已打字前缀内的部分）。
+     * centered=true 以 anchorX 为中线整行居中；false 以 anchorX 为左端靠左对齐（简洁模式）。
      */
     private static void renderRow(
-            GuiGraphics g, int w, int y, String typed, int s, int e, List<Seg> segs, int[] segColors, float scale) {
+            GuiGraphics g,
+            int anchorX,
+            int y,
+            String typed,
+            int s,
+            int e,
+            List<Seg> segs,
+            int[] segColors,
+            float scale,
+            boolean centered) {
         var font = Minecraft.getInstance().font;
         String row = typed.substring(s, e);
         int rowW = font.width(row);
         g.pose().pushPose();
-        g.pose().translate(w / 2f, y + 6f, 0f);
+        g.pose().translate(anchorX, y + 6f, 0f);
         g.pose().scale(scale, scale, 1f);
-        int x = -rowW / 2;
+        int x = centered ? -rowW / 2 : 0;
         int off = 0;
         for (Seg seg : segs) {
             int segStart = off;

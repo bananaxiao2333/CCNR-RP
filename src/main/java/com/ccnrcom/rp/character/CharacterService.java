@@ -528,6 +528,8 @@ public final class CharacterService {
                 String id = str(p, "id", "");
                 String name = str(p, "name", id);
                 int tier = p.has("tier") ? p.get("tier").getAsInt() : 2;
+                boolean black = bool(p, "cinematicBlackScreen", true);
+                boolean compact = bool(p, "cinematicCompact", false);
                 switch (action) {
                     case "create" -> errors = CCNRRPMod.factions.createFaction(
                             id,
@@ -537,7 +539,9 @@ public final class CharacterService {
                             str(p, "icon", "hex"),
                             tier,
                             str(p, "music", ""),
-                            str(p, "cmdcamScene", ""));
+                            str(p, "cmdcamScene", ""),
+                            black,
+                            compact);
                     case "update" -> errors = CCNRRPMod.factions.updateFaction(
                             id,
                             name,
@@ -546,8 +550,25 @@ public final class CharacterService {
                             str(p, "icon", "hex"),
                             tier,
                             str(p, "music", ""),
-                            str(p, "cmdcamScene", ""));
+                            str(p, "cmdcamScene", ""),
+                            black,
+                            compact);
                     case "delete" -> errors = CCNRRPMod.factions.deleteFaction(id);
+                    default -> errors = List.of("未知操作: " + action);
+                }
+            }
+            case "group" -> {
+                String id = str(p, "id", "");
+                java.util.List<String> members = new java.util.ArrayList<>();
+                if (p.has("memberIds") && p.get("memberIds").isJsonArray()) {
+                    for (com.google.gson.JsonElement e : p.getAsJsonArray("memberIds")) {
+                        members.add(e.getAsString());
+                    }
+                }
+                switch (action) {
+                    case "create" -> errors = CCNRRPMod.factions.createGroup(id, members);
+                    case "update" -> errors = CCNRRPMod.factions.updateGroup(id, members);
+                    case "delete" -> errors = CCNRRPMod.factions.deleteGroup(id);
                     default -> errors = List.of("未知操作: " + action);
                 }
             }
@@ -893,6 +914,14 @@ public final class CharacterService {
         return o.has(key) && !o.get(key).isJsonNull() ? o.get(key).getAsString() : def;
     }
 
+    private static boolean bool(JsonObject o, String key, boolean def) {
+        return o.has(key)
+                        && o.get(key).isJsonPrimitive()
+                        && o.get(key).getAsJsonPrimitive().isBoolean()
+                ? o.get(key).getAsBoolean()
+                : def;
+    }
+
     /** 管理端操作「刷给自己」：把所选职业的装备与人物身份一起赋予执行者（含阵营/状态/疏散重置）。 */
     public static void onAdminSelfProfession(ServerPlayer player, String professionId) {
         if (player == null || CCNRRPMod.factions == null) {
@@ -1204,6 +1233,8 @@ public final class CharacterService {
                 o.addProperty("description", f.description());
                 o.addProperty("music", f.music());
                 o.addProperty("cmdcamScene", f.cmdcamScene() == null ? "" : f.cmdcamScene());
+                o.addProperty("cinematicBlackScreen", f.cinematicBlackScreen());
+                o.addProperty("cinematicCompact", f.cinematicCompact());
                 com.google.gson.JsonObject facRadio = CCNRRPMod.factions.factionRadio(f.id());
                 if (com.ccnrcom.rp.faction.FactionProfessions.hasRadioLines(facRadio)) {
                     o.add("radio", facRadio.deepCopy());
@@ -1216,6 +1247,20 @@ public final class CharacterService {
             });
         }
         root.add("factions", fa);
+        // 阵营组（管理面板组编辑器枚举用）：{id, members[]}，服务端顶层数组，客户端只读列举
+        JsonArray grps = new JsonArray();
+        if (CCNRRPMod.factions != null) {
+            for (com.ccnrcom.rp.faction.FactionModels.FactionGroup g :
+                    CCNRRPMod.factions.graph().groups().values()) {
+                JsonObject o = new JsonObject();
+                o.addProperty("id", g.id());
+                JsonArray members = new JsonArray();
+                g.memberIds().forEach(members::add);
+                o.add("members", members);
+                grps.add(o);
+            }
+        }
+        root.add("groups", grps);
         // 关系测定图数据：已解析的阵营对边（a<b 去重，含生效类型；白=中立/红=敌对/绿=友好）
         JsonArray rela = new JsonArray();
         if (CCNRRPMod.factions != null) {

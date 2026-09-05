@@ -1,5 +1,60 @@
 # Changelog
 
+## 2.21.1（入场电影阵营关系按组合并）
+
+- **入场电影「阵营关系」行按「阵营组 + 关系」合并可合并项**：原来逐阵营罗列所有非中立关系（阵营多时一行过长）；
+  现在同组所有非中立成员对玩家阵营关系一致时整组合并为一条「组名 + 关系」，组内关系混杂（敌对/友好并存）或无组的
+  阵营仍逐一按阵营名显示。纯逻辑抽到 `CinematicRelations`（无 MC import），`SpawnFramework` 组装部署载荷时调用
+  （服务端权威推导，客户端渲染不变）。
+- 构建：spotlessApply / build / test -PrunTests（新增 `CinematicRelationsTest`）全绿。
+
+## 2.21.0（去 Emoji + 国际化 + 阵营组编辑 + 入场电影可配置）
+
+- **阵营图标改为弹窗选择**：原「循环切换」按钮在 rebuild 时被服务端快照覆盖（`syncFactionIconTier` 每帧同步 `iconIdx`）导致看似切不动；改为点击弹出图标选择界面（网格徽章 + 点选即设），并仅在 `selectFaction` 时同步图标/等级，保存不再被覆盖。图标多时网格带滚动条（可拖拽游标 / 滚轮滚动）。
+- **移除阵营「等级」按钮**：删除阵营表单的等级循环按钮（`tier` 字段仍从选中阵营保留并按 `tierIdx` 保存）。
+- **入场电影「简洁模式」图标左移缩小**：简洁模式下图标从顶端移到左下方、缩小，并与左对齐文字（标题/副标题）锚点对齐，文字右移避免重叠。
+- **修复：阵营/事件表单「开关类按钮点不动」**：按钮的 `onPress` 翻转本地状态后调用 `rebuild()`，但 `rebuild()` 又会从服务端快照重新同步该状态（`syncFactionIconTier` 覆盖 `facCinBlack/facCinCompact`；`buildEventForm` 覆盖 `evState`），导致开关看似无响应。修复：入场电影开关仅在 `selectFaction` 时同步一次；事件 `enabled` 仅在 `selectEvent` 时同步一次；事件保存改用 `evState`（不再读服务端旧值）。
+- **删 Emoji + 国际化（i18n）**：删除色彩 Emoji（`🔒` 等）与豆腐块类字形，保留终端单色字符（`✕`/`●`/`✓`/`✗`/`↑↓`）；所有客户端硬编码中文 UI 文案改为语言包键（`Component.translatable`），zh_cn / en_us 同步（LangFileTest 通过）。系统提示前缀 `[ 系统 ]` 改为可翻译键（zh=系统 / en=SYSTEM）。
+- **阵营组编辑入口**：新增「阵营组」页签（TAB_GROUPS），列表 + 编辑器（id / 成员阵营逗号分隔 + 阵营下拉注入），新增/保存/删除走 `ManagerCrudC2S(kind="group")` → 服务端权威校验落盘。服务端 `buildSharedListRoot` 下发 `groups` 数组供客户端枚举。
+- **入场全屏黑可开关**：阵营配置 `cinematicBlackScreen`（缺省 true）；关闭后入场电影只保留文字/图标，无全屏黑覆盖。
+- **入场电影简洁模式（可配置）**：阵营配置 `cinematicCompact`（缺省 false）；打开后信息缩小移到左下方、靠左对齐（标题 2.0x / 副标题 0.9x），图标仍居于顶端。
+- **管理面板阵营表单**：新增「入场全屏黑 / 简洁电影」per-faction 开关（保存进阵营定义）；`saveFaction`/`syncFactionIconTier` 同步。
+- **阵营组页签交互对齐**：修复点击阵营组页签崩溃（`mouseClicked` 通用列表滚动条分支对自包含页签未排除 `TAB_GROUPS`，`rowHeight()` 返回 0 触发除零）；对齐 XP / 关系页签行为。
+- **关系管理 — 阵营组智能缩短**：规则列表展示时若一组的成员恰好匹配已定义阵营组，自动折叠为 `group:{id}` 引用，避免罗列全部成员。
+- **友好关系色改为蓝**：新增 `RpTheme.FRIENDLY`（蓝 #4FA6FF），用于关系类型标签 / 类型三选 / 关系测定图边与图例 / 入场电影盟友关系段，与中立白 / 敌对红明显区分（原用灰绿 `GREEN`，与中立几乎不可分）。
+- 构建：spotlessApply / build / test -PrunTests（含 LangFileTest、ProjectMetadataTest）全绿。
+
+## 2.20.3（恢复模组图标 + 修正 JAR 元数据描述）
+
+- **恢复 `src/main/resources/icon.png`**：项目专属图标（CCNR-Com 笑脸 + 右下角蓝色 RP 标，128×128 RGBA），
+  此前在 `ec391ae`「移除内嵌多媒体资源」中被一并移除；现从 git 历史 `46f9c01` 还原，供 JAR 卡牌 / 模组列表展示。
+- **`mods.toml` 修正**：新增 `logoFile="icon.png"`；`description` 由过期的「当前仅为项目骨架，功能开发中」改为真实项目简介
+  （量子科学设施 CCNR 机构世界观、八大系统、CCNR:NET 机密终端风格三栏界面），与 README / docs 一致（docs/01 §9.1 文档-代码-实际一致）。
+- **`ProjectMetadataTest` 加固**：新增断言 `logoFile="icon.png"`、描述非过期文案；新增 `modIconBundled`（校验 `/icon.png` 存在且为有效 PNG 魔数）。
+- 构建：spotlessApply / build / test -PrunTests（含 LangFileTest、ProjectMetadataTest）全绿。
+
+## 2.20.2（K 面板 / 管理面板结构对齐参考界面：终端英文标签 + 分区布局）
+
+- **K 面板（CharacterManagementScreen）结构与标签对齐 ccnr-rp-gui Terminal**（非仅配色，属格式/细节/布局层）：
+  - 顶部栏：`[CCNR] TERMINAL` + `LV.x // STATUS: y` + `[ ADMIN ]` / `X`（原为图标 + 身份数据库 + Lv+状态）。
+  - 列头：`[ NAV ]` / `[ POSITIONS ] [n]` / `[ DETAIL ]`（原为 阵营分组/职业列表(n)/详细资料）。
+  - 导航项 `[ ALL ]`、`[ 阵营名 ]` 统一方括号格式。
+  - 详情面板改为参考分区结构：`ID: x // FACTION: y`、`[ LV.REQ: x | CURRENT: y ]`、`PERSONNEL: a/b // FACTION: c/d`、`// PREVIEW`、`EQUIPMENT`、`// PROFILE`。
+  - 部署按钮：`[ DEPLOY ]` / `[ REDEPLOY ]` / `[ REQ LV.x ]` / `[ FULL occ/lim ]`（原为「部署/重新部署/需要等级/该职业已满员…」）。
+- **管理面板（RpAdminScreen）**：页签标签统一方括号 `[ 设置 ]`；标题加 `[CCNR] ` 前缀；页签盒加宽防括号溢出。
+- **标签语言选择**：结构标签用参考的英文终端式（ID/FACTION/PREVIEW/EQUIPMENT/DEPLOY…），内容（职业名/阵营名/画像文本）仍用当前本地化文本；zh_cn 与 en_us 语言包键集一致（LangFileTest 通过）。
+- **纯视觉层**：不改布局几何/行为/配置/网络/存档。构建：spotlessApply / build / test -PrunTests / LangFileTest 全绿。
+
+## 2.20.1（终端容框完整视觉层：补齐参考设计语言）
+
+- **补齐终端「完整视觉层」**（对齐 ccnr-rp-gui `App.css` 的 `.terminal-panel` / `body::before` / `::after` 装饰；v4 只搬了调色板，此为格式/细节层）：
+  - 新增 `RpTheme.terminalFrame()`：素版面板（近黑底+灰描边）之上叠加**四角 L 型角标** + **顶部高光 rail**，用于顶层面板；内嵌弹窗/小卡片仍走 `terminalPanel`（无角标/网格）。
+  - 新增 `RpTheme.gridOverlay()`：面板细灰网格叠层（对齐前端 `.terminal-panel::after`，「军用终端底格」质感）。
+  - 接入此前**已定义但从未调用**的 `RpTheme.cornerBrackets()`。
+  - `CharacterManagementScreen`（K 面板）与 `RpAdminScreen`（管理面板）顶层主面板改用 `terminalFrame` + `gridOverlay`，并在内容层之上（`super.render` 之后）叠加 `RpTheme.scanlines()` CRT 扫描线——此前仅 `FactionGraphScreen` 有扫描线。
+- **纯视觉层**：不触碰布局/几何/行为/配置/网络/存档；扫描线/网格均为低透明度，保证文字可读性。
+- 构建：spotlessApply / build / test -PrunTests / LangFileTest 全绿。
+
 ## 2.20.0（界面主题迁移：黑白灰军用终端）
 
 - **界面主题 v4**：in-game UI 视觉统一为「黑白灰军用终端」，与 Web 管理面板（ccnr-rp-gui）对齐——近黑底 / 白·灰等宽文字 / 细灰边 / 白=强调（选中反白）/ 红=警示危险 / 灰阶徽章（机构等级）。替换原 v3「CCNR:NET 机密终端」（冷暗金属底 / 青色主色 / 金·蓝徽章）。
