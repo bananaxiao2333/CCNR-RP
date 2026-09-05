@@ -5,17 +5,24 @@
 package com.ccnrcom.rp.client;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.network.chat.Component;
 
 /** 屏幕右侧招募列表（HUD 覆盖层 v2）：圆角卡片 + 进度条。点击操作由 RecruitPopupScreen 承担。 */
 public final class RecruitOverlayHud {
     public static final List<OfferEntry> OFFERS = new ArrayList<>();
 
+    /** 整波已加入名单（服务端权威推送）：groupId -> 该波已加入玩家 + 展示 id/目标数。 */
+    private static final Map<String, RosterState> ROSTERS = new LinkedHashMap<>();
+
     private RecruitOverlayHud() {}
 
     public static void add(
             String offerId,
+            String groupId,
             String charId,
             String charName,
             String professionId,
@@ -25,6 +32,7 @@ public final class RecruitOverlayHud {
         OFFERS.removeIf(o -> o.offerId().equals(offerId));
         OFFERS.add(new OfferEntry(
                 offerId,
+                groupId,
                 charId,
                 charName,
                 professionId,
@@ -35,6 +43,34 @@ public final class RecruitOverlayHud {
                 false));
     }
 
+    /** 收到服务端已加入名单推送；空名单 = 该分组结算/取消，客户端移除。 */
+    public static void setRoster(
+            String groupId,
+            String waveId,
+            int target,
+            List<com.ccnrcom.rp.network.RpPackets.RecruitRosterS2C.RosterEntry> entries) {
+        if (entries == null || entries.isEmpty()) {
+            ROSTERS.remove(groupId);
+        } else {
+            ROSTERS.put(groupId, new RosterState(waveId, target, List.copyOf(entries)));
+        }
+    }
+
+    /** 本玩家收到的邀请所涉及的分组（保持出现顺序），用于按当前波渲染已加入名单。 */
+    private static List<String> activeGroupIds() {
+        List<String> out = new ArrayList<>();
+        for (OfferEntry o : OFFERS) {
+            if (o.groupId() != null && !o.groupId().isBlank() && !out.contains(o.groupId())) {
+                out.add(o.groupId());
+            }
+        }
+        return out;
+    }
+
+    /** 一波的已加入名单展示态：展示 id、目标人数、已加入条目。 */
+    private record RosterState(
+            String waveId, int target, List<com.ccnrcom.rp.network.RpPackets.RecruitRosterS2C.RosterEntry> entries) {}
+
     /** 接受后标记为已同意：保留在右侧悬浮 HUD 中，显示「已同意 · 等待部署」+ 强制部署倒计时。 */
     public static void markAccepted(String offerId) {
         for (int i = 0; i < OFFERS.size(); i++) {
@@ -44,6 +80,7 @@ public final class RecruitOverlayHud {
                         i,
                         new OfferEntry(
                                 o.offerId(),
+                                o.groupId(),
                                 o.charId(),
                                 o.charName(),
                                 o.professionId(),
@@ -63,6 +100,7 @@ public final class RecruitOverlayHud {
 
     public static void clear() {
         OFFERS.clear();
+        ROSTERS.clear();
     }
 
     public static boolean isEmpty() {
@@ -78,6 +116,7 @@ public final class RecruitOverlayHud {
 
     public record OfferEntry(
             String offerId,
+            String groupId,
             String charId,
             String charName,
             String professionId,
@@ -154,47 +193,100 @@ public final class RecruitOverlayHud {
         }
     }
 
-    /** 背包打开时绘制：右上角置顶「已同意玩家」列表（接受后不可取消）。 */
+    /** 背包打开时绘制：右上角置顶「已加入玩家」名单（整波已加入，随服务端推送实时刷新；接受后不可取消）。 */
     public static void renderAcceptedList(GuiGraphics gfx, int width, int height) {
-        List<OfferEntry> accepted = OFFERS.stream().filter(OfferEntry::accepted).toList();
-        if (accepted.isEmpty()) {
+        if (OFFERS.isEmpty()) {
             return;
         }
         var font = net.minecraft.client.Minecraft.getInstance().font;
         int x = width - 150;
         int y = 18;
-        gfx.drawString(
-                font,
-                net.minecraft.network.chat.Component.translatable("ccnr_rp.spawn.recruit.accepted_header")
-                        .getString(),
-                x,
-                y,
-                RpTheme.CYAN,
-                true);
-        y += 16;
-        for (OfferEntry o : accepted) {
-            int h = 24;
-            RpRoundRect.outlined(gfx, x, y, x + 140, y + h, 5f, RpTheme.PANEL_BORDER, 0xEE1A1A1A);
-            CharacterPreview.renderPortrait(
-                    gfx,
-                    x + 13,
-                    y + h / 2,
-                    9,
-                    o.charId(),
-                    o.charName(),
-                    ClientCharacterState.professionLoadout(o.professionId()));
+        boolean drewAny = false;
+        for (String groupId : activeGroupIds()) {
+            RosterState rs = ROSTERS.get(groupId);
+            if (rs == null || rs.entries().isEmpty()) {
+                continue;
+            }
             gfx.drawString(
                     font,
-                    ClientCharacterState.professionName(o.professionId()),
-                    x + 26,
-                    y + 6,
-                    RpTheme.STATUS_ALIVE,
+                    Component.translatable(
+                                    "ccnr_rp.spawn.recruit.roster_header",
+                                    rs.waveId(),
+                                    String.valueOf(rs.entries().size()),
+                                    String.valueOf(rs.target()))
+                            .getString(),
+                    x,
+                    y,
+                    RpTheme.CYAN,
                     true);
-            String facName = ClientCharacterState.factionNameOf(o.professionId());
-            if (!facName.isEmpty()) {
-                gfx.drawString(font, facName, x + 26, y + 13, RpTheme.TEXT_DIM);
+            y += 16;
+            for (com.ccnrcom.rp.network.RpPackets.RecruitRosterS2C.RosterEntry e : rs.entries()) {
+                int h = 24;
+                RpRoundRect.outlined(gfx, x, y, x + 140, y + h, 5f, RpTheme.PANEL_BORDER, 0xEE1A1A1A);
+                // 显示该玩家本人皮肤（不再清一色本地玩家皮肤）
+                CharacterPreview.renderPlayerSkin(
+                        gfx,
+                        x + 13,
+                        y + h / 2,
+                        9,
+                        e.charId(),
+                        e.charName(),
+                        ClientCharacterState.professionLoadout(e.professionId()));
+                gfx.drawString(
+                        font,
+                        ClientCharacterState.professionName(e.professionId()),
+                        x + 26,
+                        y + 6,
+                        RpTheme.STATUS_ALIVE,
+                        true);
+                String facName = ClientCharacterState.factionNameOf(e.professionId());
+                if (!facName.isEmpty()) {
+                    gfx.drawString(font, facName, x + 26, y + 13, RpTheme.TEXT_DIM);
+                }
+                y += h + 4;
             }
-            y += h + 4;
+            drewAny = true;
+        }
+        // 名单尚未到达时的兜底：本玩家自己已同意的邀请（同样显示其本人皮肤）
+        if (!drewAny) {
+            List<OfferEntry> accepted =
+                    OFFERS.stream().filter(OfferEntry::accepted).toList();
+            if (accepted.isEmpty()) {
+                return;
+            }
+            gfx.drawString(
+                    font,
+                    Component.translatable("ccnr_rp.spawn.recruit.accepted_header")
+                            .getString(),
+                    x,
+                    y,
+                    RpTheme.CYAN,
+                    true);
+            y += 16;
+            for (OfferEntry o : accepted) {
+                int h = 24;
+                RpRoundRect.outlined(gfx, x, y, x + 140, y + h, 5f, RpTheme.PANEL_BORDER, 0xEE1A1A1A);
+                CharacterPreview.renderPlayerSkin(
+                        gfx,
+                        x + 13,
+                        y + h / 2,
+                        9,
+                        o.charId(),
+                        o.charName(),
+                        ClientCharacterState.professionLoadout(o.professionId()));
+                gfx.drawString(
+                        font,
+                        ClientCharacterState.professionName(o.professionId()),
+                        x + 26,
+                        y + 6,
+                        RpTheme.STATUS_ALIVE,
+                        true);
+                String facName = ClientCharacterState.factionNameOf(o.professionId());
+                if (!facName.isEmpty()) {
+                    gfx.drawString(font, facName, x + 26, y + 13, RpTheme.TEXT_DIM);
+                }
+                y += h + 4;
+            }
         }
     }
 

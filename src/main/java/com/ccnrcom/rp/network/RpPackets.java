@@ -643,9 +643,10 @@ public final class RpPackets {
         }
     }
 
-    /** 招募 offer（S2C）；kind=wave|conscript（区分复活波与征召，客户端展示不同标签）。 */
+    /** 招募 offer（S2C）；kind=wave|conscript（区分复活波与征召，客户端展示不同标签）。groupId=本次触发的实例分组。 */
     public static final class RecruitOfferS2C {
         public final String offerId;
+        public final String groupId;
         public final String charId;
         public final String charName;
         public final String professionId;
@@ -655,6 +656,7 @@ public final class RpPackets {
 
         public RecruitOfferS2C(
                 String offerId,
+                String groupId,
                 String charId,
                 String charName,
                 String professionId,
@@ -662,6 +664,7 @@ public final class RpPackets {
                 String waveId,
                 String kind) {
             this.offerId = offerId;
+            this.groupId = groupId;
             this.charId = charId;
             this.charName = charName;
             this.professionId = professionId;
@@ -673,6 +676,7 @@ public final class RpPackets {
         public RecruitOfferS2C(FriendlyByteBuf buf) {
             this(
                     buf.readUtf(64),
+                    buf.readUtf(64),
                     buf.readUtf(256),
                     buf.readUtf(64),
                     buf.readUtf(64),
@@ -683,6 +687,7 @@ public final class RpPackets {
 
         public void encode(FriendlyByteBuf buf) {
             buf.writeUtf(offerId, 64);
+            buf.writeUtf(groupId, 64);
             buf.writeUtf(charId, 256);
             buf.writeUtf(charName, 64);
             buf.writeUtf(professionId, 64);
@@ -698,6 +703,56 @@ public final class RpPackets {
                             () -> () -> com.ccnrcom.rp.client.ClientPacketHandlers.onRecruitOffer(msg)));
             ctx.get().setPacketHandled(true);
         }
+    }
+
+    /** 招募已加入名单（S2C）：某一触发实例的整波已加入玩家（含展示用 id 与目标数）。服务端在有人接受/离服/结算时推送。 */
+    public static final class RecruitRosterS2C {
+        public final String groupId;
+        public final String waveId;
+        public final int target;
+        public final java.util.List<RosterEntry> entries;
+
+        public RecruitRosterS2C(String groupId, String waveId, int target, java.util.List<RosterEntry> entries) {
+            this.groupId = groupId;
+            this.waveId = waveId;
+            this.target = target;
+            this.entries = entries;
+        }
+
+        public RecruitRosterS2C(FriendlyByteBuf buf) {
+            this.groupId = buf.readUtf(64);
+            this.waveId = buf.readUtf(64);
+            this.target = buf.readInt();
+            int n = buf.readInt();
+            java.util.ArrayList<RosterEntry> list = new java.util.ArrayList<>(n);
+            for (int i = 0; i < n; i++) {
+                list.add(new RosterEntry(buf.readUtf(256), buf.readUtf(64), buf.readUtf(64)));
+            }
+            this.entries = list;
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(groupId, 64);
+            buf.writeUtf(waveId, 64);
+            buf.writeInt(target);
+            buf.writeInt(entries.size());
+            for (RosterEntry e : entries) {
+                buf.writeUtf(e.charId(), 256);
+                buf.writeUtf(e.charName(), 64);
+                buf.writeUtf(e.professionId(), 64);
+            }
+        }
+
+        public static void handle(RecruitRosterS2C msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(
+                            net.minecraftforge.api.distmarker.Dist.CLIENT,
+                            () -> () -> com.ccnrcom.rp.client.ClientPacketHandlers.onRecruitRoster(msg)));
+            ctx.get().setPacketHandled(true);
+        }
+
+        /** 已加入名单条目（网络传输 DTO）。 */
+        public record RosterEntry(String charId, String charName, String professionId) {}
     }
 
     /** 激活事件横幅（S2C）。 */

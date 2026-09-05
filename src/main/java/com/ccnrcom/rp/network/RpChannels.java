@@ -67,6 +67,11 @@ public final class RpChannels {
                 .decoder(RpPackets.RecruitOfferS2C::new)
                 .consumerNetworkThread(RpPackets.RecruitOfferS2C::handle)
                 .add();
+        CHANNEL.messageBuilder(RpPackets.RecruitRosterS2C.class, id++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(RpPackets.RecruitRosterS2C::encode)
+                .decoder(RpPackets.RecruitRosterS2C::new)
+                .consumerNetworkThread(RpPackets.RecruitRosterS2C::handle)
+                .add();
         CHANNEL.messageBuilder(RpPackets.RecruitAnswerC2S.class, id++, NetworkDirection.PLAY_TO_SERVER)
                 .encoder(RpPackets.RecruitAnswerC2S::encode)
                 .decoder(RpPackets.RecruitAnswerC2S::new)
