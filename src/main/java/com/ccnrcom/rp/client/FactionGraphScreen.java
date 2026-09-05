@@ -176,7 +176,7 @@ public final class FactionGraphScreen extends Screen {
     @Override
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         // 深色全屏底
-        g.fill(0, 0, width, height, 0xEE15181E);
+        g.fill(0, 0, width, height, 0xEE161616);
         RpTheme.scanlines(g, 0, 0, width, height);
 
         var font = Minecraft.getInstance().font;
@@ -231,7 +231,7 @@ public final class FactionGraphScreen extends Screen {
             if (name.isBlank()) {
                 name = str(n.faction(), "id");
             }
-            g.drawCenteredString(font, Component.literal(name), x, y + r + 3, dim ? 0xFF565B62 : RpTheme.TEXT_PRIMARY);
+            g.drawCenteredString(font, Component.literal(name), x, y + r + 3, dim ? 0xFF666666 : RpTheme.TEXT_PRIMARY);
         }
 
         // 图例 + 操作提示（左上角）

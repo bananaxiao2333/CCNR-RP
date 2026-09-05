@@ -57,7 +57,7 @@ public final class PlayerNametagRenderer {
     /** 徽章盘底色（深灰）。 */
     private static final int COLOR_BADGE_DISC = 0xFF2E2E2E;
     /** 徽章图形挖空色（深蓝黑）。 */
-    private static final int COLOR_BADGE_PUNCH = 0xFF10181E;
+    private static final int COLOR_BADGE_PUNCH = 0xFF161616;
     /** 文字行半透明底衬。 */
     private static final int COLOR_LINE_BG = 0x66000000;
     /** 默认阵营色（青，与 RpTheme.CYAN 一致）。 */

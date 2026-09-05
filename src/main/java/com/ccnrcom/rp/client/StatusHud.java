@@ -80,7 +80,7 @@ public final class StatusHud {
                         : str(faction, "name"))
                 : Component.translatable("ccnr_rp.hud.observe_mode").getString();
         int facColor = (alive || conscriptAlive)
-                ? (faction == null ? 0xFF3D7BFF : parseColor(str(faction, "color"), 0xFF3D7BFF))
+                ? (faction == null ? 0xFF888888 : parseColor(str(faction, "color"), 0xFF888888))
                 : RpTheme.STATUS_OBSERVING;
         float health = mc.player.getHealth();
         float maxHealth = mc.player.getMaxHealth();
@@ -141,7 +141,7 @@ public final class StatusHud {
                     obsColor);
         } else {
             float hpProgress = healthPct / 100f;
-            int hpColor = healthPct > 50 ? 0xFF35E07A : (healthPct > 25 ? 0xFFFFC84C : 0xFFFF3B30);
+            int hpColor = healthPct > 50 ? 0xFFFFFFFF : (healthPct > 25 ? 0xFFB4B4B4 : 0xFFFF3B30);
             RpIcons.slot(g, px + 1, rowY + 1, iconS - 2, "heart", hpColor);
             drawRow(
                     g,

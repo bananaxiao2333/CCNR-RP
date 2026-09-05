@@ -124,7 +124,7 @@ public final class ClientPacketHandlers {
                 .withStyle(s -> s.withColor(factionColor(msg.killerFactionId)).withClickEvent(ev));
         // 击杀者名字（按关系：友好=绿/敌对=红/中立=白；非玩家击杀无关系=白）
         final int relColor = "friendly".equals(msg.relation)
-                ? 0xFF35E07A
+                ? 0xFFB4B4B4
                 : ("hostile".equals(msg.relation) ? 0xFFFF3B30 : 0xFFFFFFFF);
         Component killerComp = Component.literal(msg.killerName)
                 .withStyle(s -> s.withColor(relColor).withClickEvent(ev));

@@ -532,7 +532,7 @@ public class CharacterManagementScreen extends Screen {
                                 .getString(),
                         b[0] + 25,
                         b[1] + 7,
-                        sel ? 0xFFFFFFFF : RpTheme.TEXT_SECONDARY,
+                        sel ? RpTheme.ACCENT_TEXT : RpTheme.TEXT_SECONDARY,
                         true);
             } else {
                 RpIcons.factionBadge(g, b[0] + 12, b[1] + 11, 8, fac, sel);
@@ -546,7 +546,7 @@ public class CharacterManagementScreen extends Screen {
                         name,
                         b[0] + 25,
                         b[1] + 7,
-                        sel ? 0xFFFFFFFF : (noAvail ? RpTheme.RED_LINE : RpTheme.TEXT_SECONDARY),
+                        sel ? RpTheme.ACCENT_TEXT : (noAvail ? RpTheme.RED_LINE : RpTheme.TEXT_SECONDARY),
                         true);
             }
         }
@@ -591,12 +591,16 @@ public class CharacterManagementScreen extends Screen {
                     str(p, "name"),
                     b[0] + 34,
                     b[1] + 6,
-                    sel ? 0xFFFFFFFF : (noBal ? RpTheme.RED_LINE : RpTheme.TEXT_PRIMARY),
+                    sel ? RpTheme.ACCENT_TEXT : (noBal ? RpTheme.RED_LINE : RpTheme.TEXT_PRIMARY),
                     true);
             g.drawString(
-                    font, factionName(p, factionMeta), b[0] + 34, b[1] + 20, sel ? 0xFFFFFFFF : RpTheme.TEXT_SECONDARY);
+                    font,
+                    factionName(p, factionMeta),
+                    b[0] + 34,
+                    b[1] + 20,
+                    sel ? RpTheme.ACCENT_TEXT : RpTheme.TEXT_SECONDARY);
             // 灰色职位 ID
-            g.drawString(font, str(p, "id"), b[0] + 34, b[1] + 32, sel ? 0xFFFFFFFF : RpTheme.TEXT_DIM);
+            g.drawString(font, str(p, "id"), b[0] + 34, b[1] + 32, sel ? RpTheme.ACCENT_TEXT : RpTheme.TEXT_DIM);
             boolean met = userLevel() >= unlockLevel(p);
             String tag = "Lv " + unlockLevel(p);
             int tagW = font.width(tag) + 8;
@@ -767,8 +771,8 @@ public class CharacterManagementScreen extends Screen {
      */
     private static void renderHoloBase(GuiGraphics g, int cx, int top, int bottom, int cy, int scale) {
         int baseY = Math.min(bottom - 6, cy + scale);
-        int light = 0x0045D8F2; // 透明青
-        int beam = 0x4D45D8F2; // 半透青（CYAN_DIM 低透明度）
+        int light = 0x00FFFFFF; // 透明青
+        int beam = 0x4DFFFFFF; // 半透青（CYAN_DIM 低透明度）
         // 1) 纵向投影光柱：顶部透明 -> 底部泛青，宽度随 scale 变化（top<baseY 才画）
         if (top < baseY) {
             int bw = Math.max(6, scale / 2);
@@ -783,14 +787,14 @@ public class CharacterManagementScreen extends Screen {
                 break;
             }
             int a = 90 - i * 16;
-            g.fill(gx1, yy, gx2, yy + 1, (a << 24) | 0x45D8F2);
+            g.fill(gx1, yy, gx2, yy + 1, (a << 24) | 0xFFFFFF);
         }
         // 3) 发光底座：同心圆环 + 底部渐隐
         int baseR = Math.max(8, Math.min(18, scale));
-        int ring = 0x8C45D8F2;
+        int ring = 0x8CFFFFFF;
         int disc = 0xFF202020;
         com.ccnrcom.rp.client.RpIcons.ring(g, cx, baseY, baseR, ring, disc);
-        com.ccnrcom.rp.client.RpIcons.circle(g, cx, baseY, Math.max(2, baseR / 3), (0x5A45D8F2));
+        com.ccnrcom.rp.client.RpIcons.circle(g, cx, baseY, Math.max(2, baseR / 3), (0x5AFFFFFF));
     }
 
     private void renderEquipList(
