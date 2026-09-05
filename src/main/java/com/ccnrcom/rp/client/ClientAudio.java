@@ -13,6 +13,8 @@ import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.Clip;
 import javax.sound.sampled.FloatControl;
+import net.minecraft.client.Minecraft;
+import net.minecraft.sounds.SoundSource;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -51,6 +53,9 @@ public final class ClientAudio {
             return;
         }
         stop();
+        // 音量 = 底盘 0.55 × 原版「音乐」音量：在客户端主线程读取（背景线程不碰 MC 对象）。
+        // 让玩家在「音乐和音效设置」里用「音乐」滑块即可调节本 mod 的出场音乐（0=静音，默认 1.0 不变）。
+        final float musicVol = Minecraft.getInstance().options.getSoundSourceVolume(SoundSource.MUSIC);
         Thread t = new Thread(
                 () -> {
                     try {
@@ -61,12 +66,12 @@ public final class ClientAudio {
                                 active = clip;
                             }
                             FloatControl gain = (FloatControl) clip.getControl(FloatControl.Type.MASTER_GAIN);
-                            gain.setValue(gain.getMaximum() * 0.55f);
+                            gain.setValue(gain.getMaximum() * 0.55f * musicVol);
                             clip.start();
                             // 60 秒后淡出（1.5s）
                             Thread.sleep(60_000L);
                             if (clip.isRunning() && same(clip)) {
-                                fadeOut(clip, gain, 1500);
+                                fadeOut(clip, gain, musicVol, 1500);
                             }
                         }
                     } catch (Exception e) {
@@ -111,12 +116,12 @@ public final class ClientAudio {
         }
     }
 
-    private static void fadeOut(Clip clip, FloatControl gain, long ms) {
+    private static void fadeOut(Clip clip, FloatControl gain, float musicVol, long ms) {
         long steps = 20;
         try {
             float max = gain.getMaximum();
             for (int i = 0; i < steps && clip.isRunning(); i++) {
-                gain.setValue(max * 0.55f * (1f - (i + 1f) / steps));
+                gain.setValue(max * 0.55f * musicVol * (1f - (i + 1f) / steps));
                 Thread.sleep(ms / steps);
             }
         } catch (Exception ignored) {

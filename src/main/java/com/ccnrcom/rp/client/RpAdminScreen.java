@@ -78,6 +78,9 @@ public class RpAdminScreen extends Screen {
 
     private int px1, py1, px2, py2;
     private int listX1, listX2, listY1, listY2;
+    /** 通用列表表头带高度：表头占独立一行，行列表从表头下方开始，避免表头与首行文字重叠。 */
+    private static final int LIST_HDR_H = 13;
+
     private final List<int[]> rowBounds = new ArrayList<>();
     private int closeX1, closeY1, closeX2, closeY2;
     private String notice = "";
@@ -381,10 +384,12 @@ public class RpAdminScreen extends Screen {
             List<JsonObject> items = listItems();
             int rowH = rowHeight();
             if (rowH > 0) {
-                int maxVisible = Math.max(1, (listY2 - listY1) / rowH);
+                int maxVisible = Math.max(1, (listY2 - listY1 - LIST_HDR_H) / rowH);
                 int off = Math.min(scroll, Math.max(0, items.size() - maxVisible));
                 for (int i = 0; i < items.size() && i < maxVisible; i++) {
-                    rowBounds.add(new int[] {listX1, listY1 + i * rowH, listX2, listY1 + (i + 1) * rowH - 1});
+                    rowBounds.add(new int[] {
+                        listX1, listY1 + LIST_HDR_H + i * rowH, listX2, listY1 + LIST_HDR_H + (i + 1) * rowH - 1
+                    });
                 }
             }
         }
@@ -3107,13 +3112,13 @@ public class RpAdminScreen extends Screen {
         }
         // 列表滚动条：按住游标拖拽 / 点击轨道跳转（经验规则/关系管理/阵营组页签为自包含页签，无通用列表行高，跳过）
         if (tab != TAB_SETTINGS && tab != TAB_XP && tab != TAB_RELATION && tab != TAB_GROUPS) {
-            int maxRows = Math.max(1, (listY2 - listY1) / rowHeight());
+            int maxRows = Math.max(1, (listY2 - listY1 - LIST_HDR_H) / rowHeight());
             int ns = RpScrollbar.clickV(
                     (int) mx,
                     (int) my,
                     listX2 - 6,
                     listX2 - 1,
-                    listY1,
+                    listY1 + LIST_HDR_H,
                     listY2,
                     listItems().size(),
                     maxRows,
@@ -3339,7 +3344,7 @@ public class RpAdminScreen extends Screen {
         if (rowH == 0) {
             return null;
         }
-        int maxVisible = Math.max(1, (listY2 - listY1) / rowH);
+        int maxVisible = Math.max(1, (listY2 - listY1 - LIST_HDR_H) / rowH);
         int off = Math.min(scroll, Math.max(0, items.size() - maxVisible));
         int idx = off + i;
         return idx < items.size() ? items.get(idx) : null;
@@ -4199,7 +4204,7 @@ public class RpAdminScreen extends Screen {
         if (rowH == 0) {
             return;
         }
-        int maxVisible = Math.max(1, (listY2 - listY1) / rowH);
+        int maxVisible = Math.max(1, (listY2 - listY1 - LIST_HDR_H) / rowH);
         int off = Math.min(scroll, Math.max(0, items.size() - maxVisible));
         RpRoundRect.outlined(
                 g, listX1 - 2, listY1 - 4, listX2 + 2, listY2 + 2, 4f, RpTheme.PANEL_BORDER, RpTheme.PANEL_BG_EVEN);
@@ -4207,8 +4212,10 @@ public class RpAdminScreen extends Screen {
                 font,
                 Component.translatable(TABS[tab]).getString() + " (" + items.size() + ")",
                 listX1 + 4,
-                listY1 - 4,
+                listY1 + 1,
                 RpTheme.TEXT_DIM);
+        // 表头带与行列表分隔线（避免表头文字压到首行）
+        g.fill(listX1, listY1 + LIST_HDR_H - 1, listX2, listY1 + LIST_HDR_H, RpTheme.PANEL_BORDER);
         for (int i = 0; i < items.size() && i < maxVisible; i++) {
             JsonObject item = items.get(off + i);
             int[] b = rowBounds.get(TABS.length + i);
@@ -4255,7 +4262,7 @@ public class RpAdminScreen extends Screen {
                 g.drawString(font, warn, b[2] - 8 - font.width(warn), b[1] + 11, 0xFFB4B4B4, true);
             }
         }
-        RpScrollbar.draw(g, listX2 - 6, listY1, listY2, items.size(), maxVisible, off);
+        RpScrollbar.draw(g, listX2 - 6, listY1 + LIST_HDR_H, listY2, items.size(), maxVisible, off);
     }
 
     /** 职业 loadout 是否缺装备设定（无 loadout 或 inventory/armor/offhand 全空）。 */
