@@ -75,6 +75,8 @@ public final class RpRulesTab {
     private long noticeUntil = 0;
 
     private static final int ROW_H = 20;
+    /** 表头带高度：表头独立一行，行列表从表头下方开始，避免表头与首行文字重叠。 */
+    private static final int HDR = 13;
 
     public RpRulesTab(RpAdminScreen screen) {
         this.screen = screen;
@@ -165,13 +167,15 @@ public final class RpRulesTab {
                 font,
                 Component.translatable("ccnr_rp.gui.admin.tab.xp").getString() + " (" + rules.size() + ")",
                 listX1 + 4,
-                listY1 - 4,
+                listY1 + 1,
                 RpTheme.TEXT_DIM);
-        int maxVisible = Math.max(1, (listY2 - listY1) / ROW_H);
+        // 表头带与行列表分隔线（避免表头文字压到首行）
+        g.fill(listX1, listY1 + HDR - 1, listX2, listY1 + HDR, RpTheme.PANEL_BORDER);
+        int maxVisible = Math.max(1, (listY2 - listY1 - HDR) / ROW_H);
         int off = Math.min(rulesScroll, Math.max(0, rules.size() - maxVisible));
         for (int i = 0; i < rules.size() && i < maxVisible; i++) {
             JsonObject r = rules.get(off + i);
-            int y1 = listY1 + i * ROW_H;
+            int y1 = listY1 + HDR + i * ROW_H;
             int y2 = y1 + ROW_H - 1;
             boolean s = off + i == sel;
             boolean hov = mx >= listX1 && mx <= listX2 && my >= y1 && my <= y2;
@@ -458,10 +462,10 @@ public final class RpRulesTab {
             }
         }
         // 规则列表行
-        int maxVisible = Math.max(1, (listY2 - listY1) / ROW_H);
+        int maxVisible = Math.max(1, (listY2 - listY1 - HDR) / ROW_H);
         int off = Math.min(rulesScroll, Math.max(0, rules.size() - maxVisible));
         for (int i = 0; i < rules.size() && i < maxVisible; i++) {
-            int y1 = listY1 + i * ROW_H;
+            int y1 = listY1 + HDR + i * ROW_H;
             if (mx >= listX1 && mx <= listX2 && my >= y1 && my <= y1 + ROW_H - 1) {
                 sel = off + i;
                 loadDraft(rules.get(sel));
@@ -628,7 +632,7 @@ public final class RpRulesTab {
 
     public void mouseScrolled(int mouseX, int mouseY, double delta) {
         if (mouseX >= listX1 && mouseX <= listX2 && mouseY >= listY1 && mouseY <= listY2) {
-            int max = Math.max(0, rules.size() - Math.max(1, (listY2 - listY1) / ROW_H));
+            int max = Math.max(0, rules.size() - Math.max(1, (listY2 - listY1 - HDR) / ROW_H));
             rulesScroll = (int) Math.max(0, Math.min(rulesScroll - delta / 8, max));
         } else {
             paramScroll = (int) Math.max(0, paramScroll - delta / 8);

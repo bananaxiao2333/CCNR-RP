@@ -27,6 +27,8 @@ public final class RpRelationTab {
     private int listX1, listX2, listY1, listY2;
     private int scroll = 0;
     private static final int ROW_H = 20;
+    /** 表头带高度：表头独立一行，行列表从表头下方开始，避免表头与首行文字重叠。 */
+    private static final int HDR = 13;
 
     private EditBox fromBox;
     private EditBox toBox;
@@ -216,7 +218,7 @@ public final class RpRelationTab {
         // 列表行选择
         List<JsonObject> rules = rules();
         for (int i = 0; i < rules.size(); i++) {
-            int ry = listY1 + (i - scroll) * ROW_H;
+            int ry = listY1 + HDR + (i - scroll) * ROW_H;
             if (ry >= listY1 - ROW_H && ry <= listY2 && mx >= listX1 && mx <= listX2 && my >= ry && my <= ry + ROW_H) {
                 loadEditor(i);
                 return true;
@@ -247,7 +249,7 @@ public final class RpRelationTab {
             return;
         }
         if (mouseX >= listX1 && mouseX <= listX2 && mouseY >= listY1 && mouseY <= listY2) {
-            int max = Math.max(0, rules().size() - Math.max(1, (listY2 - listY1) / ROW_H));
+            int max = Math.max(0, rules().size() - Math.max(1, (listY2 - listY1 - HDR) / ROW_H));
             if (delta > 0) {
                 scroll = Math.max(0, scroll - 2);
             } else {
@@ -492,11 +494,13 @@ public final class RpRelationTab {
                 font,
                 Component.translatable("ccnr_rp.gui.admin.relation.list").getString() + " (" + rules.size() + ")",
                 listX1 + 4,
-                listY1 - 4,
+                listY1 + 1,
                 RpTheme.TEXT_DIM);
-        g.enableScissor(listX1, listY1, listX2, listY2);
+        // 表头带与行列表分隔线（避免表头文字压到首行）
+        g.fill(listX1, listY1 + HDR - 1, listX2, listY1 + HDR, RpTheme.PANEL_BORDER);
+        g.enableScissor(listX1, listY1 + HDR, listX2, listY2);
         for (int i = 0; i < rules.size(); i++) {
-            int ry = listY1 + (i - scroll) * ROW_H;
+            int ry = listY1 + HDR + (i - scroll) * ROW_H;
             if (ry < listY1 - ROW_H || ry > listY2) {
                 continue;
             }
