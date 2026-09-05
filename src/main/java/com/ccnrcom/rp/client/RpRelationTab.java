@@ -512,8 +512,8 @@ public final class RpRelationTab {
             boolean internal = sameSet(from, to);
             String type = str(r, "type", "neutral");
             String raw = internal
-                    ? tr("ccnr_rp.gui.admin.relation.internal") + ": " + join(from)
-                    : join(from) + " × " + join(to);
+                    ? tr("ccnr_rp.gui.admin.relation.internal") + ": " + sideLabel(from)
+                    : sideLabel(from) + " × " + sideLabel(to);
             // 行文本按列表宽裁剪，避免长规则名溢出与右侧类型标签重叠
             String tag = typeTag(type);
             int labelMax = (listX2 - listX1) - 4 - 6 - font.width(tag) - 6;
@@ -551,7 +551,7 @@ public final class RpRelationTab {
                     switch (i) {
                         case 0 -> 0xFFFFFFFF;
                         case 1 -> RpTheme.RED;
-                        default -> RpTheme.GREEN;
+                        default -> RpTheme.FRIENDLY;
                     };
             RpRoundRect.outlined(
                     g,
@@ -711,6 +711,33 @@ public final class RpRelationTab {
         return sa.equals(sb);
     }
 
+    /**
+     * 把一组 id 缩短为已定义阵营组的引用：若这组 id 恰好等于某个组的 memberIds 集合，
+     * 返回该组的 id（供列表/规则摘要用，避免重复罗列全部成员）；否则原样拼接。
+     * 组内无引用或未匹配时按成员 id 逐个返回（保留展示信息）。
+     */
+    private static String shortenIds(List<String> ids) {
+        if (ids.isEmpty()) {
+            return "";
+        }
+        for (JsonObject g : ClientCharacterState.groups()) {
+            List<String> members = idList(g, "members");
+            if (sameSet(members, ids)) {
+                String gid = str(g, "id", "");
+                if (!gid.isBlank()) {
+                    return Component.translatable("ccnr_rp.gui.admin.relation.group_ref", gid)
+                            .getString();
+                }
+            }
+        }
+        return join(ids);
+    }
+
+    /** 展示用 from/to 摘要（阵营组匹配时缩短，降低规则名长度）。 */
+    private static String sideLabel(List<String> ids) {
+        return shortenIds(ids);
+    }
+
     /** 按像素宽度裁剪文本（超宽截断加省略号），避免长规则名溢出行宽。 */
     private static String clip(net.minecraft.client.gui.Font font, String s, int maxW) {
         if (font.width(s) <= maxW) {
@@ -740,7 +767,7 @@ public final class RpRelationTab {
             return RpTheme.RED;
         }
         if (t == RelationType.FRIENDLY) {
-            return RpTheme.GREEN;
+            return RpTheme.FRIENDLY;
         }
         return 0xFFFFFFFF;
     }

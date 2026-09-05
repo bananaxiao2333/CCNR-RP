@@ -35,12 +35,15 @@ public class RpAdminScreen extends Screen {
     private static final int TAB_LIMITS = 6;
     private static final int TAB_XP = 7;
     private static final int TAB_RELATION = 8;
+    private static final int TAB_GROUPS = 9;
 
     private int tab = TAB_SETTINGS;
     /** 经验规则页签（经验系统 v3）：自包含编辑器；首次使用才构造（避免构造期 this 逃逸）。 */
     private RpRulesTab rulesTab;
     /** 关系管理页签（关系系统）：规则列表 + 编辑器 + 测定图入口；与经验规则页签并列。 */
     private RpRelationTab relationTab;
+    /** 阵营组页签（阵营组即关系声明的批量容器）：组列表 + 编辑器；与关系管理页签并列。 */
+    private RpGroupsTab groupsTab;
     // 页签栏横向滚动（过窄时可滚动，滚动条可拖拽）
     private int tabScroll = 0;
     private int maxTabScroll = 0;
@@ -66,6 +69,13 @@ public class RpAdminScreen extends Screen {
         return relationTab;
     }
 
+    private RpGroupsTab groupsTab() {
+        if (groupsTab == null) {
+            groupsTab = new RpGroupsTab(this);
+        }
+        return groupsTab;
+    }
+
     private int px1, py1, px2, py2;
     private int listX1, listX2, listY1, listY2;
     private final List<int[]> rowBounds = new ArrayList<>();
@@ -82,6 +92,10 @@ public class RpAdminScreen extends Screen {
     private int factionIdx = 0;
     private int iconIdx = 0;
     private int tierIdx = 1;
+    /** 阵营入场电影开关（per-faction 编辑态：cinematicBlackScreen / cinematicCompact）。 */
+    private boolean facCinBlack = true;
+
+    private boolean facCinCompact = false;
     private EditBox unlockLevelBox;
     /** serverconfig 程序化设定：key → 数值输入框（设定标签）。 */
     private final java.util.Map<String, net.minecraft.client.gui.components.EditBox> cfgBoxes =
@@ -109,11 +123,25 @@ public class RpAdminScreen extends Screen {
     /** 部署点弹窗每行「传送」按钮矩形（渲染与点击共用）。 */
     private final List<int[]> spTeleportBounds = new ArrayList<>();
 
+    // 阵营图标选择弹窗：网格列出可选图标（徽章），点选即设 iconIdx（阵营表单）
+    private boolean iconModalOpen = false;
+    private int iconX1, iconY1, iconX2, iconY2;
+    private final List<int[]> iconCellBounds = new ArrayList<>();
+    private final List<int[]> iconCancelBounds = new ArrayList<>();
+    /** 图标选择弹窗滚动偏移（图标多时超出网格高度，滚动条可拖拽）。 */
+    private int iconScroll = 0;
+
+    private int iconGridY1, iconGridY2, iconScrollX;
+    private static final int ICON_SCROLL_ID = 9;
+    private static final int ICON_COLS = 6;
+    private static final int ICON_CELL = 46;
+
     // 无线电编辑器（阵营/职业共用弹窗）：speaker + 多句 text/wait 列表（入场动画播完 action bar 打字机播放）
     private boolean radioModalOpen = false;
     private String radioModalKind = "faction"; // faction|profession
     private String radioModalTarget = "";
-    private String radioSpeaker = "指挥官";
+    private String radioSpeaker =
+            Component.translatable("ccnr_rp.gui.admin.radio.speaker_default").getString();
     private final List<String> radioLines = new ArrayList<>(); // 每句文本
     private final List<String> radioWaits = new ArrayList<>(); // 每句停留秒数
     private boolean radioDisabled = false; // 职业：禁用无线电开关
@@ -254,7 +282,8 @@ public class RpAdminScreen extends Screen {
         "ccnr_rp.gui.admin.tab.wave",
         "ccnr_rp.gui.admin.tab.limits",
         "ccnr_rp.gui.admin.tab.xp",
-        "ccnr_rp.gui.admin.tab.relation"
+        "ccnr_rp.gui.admin.tab.relation",
+        "ccnr_rp.gui.admin.tab.groups"
     };
 
     /** 限制类型（部署人数上限规则）：GLOBAL=通用角色上限（职业无专属时兜底）/ FACTION=阵营上限 / PROFESSION=职业上限。 */
@@ -307,7 +336,7 @@ public class RpAdminScreen extends Screen {
         // 页签栏几何是所有页签共用的，必须先填充（render/鼠标分发都依赖 rowBounds 前 8 项）。
         // 过窄时横向滚动：保持页签可读宽度，超出的部分通过 tabScroll 偏移 + 底部滚动条查看。
         int avail = px2 - px1 - 24; // 页签可用宽（左右各 12）
-        int tabW = Math.min(84, Math.max(64, avail / TABS.length));
+        int tabW = Math.min(88, Math.max(76, avail / TABS.length));
         int totalTab = TABS.length * (tabW + 4) - 4;
         maxTabScroll = Math.max(0, totalTab - avail);
         tabScroll = Math.max(0, Math.min(tabScroll, maxTabScroll));
@@ -322,6 +351,10 @@ public class RpAdminScreen extends Screen {
         }
         if (tab == TAB_RELATION) {
             relationTab().rebuild(px1, py1, px2, py2);
+            return;
+        }
+        if (tab == TAB_GROUPS) {
+            groupsTab().rebuild(px1, py1, px2, py2);
             return;
         }
         if (tab == TAB_SETTINGS) {
@@ -447,7 +480,8 @@ public class RpAdminScreen extends Screen {
                 RpChannels.sendToServer(new RpPackets.ServerConfigSetC2S(key, value));
             }
         }
-        notice = "设置已保存";
+        notice = Component.translatable("ccnr_rp.gui.admin.notice.settings_saved")
+                .getString();
         rebuild();
     }
 
@@ -462,8 +496,15 @@ public class RpAdminScreen extends Screen {
         idBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.id", id, edit);
         y += 30;
         boolean enabled = ev == null || !ev.has("enabled") || ev.get("enabled").getAsBoolean();
-        evState = enabled;
-        fld3Box = mkBox(x, y, w, "时长(秒,0=事件持续时间)", ev == null ? "0" : num(ev, "durationSeconds", 0), false);
+        // 注意：不把 evState 写回 enabled——否则点击「启用」开关触发 rebuild() 时会被服务端快照覆盖，
+        // 导致开关看似点不动。evState 只在 selectEvent(item) 时从服务端同步一次。
+        fld3Box = mkBox(
+                x,
+                y,
+                w,
+                "ccnr_rp.gui.admin.field.duration_second",
+                ev == null ? "0" : num(ev, "durationSeconds", 0),
+                false);
         y += 30;
         // 管理快捷操作：启用开关 / 编辑行为序列 / 手动触发事件 —— 三个长按钮压成一行短按钮并排
         boolean evEnabled = enabled;
@@ -473,19 +514,38 @@ public class RpAdminScreen extends Screen {
                 w,
                 20,
                 java.util.List.of(
-                        new ActButton("启用: " + (evEnabled ? "是" : "否"), 1, () -> {
-                            evState = !evState;
-                            rebuild();
-                        }),
-                        new ActButton("行为序列", 1, () -> openSequenceModal()),
-                        new ActButton("触发事件", 0, () -> {
-                            String evtId = idBox.getValue();
-                            if (evtId.isBlank()) {
-                                notice = "缺少 id";
-                                return;
-                            }
-                            RpChannels.sendToServer(new RpPackets.AdminEventTriggerC2S(evtId));
-                        })));
+                        new ActButton(
+                                Component.translatable(
+                                                "ccnr_rp.gui.admin.label.enabled",
+                                                evEnabled
+                                                        ? Component.translatable("ccnr_rp.gui.admin.value.yes")
+                                                                .getString()
+                                                        : Component.translatable("ccnr_rp.gui.admin.value.no")
+                                                                .getString())
+                                        .getString(),
+                                1,
+                                () -> {
+                                    evState = !evState;
+                                    rebuild();
+                                }),
+                        new ActButton(
+                                Component.translatable("ccnr_rp.gui.admin.field.sequence")
+                                        .getString(),
+                                1,
+                                () -> openSequenceModal()),
+                        new ActButton(
+                                Component.translatable("ccnr_rp.gui.admin.field.trigger_event")
+                                        .getString(),
+                                0,
+                                () -> {
+                                    String evtId = idBox.getValue();
+                                    if (evtId.isBlank()) {
+                                        notice = Component.translatable("ccnr_rp.gui.admin.notice.missing_id")
+                                                .getString();
+                                        return;
+                                    }
+                                    RpChannels.sendToServer(new RpPackets.AdminEventTriggerC2S(evtId));
+                                })));
         y += 26;
         actionRow(x, y, w, edit);
     }
@@ -500,12 +560,27 @@ public class RpAdminScreen extends Screen {
         // ID 仅编辑模式锁定（创建模式必须可输入，否则无法新建）
         idBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.id", id, edit);
         y += 30;
-        fld2Box = mkBox(x, y, w, "顺序 order", ph == null ? "0" : num(ph, "order", 0), false);
+        fld2Box = mkBox(x, y, w, "ccnr_rp.gui.admin.field.seq_order", ph == null ? "0" : num(ph, "order", 0), false);
         y += 30;
-        fld3Box = mkBox(x, y, w, "时长(分钟)", ph == null ? "30" : num(ph, "durationMinutes", 30), false);
+        fld3Box = mkBox(
+                x,
+                y,
+                w,
+                "ccnr_rp.gui.admin.field.duration_minute",
+                ph == null ? "30" : num(ph, "durationMinutes", 30),
+                false);
         y += 30;
         // 编辑行为序列（整行长按钮压成短按钮）
-        buttonRow(x, y, w, 20, java.util.List.of(new ActButton("行为序列", 1, () -> openSequenceModal())));
+        buttonRow(
+                x,
+                y,
+                w,
+                20,
+                java.util.List.of(new ActButton(
+                        Component.translatable("ccnr_rp.gui.admin.field.sequence")
+                                .getString(),
+                        1,
+                        () -> openSequenceModal())));
         y += 26;
         actionRow(x, y, w, edit);
     }
@@ -519,8 +594,8 @@ public class RpAdminScreen extends Screen {
         String id = r == null ? "" : str(r, "id");
         boolean edit = !id.isBlank();
         // 类型循环按钮 + ID（仅编辑模式锁定）
-        addRenderableWidget(
-                RpButton.secondary(x, y, (w - 4) / 2, 18, Component.literal("类型: " + limitTypeLabel()), b -> {
+        addRenderableWidget(RpButton.secondary(
+                x, y, (w - 4) / 2, 18, Component.translatable("ccnr_rp.gui.admin.label.type", limitTypeLabel()), b -> {
                     limitTypeIdx = (limitTypeIdx + 1) % LIMIT_TYPES.length;
                     rebuild();
                 }));
@@ -528,10 +603,11 @@ public class RpAdminScreen extends Screen {
         y += 30;
         // 目标（阵营/职业 id；GLOBAL 留空 = 通用兜底）
         String target = r == null ? "" : str(r, "target", "");
-        nameBox = mkBox(x, y, w, "目标(阵营/职业 id；GLOBAL 留空=通用)", target, false);
+        nameBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.limit_target", target, false);
         y += 30;
         // 人数上限
-        unlockLevelBox = mkBox(x, y, w, "人数上限 limit（0=禁止部署；不限=不配置该规则）", r == null ? "" : num(r, "limit", 0), false);
+        unlockLevelBox =
+                mkBox(x, y, w, "ccnr_rp.gui.admin.field.limit_value", r == null ? "" : num(r, "limit", 0), false);
         y += 30;
         // 说明 + 清空全部限制：两个整行长按钮压成一行短按钮并排
         buttonRow(
@@ -539,23 +615,37 @@ public class RpAdminScreen extends Screen {
                 y,
                 w,
                 20,
-                java.util.List.of(new ActButton("说明：0=禁止部署；在职≥上限拒绝", 1, () -> {}), new ActButton("清空全部限制", 2, () -> {
-                    for (JsonObject rule : ClientCharacterState.deployLimits()) {
-                        JsonObject del = payload();
-                        del.addProperty("id", str(rule, "id"));
-                        requestCrud("limit", "delete", del);
-                    }
-                    notice = "已请求清空限制";
-                })));
+                java.util.List.of(
+                        new ActButton(
+                                Component.translatable("ccnr_rp.gui.admin.field.limit_note")
+                                        .getString(),
+                                1,
+                                () -> {}),
+                        new ActButton(
+                                Component.translatable("ccnr_rp.gui.admin.field.clear_limits")
+                                        .getString(),
+                                2,
+                                () -> {
+                                    for (JsonObject rule : ClientCharacterState.deployLimits()) {
+                                        JsonObject del = payload();
+                                        del.addProperty("id", str(rule, "id"));
+                                        requestCrud("limit", "delete", del);
+                                    }
+                                    notice = Component.translatable("ccnr_rp.gui.admin.notice.limits_cleared")
+                                            .getString();
+                                })));
         y += 26;
         actionRow(x, y, w, edit);
     }
 
     private String limitTypeLabel() {
         return switch (LIMIT_TYPES[limitTypeIdx]) {
-            case "GLOBAL" -> "通用角色上限（职业未配置时的兜底）";
-            case "FACTION" -> "阵营上限（该阵营在职总人数）";
-            default -> "职业上限（该职业在职人数）";
+            case "GLOBAL" -> Component.translatable("ccnr_rp.gui.admin.limit.type.global")
+                    .getString();
+            case "FACTION" -> Component.translatable("ccnr_rp.gui.admin.limit.type.faction")
+                    .getString();
+            default -> Component.translatable("ccnr_rp.gui.admin.limit.type.profession")
+                    .getString();
         };
     }
 
@@ -605,30 +695,52 @@ public class RpAdminScreen extends Screen {
         idBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.id", id, edit);
         y += 30;
         int bw2 = (w - 4) / 2;
-        addRenderableWidget(
-                RpButton.secondary(x, y, bw2, 18, Component.literal("模式: " + waveModeLabel(Modes[modeIdx])), b -> {
+        addRenderableWidget(RpButton.secondary(
+                x,
+                y,
+                bw2,
+                18,
+                Component.translatable("ccnr_rp.gui.admin.label.mode", waveModeLabel(Modes[modeIdx])),
+                b -> {
                     modeIdx = (modeIdx + 1) % Modes.length;
                     rebuild();
                 }));
-        addRenderableWidget(
-                RpButton.secondary(x + bw2 + 4, y, bw2, 18, Component.literal("部署点: " + DeployTypes[deployIdx]), b -> {
+        addRenderableWidget(RpButton.secondary(
+                x + bw2 + 4,
+                y,
+                bw2,
+                18,
+                Component.translatable("ccnr_rp.gui.admin.label.deploy_point", DeployTypes[deployIdx]),
+                b -> {
                     deployIdx = (deployIdx + 1) % DeployTypes.length;
                     rebuild();
                 }));
         y += 30;
-        fld2Box = mkBox(x, y, bw2, "数量", wv == null ? "1" : num(wv, "count", 1), false);
-        fld3Box = mkBox(x + bw2 + 4, y, bw2, "最低等级", wv == null ? "0" : num(wv, "minLevel", 0), false);
+        fld2Box = mkBox(x, y, bw2, "ccnr_rp.gui.admin.field.count", wv == null ? "1" : num(wv, "count", 1), false);
+        fld3Box = mkBox(
+                x + bw2 + 4,
+                y,
+                bw2,
+                "ccnr_rp.gui.admin.field.min_level",
+                wv == null ? "0" : num(wv, "minLevel", 0),
+                false);
         y += 30;
-        fld4Box = mkBox(x, y, w, "招募时限(秒)", wv == null ? "60" : num(wv, "recruitTimeoutSeconds", 60), false);
+        fld4Box = mkBox(
+                x,
+                y,
+                w,
+                "ccnr_rp.gui.admin.field.recruit_timeout",
+                wv == null ? "60" : num(wv, "recruitTimeoutSeconds", 60),
+                false);
         y += 30;
-        profileBox = mkBox(x, y, w, "坐标 x y z（POS 时用）", wv == null ? "" : posStr(wv), false);
+        profileBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.pos_coords", wv == null ? "" : posStr(wv), false);
         y += 30;
-        nameBox =
-                mkBox(x, y, bw2, "维度(minecraft:overworld)", wv == null ? "minecraft:overworld" : str(wv, "dim"), false);
-        colorBox = mkBox(x + bw2 + 4, y, bw2, "队伍ID(逗号)", csv(wv, "teamIds"), false);
+        nameBox = mkBox(
+                x, y, bw2, "ccnr_rp.gui.admin.field.dim", wv == null ? "minecraft:overworld" : str(wv, "dim"), false);
+        colorBox = mkBox(x + bw2 + 4, y, bw2, "ccnr_rp.gui.admin.field.team_ids", csv(wv, "teamIds"), false);
         y += 30;
-        descBox = mkBox(x, y, bw2, "职业ID(逗号)", csv(wv, "professionIds"), false);
-        musicBox = mkBox(x + bw2 + 4, y, bw2, "阵营ID(逗号)", csv(wv, "factionIds"), false);
+        descBox = mkBox(x, y, bw2, "ccnr_rp.gui.admin.field.profession_ids", csv(wv, "professionIds"), false);
+        musicBox = mkBox(x + bw2 + 4, y, bw2, "ccnr_rp.gui.admin.field.faction_ids", csv(wv, "factionIds"), false);
         y += 30;
         // CMDCam 出场场景（可选）：部署入场电影播完黑屏转场播放该摄像机场景（补全提示见 renderCamSceneSuggestions）
         camSceneBox =
@@ -640,14 +752,25 @@ public class RpAdminScreen extends Screen {
                 y,
                 w,
                 20,
-                java.util.List.of(new ActButton("行为序列", 1, () -> openSequenceModal()), new ActButton("召唤复活波", 0, () -> {
-                    String wvId = idBox.getValue();
-                    if (wvId.isBlank()) {
-                        notice = "缺少 id";
-                        return;
-                    }
-                    RpChannels.sendToServer(new RpPackets.AdminWaveTriggerC2S(wvId));
-                })));
+                java.util.List.of(
+                        new ActButton(
+                                Component.translatable("ccnr_rp.gui.admin.field.sequence")
+                                        .getString(),
+                                1,
+                                () -> openSequenceModal()),
+                        new ActButton(
+                                Component.translatable("ccnr_rp.gui.admin.field.summon_wave")
+                                        .getString(),
+                                0,
+                                () -> {
+                                    String wvId = idBox.getValue();
+                                    if (wvId.isBlank()) {
+                                        notice = Component.translatable("ccnr_rp.gui.admin.notice.missing_id")
+                                                .getString();
+                                        return;
+                                    }
+                                    RpChannels.sendToServer(new RpPackets.AdminWaveTriggerC2S(wvId));
+                                })));
         y += 26;
         actionRow(x, y, w, edit);
     }
@@ -665,7 +788,8 @@ public class RpAdminScreen extends Screen {
                 RpButton.danger(x + bw3 + 4, y, bw3, 20, Component.translatable("ccnr_rp.gui.admin.crud.delete"), b -> {
                     String sel = idBox.getValue();
                     if (sel.isBlank()) {
-                        notice = "缺少 id";
+                        notice = Component.translatable("ccnr_rp.gui.admin.notice.missing_id")
+                                .getString();
                         return;
                     }
                     JsonObject del = payload();
@@ -751,8 +875,7 @@ public class RpAdminScreen extends Screen {
                 p.addProperty("id", idBox.getValue());
                 JsonObject src = selItem();
                 if (src != null) {
-                    p.addProperty(
-                            "enabled", src.has("enabled") ? src.get("enabled").getAsBoolean() : evState);
+                    p.addProperty("enabled", evState);
                     p.addProperty(
                             "durationSeconds",
                             src.has("durationSeconds")
@@ -984,24 +1107,44 @@ public class RpAdminScreen extends Screen {
                 w,
                 20,
                 java.util.List.of(
-                        new ActButton("无线电管理", 1, () -> openRadioModal("profession")),
-                        new ActButton("刷给自己", 0, () -> {
-                            if (selProfId.isBlank()) {
-                                notice = "请先在左侧选择职业";
-                                return;
-                            }
-                            RpChannels.sendToServer(new RpPackets.AdminSelfProfessionC2S(selProfId));
-                        }),
-                        new ActButton("保存装备", 1, () -> {
-                            if (selProfId.isBlank()) {
-                                notice = "请先在左侧选择职业";
-                                return;
-                            }
-                            // 二次确认：覆盖职业装备前先征询（弹窗行为同影响确认，docs/01 §10）
-                            saveLoadoutTarget = selProfId;
-                            saveLoadoutOpen = true;
-                        }),
-                        new ActButton("职业复活点", 1, () -> openSpawnModal("profession"))));
+                        new ActButton(
+                                Component.translatable("ccnr_rp.gui.admin.field.radio_manage")
+                                        .getString(),
+                                1,
+                                () -> openRadioModal("profession")),
+                        new ActButton(
+                                Component.translatable("ccnr_rp.gui.admin.field.self")
+                                        .getString(),
+                                0,
+                                () -> {
+                                    if (selProfId.isBlank()) {
+                                        notice = Component.translatable(
+                                                        "ccnr_rp.gui.admin.notice.select_profession_first")
+                                                .getString();
+                                        return;
+                                    }
+                                    RpChannels.sendToServer(new RpPackets.AdminSelfProfessionC2S(selProfId));
+                                }),
+                        new ActButton(
+                                Component.translatable("ccnr_rp.gui.admin.field.save_loadout_btn")
+                                        .getString(),
+                                1,
+                                () -> {
+                                    if (selProfId.isBlank()) {
+                                        notice = Component.translatable(
+                                                        "ccnr_rp.gui.admin.notice.select_profession_first")
+                                                .getString();
+                                        return;
+                                    }
+                                    // 二次确认：覆盖职业装备前先征询（弹窗行为同影响确认，docs/01 §10）
+                                    saveLoadoutTarget = selProfId;
+                                    saveLoadoutOpen = true;
+                                }),
+                        new ActButton(
+                                Component.translatable("ccnr_rp.gui.admin.field.profession_spawn")
+                                        .getString(),
+                                1,
+                                () -> openSpawnModal("profession"))));
         y += 26;
         int bw3 = Math.max(60, w / 4);
         addRenderableWidget(RpButton.primary(
@@ -1010,7 +1153,8 @@ public class RpAdminScreen extends Screen {
                 RpButton.danger(x + bw3 + 4, y, bw3, 20, Component.translatable("ccnr_rp.gui.admin.crud.delete"), b -> {
                     String sel = idBox.getValue();
                     if (sel.isBlank()) {
-                        notice = "职业不存在";
+                        notice = Component.translatable("ccnr_rp.gui.admin.notice.profession_missing")
+                                .getString();
                         return;
                     }
                     JsonObject del = payload();
@@ -1039,7 +1183,8 @@ public class RpAdminScreen extends Screen {
     private String factionCycleLabel() {
         List<JsonObject> facs = ClientCharacterState.factions();
         if (facs.isEmpty()) {
-            return "阵营: ?";
+            return Component.translatable("ccnr_rp.gui.admin.label.no_selection")
+                    .getString();
         }
         JsonObject f = facs.get(factionIdx % facs.size());
         return Component.translatable("ccnr_rp.gui.character.faction", str(f, "name"))
@@ -1073,9 +1218,8 @@ public class RpAdminScreen extends Screen {
         String id = fac == null ? "" : str(fac, "id");
         boolean edit = !id.isBlank();
         loadFactionSpawn(fac);
-        if (fac != null) {
-            syncFactionIconTier(fac); // 选中后每次重建表单都同步图标/等级（防刷新回退默认值）
-        }
+        // 注意：不每帧调用 syncFactionIconTier——否则用户选图标/切页签时 iconIdx/tierIdx 会被服务端快照覆盖，
+        // 导致图标切换看似失效。图标/等级只在 selectFaction(选中阵营) 时同步一次。
         // ID 仅编辑模式锁定（创建模式必须可输入，否则无法新建）
         idBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.id", id, edit);
         y += 30;
@@ -1083,17 +1227,15 @@ public class RpAdminScreen extends Screen {
         y += 30;
         colorBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.color", fac == null ? "#FFFFFF" : str(fac, "color"), false);
         y += 30;
-        int bw2 = (w - 4) / 2;
+        // 图标：弹出选择界面（不再用循环按钮——服务端快照会在 rebuild 时覆盖 iconIdx，循环看似失效）
         addRenderableWidget(RpButton.secondary(
-                x, y, bw2, 18, Component.literal("图标: " + iconOptions().get(iconIdx)), b -> {
-                    iconIdx = (iconIdx + 1) % iconOptions().size();
-                    rebuild();
-                }));
-        addRenderableWidget(
-                RpButton.secondary(x + bw2 + 4, y, bw2, 18, Component.literal("等级: " + (tierIdx + 1)), b -> {
-                    tierIdx = (tierIdx + 1) % 3;
-                    rebuild();
-                }));
+                x,
+                y,
+                w,
+                18,
+                Component.translatable(
+                        "ccnr_rp.gui.admin.label.icon", iconOptions().get(iconIdx)),
+                b -> openIconModal()));
         y += 30;
         descBox = mkBox(x, y, w, "ccnr_rp.gui.admin.field.desc", fac == null ? "" : str(fac, "description"), false);
         y += 30;
@@ -1105,6 +1247,35 @@ public class RpAdminScreen extends Screen {
         camSceneBox =
                 mkBox(x, y, w, "ccnr_rp.gui.admin.field.cam_scene", fac == null ? "" : str(fac, "cmdcamScene"), false);
         y += 30;
+        // 入场电影 per-faction 开关：全屏黑（cinematicBlackScreen）与简洁模式（cinematicCompact）
+        int bw2 = (w - 4) / 2;
+        addRenderableWidget(RpButton.secondary(
+                x,
+                y,
+                bw2,
+                18,
+                Component.literal(Component.translatable("ccnr_rp.gui.admin.faction.cinematic_black")
+                                .getString()
+                        + ": "
+                        + onOff(facCinBlack)),
+                b -> {
+                    facCinBlack = !facCinBlack;
+                    rebuild();
+                }));
+        addRenderableWidget(RpButton.secondary(
+                x + bw2 + 4,
+                y,
+                bw2,
+                18,
+                Component.literal(Component.translatable("ccnr_rp.gui.admin.faction.cinematic_compact")
+                                .getString()
+                        + ": "
+                        + onOff(facCinCompact)),
+                b -> {
+                    facCinCompact = !facCinCompact;
+                    rebuild();
+                }));
+        y += 30;
         // 管理快捷操作（阵营级）：无线电管理 / 管理部署点 —— 两个长按钮压成一行短按钮并排
         buttonRow(
                 x,
@@ -1112,8 +1283,16 @@ public class RpAdminScreen extends Screen {
                 w,
                 20,
                 java.util.List.of(
-                        new ActButton("无线电管理", 1, () -> openRadioModal("faction")),
-                        new ActButton("管理部署点", 1, () -> openSpawnModal("faction"))));
+                        new ActButton(
+                                Component.translatable("ccnr_rp.gui.admin.field.radio_manage")
+                                        .getString(),
+                                1,
+                                () -> openRadioModal("faction")),
+                        new ActButton(
+                                Component.translatable("ccnr_rp.gui.admin.field.manage_spawn")
+                                        .getString(),
+                                1,
+                                () -> openSpawnModal("faction"))));
         y += 26;
         int bw3 = Math.max(60, w / 4);
         addRenderableWidget(RpButton.primary(
@@ -1122,7 +1301,8 @@ public class RpAdminScreen extends Screen {
                 RpButton.danger(x + bw3 + 4, y, bw3, 20, Component.translatable("ccnr_rp.gui.admin.crud.delete"), b -> {
                     String sel = idBox.getValue();
                     if (sel.isBlank()) {
-                        notice = "阵营不存在";
+                        notice = Component.translatable("ccnr_rp.gui.admin.notice.faction_missing")
+                                .getString();
                         return;
                     }
                     JsonObject del = payload();
@@ -1134,6 +1314,8 @@ public class RpAdminScreen extends Screen {
                     selFactionId = "";
                     iconIdx = 0;
                     tierIdx = 1;
+                    facCinBlack = true;
+                    facCinCompact = false;
                     rebuild();
                 }));
         // 关系管理与关系测定图已并入独立页签（TAB_RELATION），不再放在阵营表单内
@@ -1175,7 +1357,11 @@ public class RpAdminScreen extends Screen {
     private void openSpawnModal(String kind) {
         JsonObject target = "profession".equals(kind) ? selProf() : selFaction();
         if (target == null || str(target, "id").isBlank()) {
-            notice = "请先在左侧选择" + ("profession".equals(kind) ? "职业" : "阵营");
+            notice = "profession".equals(kind)
+                    ? Component.translatable("ccnr_rp.gui.admin.notice.select_left_profession")
+                            .getString()
+                    : Component.translatable("ccnr_rp.gui.admin.notice.select_left_faction")
+                            .getString();
             return;
         }
         spawnModalKind = kind;
@@ -1186,14 +1372,17 @@ public class RpAdminScreen extends Screen {
     }
 
     private String ruleLabel(String rule) {
-        return "SINGLE".equals(rule) ? "集中(单点)" : "分摊(随机)";
+        return "SINGLE".equals(rule)
+                ? Component.translatable("ccnr_rp.gui.admin.spawn.rule.single").getString()
+                : Component.translatable("ccnr_rp.gui.admin.spawn.rule.spread").getString();
     }
 
     /** 把本机玩家当前坐标 + 维度加入出生点列表（弹窗内，不触发窗体重建）。 */
     private void addCurrentPos() {
         net.minecraft.client.player.LocalPlayer p = net.minecraft.client.Minecraft.getInstance().player;
         if (p == null) {
-            notice = "需以玩家身份打开";
+            notice = Component.translatable("ccnr_rp.gui.admin.notice.need_player")
+                    .getString();
             return;
         }
         String dim = p.level().dimension().location().toString();
@@ -1204,7 +1393,8 @@ public class RpAdminScreen extends Screen {
     /** 发送部署点配置到服务端（写 faction/profession spawn 字段），成功后关闭弹窗。 */
     private void saveSpawn() {
         if (spawnModalTarget.isBlank()) {
-            notice = "请先选择目标";
+            notice = Component.translatable("ccnr_rp.gui.admin.notice.select_target")
+                    .getString();
             return;
         }
         com.google.gson.JsonArray arr = new com.google.gson.JsonArray();
@@ -1240,7 +1430,12 @@ public class RpAdminScreen extends Screen {
         RpTheme.terminalPanel(g, x1, y1, x1 + w, y1 + h, RpTheme.RADIUS_LARGE);
         g.drawString(
                 font,
-                ("profession".equals(spawnModalKind) ? "管理职业复活点 — " : "管理部署点 — ") + spawnModalTarget,
+                Component.translatable(
+                                "profession".equals(spawnModalKind)
+                                        ? "ccnr_rp.gui.admin.spawn.title_profession"
+                                        : "ccnr_rp.gui.admin.spawn.title_faction",
+                                spawnModalTarget)
+                        .getString(),
                 x1 + 14,
                 y1 + 10,
                 RpTheme.CYAN,
@@ -1264,7 +1459,8 @@ public class RpAdminScreen extends Screen {
                 spRuleY1,
                 spRuleX2,
                 spRuleY2,
-                "规则: " + ruleLabel(spawnRule),
+                Component.translatable("ccnr_rp.gui.admin.label.rule", ruleLabel(spawnRule))
+                        .getString(),
                 inRect(mouseX, mouseY, spRuleX1, spRuleY1, spRuleX2, spRuleY2) ? borderHover : border,
                 false);
         // 添加当前坐标
@@ -1278,7 +1474,7 @@ public class RpAdminScreen extends Screen {
                 spAddY1,
                 spAddX2,
                 spAddY2,
-                "+ 添加当前坐标",
+                Component.translatable("ccnr_rp.gui.admin.field.add_pos").getString(),
                 inRect(mouseX, mouseY, spAddX1, spAddY1, spAddX2, spAddY2) ? borderHover : border,
                 false);
         // 保存
@@ -1292,7 +1488,7 @@ public class RpAdminScreen extends Screen {
                 spSaveY1,
                 spSaveX2,
                 spSaveY2,
-                "保存",
+                Component.translatable("ccnr_rp.gui.admin.crud.save").getString(),
                 inRect(mouseX, mouseY, spSaveX1, spSaveY1, spSaveX2, spSaveY2) ? borderHover : border,
                 true);
         // 关闭
@@ -1306,7 +1502,7 @@ public class RpAdminScreen extends Screen {
                 spCancelY1,
                 spCancelX2,
                 spCancelY2,
-                "关闭",
+                Component.translatable("ccnr_rp.gui.admin.field.close").getString(),
                 inRect(mouseX, mouseY, spCancelX1, spCancelY1, spCancelX2, spCancelY2) ? borderHover : border,
                 false);
         cy += 26;
@@ -1314,7 +1510,8 @@ public class RpAdminScreen extends Screen {
         int ry = cy + 4;
         int rx = cx;
         int rw2 = cw - rx;
-        g.drawString(font, "提示：点“+ 添加当前坐标”把传送到此处的坐标记入；规则=分摊/集中。", rx, ry, RpTheme.TEXT_DIM);
+        g.drawString(
+                font, Component.translatable("ccnr_rp.gui.admin.spawn.hint").getString(), rx, ry, RpTheme.TEXT_DIM);
         ry += 16;
 
         spRemoveBounds.clear();
@@ -1337,7 +1534,7 @@ public class RpAdminScreen extends Screen {
                     ry,
                     tpX + 48,
                     ry + 16,
-                    "传送",
+                    Component.translatable("ccnr_rp.gui.admin.field.teleport").getString(),
                     inRect(mouseX, mouseY, tpX, ry, tpX + 48, ry + 16) ? borderHover : border,
                     false);
             spRemoveBounds.add(new int[] {rbX, ry, rbX + 48, ry + 16});
@@ -1347,18 +1544,169 @@ public class RpAdminScreen extends Screen {
                     ry,
                     rbX + 48,
                     ry + 16,
-                    "移除",
+                    Component.translatable("ccnr_rp.gui.admin.field.remove").getString(),
                     inRect(mouseX, mouseY, rbX, ry, rbX + 48, ry + 16) ? borderHover : border,
                     false);
             ry += 22;
         }
         if (spawnPts.isEmpty()) {
-            g.drawString(font, "（未配置出生点：部署回退部署点/世界出生点）", rx, ry + 3, RpTheme.TEXT_DIM);
+            g.drawString(
+                    font,
+                    Component.translatable("ccnr_rp.gui.admin.spawn.empty").getString(),
+                    rx,
+                    ry + 3,
+                    RpTheme.TEXT_DIM);
         }
     }
 
     private boolean inRect(int mx, int my, int x1, int y1, int x2, int y2) {
         return mx >= x1 && mx <= x2 && my >= y1 && my <= y2;
+    }
+
+    // ---------- 阵营图标选择弹窗 ----------
+
+    /** 打开阵营图标选择弹窗（点选可选图标 → 设 iconIdx；取消关闭）。 */
+    private void openIconModal() {
+        iconScroll = 0;
+        iconModalOpen = true;
+        rebuildIconModalBounds();
+    }
+
+    private void rebuildIconModalBounds() {
+        iconCellBounds.clear();
+        iconCancelBounds.clear();
+        java.util.List<String> opts = iconOptions();
+        int cols = ICON_COLS;
+        int cell = ICON_CELL;
+        int rows = Math.max(1, (opts.size() + cols - 1) / cols);
+        int gridW = cols * cell;
+        int w = gridW + 24 + 18; // 右侧预留滚动条
+        int h = 40 + Math.min(rows, 5) * (cell + 8) + 42;
+        int w2 = Math.min(520, Math.max(360, w));
+        int h2 = Math.min(400, Math.max(220, h));
+        iconX1 = (width - w2) / 2;
+        iconY1 = (height - h2) / 2;
+        iconX2 = iconX1 + w2;
+        iconY2 = iconY1 + h2;
+        // 网格可视区（滚动裁剪 + 右侧滚动条轨道）
+        iconGridY1 = iconY1 + 34;
+        iconGridY2 = iconY2 - 44;
+        iconScrollX = iconX2 - 14;
+        int gx = iconX1 + 12;
+        int gy = iconGridY1;
+        int rowH = cell + 8;
+        int visibleRows = Math.max(1, (iconGridY2 - iconGridY1) / rowH);
+        int maxScroll = Math.max(0, rows - visibleRows);
+        iconScroll = Math.max(0, Math.min(iconScroll, maxScroll));
+        for (int i = 0; i < opts.size(); i++) {
+            int row = i / cols;
+            if (row < iconScroll) {
+                continue;
+            }
+            int cx = gx + (i % cols) * cell;
+            int cy = gy + (row - iconScroll) * rowH;
+            if (cy + cell > iconGridY2 + 2) {
+                continue;
+            }
+            iconCellBounds.add(new int[] {cx, cy, cx + cell - 8, cy + cell - 8, i});
+        }
+        // 取消按钮（右下角）
+        int cw = 80;
+        int ch = 24;
+        iconCancelBounds.add(new int[] {iconX2 - cw - 12, iconY2 - ch - 12, iconX2 - 12, iconY2 - 12});
+    }
+
+    /** 渲染图标选择弹窗（每帧；命中在 iconModalClick）。 */
+    private void renderIconModal(GuiGraphics g, int mouseX, int mouseY) {
+        g.fill(0, 0, width, height, 0xA6000000);
+        RpTheme.terminalPanel(g, iconX1, iconY1, iconX2, iconY2, RpTheme.RADIUS_LARGE);
+        g.drawString(
+                font,
+                Component.translatable("ccnr_rp.gui.admin.faction.icon_pick")
+                        .getString()
+                        .toUpperCase(java.util.Locale.ROOT),
+                iconX1 + 14,
+                iconY1 + 10,
+                RpTheme.CYAN,
+                true);
+        g.fill(iconX1 + 8, iconY1 + 26, iconX2 - 8, iconY1 + 27, RpTheme.CYAN_DIM);
+        rebuildIconModalBounds();
+        java.util.List<String> opts = iconOptions();
+        int cols = ICON_COLS;
+        int cell = ICON_CELL;
+        int rowH = cell + 8;
+        int visibleRows = Math.max(1, (iconGridY2 - iconGridY1) / rowH);
+        // 网格裁剪到可视区，滚动时只画可见行
+        g.enableScissor(iconX1 + 12, iconGridY1, iconX2 - 20, iconGridY2);
+        for (int[] c : iconCellBounds) {
+            int idx = c[4];
+            boolean sel = idx == iconIdx;
+            boolean hov = inRect(mouseX, mouseY, c[0], c[1], c[2], c[3]);
+            RpRoundRect.outlined(
+                    g,
+                    c[0],
+                    c[1],
+                    c[2],
+                    c[3],
+                    4f,
+                    sel ? RpTheme.CYAN : (hov ? RpTheme.PANEL_BORDER_BRIGHT : RpTheme.PANEL_BORDER),
+                    sel ? 0xAA313131 : (hov ? 0xAA3A3A3A : 0x99333333));
+            int r = Math.max(10, (c[2] - c[0]) / 2 - 3);
+            int cx = (c[0] + c[2]) / 2;
+            int cy = (c[1] + c[3]) / 2;
+            RpIcons.badge(g, cx, cy, r, opts.get(idx), tierIdx + 1, false);
+        }
+        g.disableScissor();
+        // 滚动条（大量图标时可拖拽/点击跳转）
+        RpScrollbar.draw(
+                g, iconScrollX, iconGridY1, iconGridY2, (opts.size() + cols - 1) / cols, visibleRows, iconScroll);
+        int[] cb = iconCancelBounds.get(0);
+        RpButton.draw(
+                g,
+                cb[0],
+                cb[1],
+                cb[2],
+                cb[3],
+                Component.translatable("ccnr_rp.gui.admin.field.close").getString(),
+                inRect(mouseX, mouseY, cb[0], cb[1], cb[2], cb[3]) ? RpTheme.PANEL_BORDER_BRIGHT : RpTheme.PANEL_BORDER,
+                false);
+    }
+
+    /** 图标选择弹窗命中（打开时在 mouseClicked 顶部调用；未命中关闭）。 */
+    private boolean iconModalClick(double mx, double my, int button) {
+        for (int[] c : iconCellBounds) {
+            if (inRect((int) mx, (int) my, c[0], c[1], c[2], c[3])) {
+                iconIdx = c[4];
+                iconModalOpen = false;
+                rebuild();
+                return true;
+            }
+        }
+        int[] cb = iconCancelBounds.get(0);
+        if (inRect((int) mx, (int) my, cb[0], cb[1], cb[2], cb[3])) {
+            iconModalOpen = false;
+            return true;
+        }
+        // 滚动条：命中游标拖拽 / 点轨道跳转
+        int visibleRows = Math.max(1, (iconGridY2 - iconGridY1) / (ICON_CELL + 8));
+        int ns = RpScrollbar.clickV(
+                (int) mx,
+                (int) my,
+                iconScrollX,
+                iconScrollX + 5,
+                iconGridY1,
+                iconGridY2,
+                (iconOptions().size() + ICON_COLS - 1) / ICON_COLS,
+                visibleRows,
+                iconScroll,
+                ICON_SCROLL_ID);
+        if (ns >= 0) {
+            iconScroll = ns;
+            rebuildIconModalBounds();
+            return true;
+        }
+        iconModalOpen = false;
+        return true;
     }
 
     /** 弹窗内命中处理（在 mouseClicked 顶部调用）。 */
@@ -1408,18 +1756,27 @@ public class RpAdminScreen extends Screen {
     private void openRadioModal(String kind) {
         JsonObject target = "profession".equals(kind) ? selProf() : selFaction();
         if (target == null || str(target, "id").isBlank()) {
-            notice = "请先在左侧选择" + ("profession".equals(kind) ? "职业" : "阵营");
+            notice = "profession".equals(kind)
+                    ? Component.translatable("ccnr_rp.gui.admin.notice.select_left_profession")
+                            .getString()
+                    : Component.translatable("ccnr_rp.gui.admin.notice.select_left_faction")
+                            .getString();
             return;
         }
         radioModalKind = kind;
         radioModalTarget = str(target, "id");
         radioLines.clear();
         radioWaits.clear();
-        radioSpeaker = "指挥官";
+        radioSpeaker = Component.translatable("ccnr_rp.gui.admin.radio.speaker_default")
+                .getString();
         radioDisabled = false;
         if (target.has("radio") && target.get("radio").isJsonObject()) {
             JsonObject r = target.getAsJsonObject("radio");
-            radioSpeaker = str(r, "speaker", "指挥官");
+            radioSpeaker = str(
+                    r,
+                    "speaker",
+                    Component.translatable("ccnr_rp.gui.admin.radio.speaker_default")
+                            .getString());
             if (r.has("lines") && r.get("lines").isJsonArray()) {
                 for (com.google.gson.JsonElement e : r.getAsJsonArray("lines")) {
                     if (!e.isJsonObject()) {
@@ -1461,11 +1818,17 @@ public class RpAdminScreen extends Screen {
     /** 发送无线电配置到服务端（写 faction/profession radio 字段），成功后关闭弹窗。 */
     private void saveRadioModal() {
         if (radioModalTarget.isBlank()) {
-            notice = "请先选择目标";
+            notice = Component.translatable("ccnr_rp.gui.admin.notice.select_target")
+                    .getString();
             return;
         }
         com.google.gson.JsonObject radio = new com.google.gson.JsonObject();
-        radio.addProperty("speaker", radioSpeaker.isBlank() ? "指挥官" : radioSpeaker);
+        radio.addProperty(
+                "speaker",
+                radioSpeaker.isBlank()
+                        ? Component.translatable("ccnr_rp.gui.admin.radio.speaker_default")
+                                .getString()
+                        : radioSpeaker);
         com.google.gson.JsonArray lines = new com.google.gson.JsonArray();
         for (int i = 0; i < radioLines.size(); i++) {
             String text = radioLines.get(i);
@@ -1512,7 +1875,12 @@ public class RpAdminScreen extends Screen {
         RpTheme.terminalPanel(g, x1, y1, x1 + w, y1 + h, RpTheme.RADIUS_LARGE);
         g.drawString(
                 font,
-                ("profession".equals(radioModalKind) ? "无线电管理（职业）— " : "无线电管理（阵营）— ") + radioModalTarget,
+                Component.translatable(
+                                "profession".equals(radioModalKind)
+                                        ? "ccnr_rp.gui.admin.radio.title_profession"
+                                        : "ccnr_rp.gui.admin.radio.title_faction",
+                                radioModalTarget)
+                        .getString(),
                 x1 + 14,
                 y1 + 10,
                 RpTheme.CYAN,
@@ -1526,7 +1894,8 @@ public class RpAdminScreen extends Screen {
         int border = RpTheme.PANEL_BORDER;
         int borderHover = RpTheme.PANEL_BORDER_BRIGHT;
         // 说话人（阵营色渲染前缀）：首次创建、后续复用（不重建，保证可输入且不丢焦点）
-        g.drawString(font, "说话人（阵营色）:", cx, cy, RpTheme.TEXT_DIM);
+        g.drawString(
+                font, Component.translatable("ccnr_rp.gui.admin.label.speaker").getString(), cx, cy, RpTheme.TEXT_DIM);
         if (radioSpeakerBox == null) {
             radioSpeakerBox = mkBox(cx + 120, cy, cw - cx - 120, "", radioSpeaker, false);
         } else {
@@ -1547,7 +1916,7 @@ public class RpAdminScreen extends Screen {
                 rdAddY1,
                 rdAddX2,
                 rdAddY2,
-                "+ 添加句子",
+                Component.translatable("ccnr_rp.gui.admin.field.add_line").getString(),
                 inRect(mouseX, mouseY, rdAddX1, rdAddY1, rdAddX2, rdAddY2) ? borderHover : border,
                 false);
         // 职业：禁用无线电开关
@@ -1562,7 +1931,14 @@ public class RpAdminScreen extends Screen {
                     rdToggleY1,
                     rdToggleX2,
                     rdToggleY2,
-                    "禁用无线电: " + (radioDisabled ? "开" : "关"),
+                    Component.translatable(
+                                    "ccnr_rp.gui.admin.label.radio_disabled",
+                                    radioDisabled
+                                            ? Component.translatable("ccnr_rp.gui.admin.value.on")
+                                                    .getString()
+                                            : Component.translatable("ccnr_rp.gui.admin.value.off")
+                                                    .getString())
+                            .getString(),
                     inRect(mouseX, mouseY, rdToggleX1, rdToggleY1, rdToggleX2, rdToggleY2) ? borderHover : border,
                     radioDisabled);
         }
@@ -1577,7 +1953,7 @@ public class RpAdminScreen extends Screen {
                 rdSaveY1,
                 rdSaveX2,
                 rdSaveY2,
-                "保存",
+                Component.translatable("ccnr_rp.gui.admin.crud.save").getString(),
                 inRect(mouseX, mouseY, rdSaveX1, rdSaveY1, rdSaveX2, rdSaveY2) ? borderHover : border,
                 true);
         // 关闭
@@ -1591,12 +1967,13 @@ public class RpAdminScreen extends Screen {
                 rdCancelY1,
                 rdCancelX2,
                 rdCancelY2,
-                "关闭",
+                Component.translatable("ccnr_rp.gui.admin.field.close").getString(),
                 inRect(mouseX, mouseY, rdCancelX1, rdCancelY1, rdCancelX2, rdCancelY2) ? borderHover : border,
                 false);
         cy += 26;
 
-        g.drawString(font, "提示：行内直接编辑句子与停留秒数；按住行首「≡」上下拖动调换顺序；新句子追加在尾部。", cx, cy, RpTheme.TEXT_DIM);
+        g.drawString(
+                font, Component.translatable("ccnr_rp.gui.admin.radio.hint").getString(), cx, cy, RpTheme.TEXT_DIM);
         cy += 16;
 
         // 句子列表（滚动，行高 RADIO_ROW_H）：拖拽手柄 + 文本输入 + 停留秒数输入 + 删除 —— 行内编辑
@@ -1685,13 +2062,18 @@ public class RpAdminScreen extends Screen {
                     ry + 1,
                     delX + delW,
                     ry + 19,
-                    "删",
+                    Component.translatable("ccnr_rp.gui.admin.field.del").getString(),
                     inRect(mouseX, mouseY, delX, ry + 1, delX + delW, ry + 19) ? borderHover : border,
                     false);
             ry += RADIO_ROW_H;
         }
         if (radioLines.isEmpty()) {
-            g.drawString(font, "（空：点「+ 添加句子」开始）", cx, listTop + 4, RpTheme.TEXT_DIM);
+            g.drawString(
+                    font,
+                    Component.translatable("ccnr_rp.gui.admin.radio.empty").getString(),
+                    cx,
+                    listTop + 4,
+                    RpTheme.TEXT_DIM);
         }
         RpScrollbar.draw(g, cw - 8, listTop, listBottom, radioLines.size(), maxVis, off);
     }
@@ -1844,7 +2226,8 @@ public class RpAdminScreen extends Screen {
     private void openSequenceModal() {
         JsonObject it = selItem();
         if (it == null || str(it, "id").isBlank()) {
-            notice = "请先在左侧选择条目";
+            notice = Component.translatable("ccnr_rp.gui.admin.notice.select_item_first")
+                    .getString();
             return;
         }
         seqModalTitle = kindLabel(crudKind()) + " " + str(it, "id");
@@ -1879,9 +2262,11 @@ public class RpAdminScreen extends Screen {
 
     private static String kindLabel(String kind) {
         return switch (kind) {
-            case "event" -> "事件";
-            case "phase" -> "阶段";
-            case "wave" -> "刷新波";
+            case "event" -> Component.translatable("ccnr_rp.gui.admin.kind.event")
+                    .getString();
+            case "phase" -> Component.translatable("ccnr_rp.gui.admin.kind.phase")
+                    .getString();
+            case "wave" -> Component.translatable("ccnr_rp.gui.admin.kind.wave").getString();
             default -> kind;
         };
     }
@@ -1907,12 +2292,20 @@ public class RpAdminScreen extends Screen {
     private static String stepSummary(JsonObject s) {
         String type = str(s, "type", "WAIT").toUpperCase(java.util.Locale.ROOT);
         return switch (type) {
-            case "TRIGGER" -> "触发事件：" + str(s, "label");
-            case "WAIT" -> "等待 " + num(s, "seconds", 10) + "s";
-            case "WAVE" -> "召唤波 " + str(s, "wave");
-            case "COMMAND" -> "命令 " + str(s, "command");
-            case "FORCE_PICK" -> "征召 " + num(s, "count", 1) + " 人 [" + str(s, "professions") + "] (" + str(s, "faction")
-                    + ")";
+            case "TRIGGER" -> Component.translatable("ccnr_rp.gui.admin.step.trigger", str(s, "label"))
+                    .getString();
+            case "WAIT" -> Component.translatable("ccnr_rp.gui.admin.step.wait", num(s, "seconds", 10))
+                    .getString();
+            case "WAVE" -> Component.translatable("ccnr_rp.gui.admin.step.wave", str(s, "wave"))
+                    .getString();
+            case "COMMAND" -> Component.translatable("ccnr_rp.gui.admin.step.command", str(s, "command"))
+                    .getString();
+            case "FORCE_PICK" -> Component.translatable(
+                            "ccnr_rp.gui.admin.step.force_pick",
+                            num(s, "count", 1),
+                            str(s, "professions"),
+                            str(s, "faction"))
+                    .getString();
             default -> type;
         };
     }
@@ -1985,15 +2378,32 @@ public class RpAdminScreen extends Screen {
         // 字段描述用输入框灰色占位提示（值空时显示，输入即消失），避免描述文本画在框内造成重叠
         switch (type) {
             case "WAIT" -> seqBoxes.put(
-                    "seconds", seqBox(x, sqFieldY1, w, "等待秒数", String.valueOf(num(s, "seconds", 10))));
-            case "WAVE" -> seqBoxes.put("wave", seqBox(x, sqFieldY1, w, "刷新波 ID", str(s, "wave")));
+                    "seconds",
+                    seqBox(
+                            x,
+                            sqFieldY1,
+                            w,
+                            "ccnr_rp.gui.admin.field.wait_seconds",
+                            String.valueOf(num(s, "seconds", 10))));
+            case "WAVE" -> seqBoxes.put(
+                    "wave", seqBox(x, sqFieldY1, w, "ccnr_rp.gui.admin.field.wave_id", str(s, "wave")));
             case "COMMAND" -> seqBoxes.put(
-                    "command",
-                    seqBox(x, sqFieldY1, w, "命令文本：可用 {{event}} {{phase}} {{seq}} {{trigger}} 变量", str(s, "command")));
+                    "command", seqBox(x, sqFieldY1, w, "ccnr_rp.gui.admin.field.command_text", str(s, "command")));
             case "FORCE_PICK" -> {
-                seqBoxes.put("count", seqBox(x, sqFieldY1, bw2, "数量", String.valueOf(num(s, "count", 1))));
-                seqBoxes.put("professions", seqBox(x + bw2 + 4, sqFieldY1, bw2, "职业ID(逗号)", str(s, "professions")));
-                seqBoxes.put("faction", seqBox(x, sqFieldY1 + 24, w, "阵营ID", str(s, "faction")));
+                seqBoxes.put(
+                        "count",
+                        seqBox(x, sqFieldY1, bw2, "ccnr_rp.gui.admin.field.count", String.valueOf(num(s, "count", 1))));
+                seqBoxes.put(
+                        "professions",
+                        seqBox(
+                                x + bw2 + 4,
+                                sqFieldY1,
+                                bw2,
+                                "ccnr_rp.gui.admin.field.profession_ids",
+                                str(s, "professions")));
+                seqBoxes.put(
+                        "faction",
+                        seqBox(x, sqFieldY1 + 24, w, "ccnr_rp.gui.admin.field.faction_id", str(s, "faction")));
             }
             default -> {}
         }
@@ -2075,7 +2485,14 @@ public class RpAdminScreen extends Screen {
         g.fill(0, 0, width, height, 0xA6000000);
         layoutSeqModal();
         RpTheme.terminalPanel(g, sqX1, sqY1, sqX2, sqY2, RpTheme.RADIUS_LARGE);
-        g.drawString(font, "行为序列 — " + seqModalTitle, sqX1 + 14, sqY1 + 10, RpTheme.CYAN, true);
+        g.drawString(
+                font,
+                Component.translatable("ccnr_rp.gui.admin.label.sequence_title", seqModalTitle)
+                        .getString(),
+                sqX1 + 14,
+                sqY1 + 10,
+                RpTheme.CYAN,
+                true);
         g.fill(sqX1 + 8, sqY1 + 26, sqX2 - 8, sqY1 + 27, RpTheme.CYAN_DIM);
 
         int cx = sqX1 + 14;
@@ -2098,7 +2515,7 @@ public class RpAdminScreen extends Screen {
                 sqRuleY1,
                 sqRuleX2,
                 sqRuleY2,
-                "类型: " + typeCur,
+                Component.translatable("ccnr_rp.gui.admin.label.type", typeCur).getString(),
                 inRect(mouseX, mouseY, sqRuleX1, sqRuleY1, sqRuleX2, sqRuleY2) ? borderHover : border,
                 stepSel >= 1); // 锚点不可改类型
         // 添加步骤
@@ -2112,7 +2529,7 @@ public class RpAdminScreen extends Screen {
                 sqAddY1,
                 sqAddX2,
                 sqAddY2,
-                "+ 添加步骤",
+                Component.translatable("ccnr_rp.gui.admin.field.add_step").getString(),
                 inRect(mouseX, mouseY, sqAddX1, sqAddY1, sqAddX2, sqAddY2) ? borderHover : border,
                 false);
         // 保存
@@ -2126,7 +2543,7 @@ public class RpAdminScreen extends Screen {
                 sqSaveY1,
                 sqSaveX2,
                 sqSaveY2,
-                "保存",
+                Component.translatable("ccnr_rp.gui.admin.crud.save").getString(),
                 inRect(mouseX, mouseY, sqSaveX1, sqSaveY1, sqSaveX2, sqSaveY2) ? borderHover : border,
                 true);
         // 关闭
@@ -2140,18 +2557,14 @@ public class RpAdminScreen extends Screen {
                 sqCancelY1,
                 sqCancelX2,
                 sqCancelY2,
-                "关闭",
+                Component.translatable("ccnr_rp.gui.admin.field.close").getString(),
                 inRect(mouseX, mouseY, sqCancelX1, sqCancelY1, sqCancelX2, sqCancelY2) ? borderHover : border,
                 false);
         g.drawString(
-                font,
-                "提示：点击步骤行选中编辑；WAIT=等待秒数 / WAVE=召唤刷新波 / COMMAND=执行命令（{{event}} {{phase}} {{seq}} 变量）/ FORCE_PICK=强制征召。",
-                cx,
-                cy + 24,
-                RpTheme.TEXT_DIM);
+                font, Component.translatable("ccnr_rp.gui.admin.seq.hint").getString(), cx, cy + 24, RpTheme.TEXT_DIM);
 
         // 步骤列表（滚动，行高 22）：点选 / 上移 / 下移 / 删除；
-        // 「触发事件」锚点行为只读行（🔒 锁定样式，无删除按钮，但可上移下移调整位置）
+        // 「触发事件」锚点行为只读行（锁定样式，无删除按钮，但可上移下移调整位置）
         sqStepBounds.clear();
         sqUpBounds.clear();
         sqDownBounds.clear();
@@ -2193,7 +2606,9 @@ public class RpAdminScreen extends Screen {
                         i % 2 == 0 ? RpTheme.PANEL_BG : RpTheme.PANEL_BG_EVEN);
             }
             String label = anchor
-                    ? "🔒 " + stepSummary(s) + "（只读，触发来源 " + str(s, "source") + "）"
+                    ? stepSummary(s)
+                            + Component.translatable("ccnr_rp.gui.admin.seq.readonly", str(s, "source"))
+                                    .getString()
                     : "[" + idx + "] " + stepSummary(s);
             g.drawString(
                     font,
@@ -2233,21 +2648,31 @@ public class RpAdminScreen extends Screen {
                         ry,
                         bx + bw3 * 3 + 4,
                         ry + 20,
-                        "删",
+                        Component.translatable("ccnr_rp.gui.admin.field.del").getString(),
                         inRect(mouseX, mouseY, bx + bw3 * 2 + 4, ry, bx + bw3 * 3 + 4, ry + 20) ? borderHover : border,
                         false);
             }
             ry += 22;
         }
         if (seqSteps.isEmpty()) {
-            g.drawString(font, "（空：点「+ 添加步骤」开始编排）", cx, sqListY1 + 4, RpTheme.TEXT_DIM);
+            g.drawString(
+                    font,
+                    Component.translatable("ccnr_rp.gui.admin.seq.empty").getString(),
+                    cx,
+                    sqListY1 + 4,
+                    RpTheme.TEXT_DIM);
         }
         RpScrollbar.draw(g, cw - 8, sqListY1, sqListY2, seqSteps.size(), maxVis, off);
 
         // 选中项参数区：锚点只读展示；可编辑步骤按类型生成输入框
         if (isTriggerStep(stepSel)) {
             JsonObject anchor = seqSteps.get(stepSel);
-            g.drawString(font, "触发事件锚点（只读）：", sqFieldX1, sqFieldY1 - 12, RpTheme.TEXT_DIM);
+            g.drawString(
+                    font,
+                    Component.translatable("ccnr_rp.gui.admin.seq.anchor").getString(),
+                    sqFieldX1,
+                    sqFieldY1 - 12,
+                    RpTheme.TEXT_DIM);
             g.drawString(
                     font,
                     str(anchor, "label") + "（source=" + str(anchor, "source") + "）",
@@ -2256,13 +2681,19 @@ public class RpAdminScreen extends Screen {
                     RpTheme.TEXT_SECONDARY);
             g.drawString(
                     font,
-                    "代表触发本序列的真实事件/环境，不可删除、不可修改、不可编辑参数；可用 ↑↓ 调整位置，实际执行由其余步骤承担。",
+                    Component.translatable("ccnr_rp.gui.admin.seq.anchor_hint").getString(),
                     sqFieldX1,
                     sqFieldY1 + 22,
                     RpTheme.TEXT_DIM);
         } else if (stepSel >= 0 && stepSel < seqSteps.size()) {
             String type = str(seqSteps.get(stepSel), "type", "WAIT").toUpperCase(java.util.Locale.ROOT);
-            g.drawString(font, "步骤参数（" + type + "）：", sqFieldX1, sqFieldY1 - 12, RpTheme.TEXT_DIM);
+            g.drawString(
+                    font,
+                    Component.translatable("ccnr_rp.gui.admin.label.step_params", type)
+                            .getString(),
+                    sqFieldX1,
+                    sqFieldY1 - 12,
+                    RpTheme.TEXT_DIM);
             // 字段描述以输入框灰色占位提示呈现（值空显示，输入即消失），不再画在框内与输入文本重叠
             for (EditBox b : seqBoxes.values()) {
                 b.render(g, mouseX, mouseY, partialTick);
@@ -2375,6 +2806,8 @@ public class RpAdminScreen extends Screen {
         p.addProperty("tier", tierIdx + 1);
         p.addProperty("music", musicBox.getValue());
         p.addProperty("cmdcamScene", camSceneBox == null ? "" : camSceneBox.getValue());
+        p.addProperty("cinematicBlackScreen", facCinBlack);
+        p.addProperty("cinematicCompact", facCinCompact);
         requestCrud("faction", edit ? "update" : "create", p);
     }
 
@@ -2522,7 +2955,7 @@ public class RpAdminScreen extends Screen {
     }
 
     /** 更新/删除先向服务端做影响预检（波及角色/波/事件/阶段），确认后再执行；新建直接执行。 */
-    private void requestCrud(String kind, String action, JsonObject payload) {
+    void requestCrud(String kind, String action, JsonObject payload) {
         if ("create".equals(action)) {
             sendCrud(kind, action, payload);
             return;
@@ -2672,8 +3105,8 @@ public class RpAdminScreen extends Screen {
                 return true;
             }
         }
-        // 列表滚动条：按住游标拖拽 / 点击轨道跳转（经验规则/关系管理页签无通用列表行高，跳过）
-        if (tab != TAB_SETTINGS && tab != TAB_XP && tab != TAB_RELATION) {
+        // 列表滚动条：按住游标拖拽 / 点击轨道跳转（经验规则/关系管理/阵营组页签为自包含页签，无通用列表行高，跳过）
+        if (tab != TAB_SETTINGS && tab != TAB_XP && tab != TAB_RELATION && tab != TAB_GROUPS) {
             int maxRows = Math.max(1, (listY2 - listY1) / rowHeight());
             int ns = RpScrollbar.clickV(
                     (int) mx,
@@ -2715,6 +3148,10 @@ public class RpAdminScreen extends Screen {
             }
             return true; // 未命中也不放行到底层
         }
+        if (iconModalOpen) {
+            iconModalClick(mx, my, button); // 图标选择弹窗：命中单元格/取消处理，未命中关闭
+            return true;
+        }
         if (radioModalOpen) {
             radioModalClick(mx, my, button); // 无线电编辑弹窗：命中按钮/输入框处理，未命中也不放行到底层
             return true;
@@ -2729,6 +3166,10 @@ public class RpAdminScreen extends Screen {
         }
         // 关系页签阵营下拉/注入：弹层会盖住输入框等 widget，须在 super（widget 分发）之前命中
         if (tab == TAB_RELATION && relationTab().mouseClickedOverlay((int) mx, (int) my, button)) {
+            return true;
+        }
+        // 阵营组页签成员下拉/注入：同样须在 super 之前命中
+        if (tab == TAB_GROUPS && groupsTab().mouseClickedOverlay((int) mx, (int) my, button)) {
             return true;
         }
         if (super.mouseClicked(mx, my, button)) {
@@ -2784,6 +3225,11 @@ public class RpAdminScreen extends Screen {
                 return true;
             }
         }
+        if (tab == TAB_GROUPS) {
+            if (groupsTab().mouseClicked((int) mx, (int) my, button)) {
+                return true;
+            }
+        }
         if (!ClientCharacterState.isAdmin() && tab != TAB_SETTINGS) {
             notice = Component.translatable("ccnr_rp.gui.admin.no_perm").getString();
             return true;
@@ -2826,6 +3272,17 @@ public class RpAdminScreen extends Screen {
             int target = radioDragTarget(my);
             if (target != radioDragIdx) {
                 moveRadioLine(radioDragIdx, target);
+            }
+            return true;
+        }
+        // 图标选择弹窗滚动条拖拽
+        if (iconModalOpen) {
+            if (RpScrollbar.dragId() == ICON_SCROLL_ID) {
+                int ns = RpScrollbar.dragV((int) my);
+                if (ns >= 0) {
+                    iconScroll = ns;
+                    rebuildIconModalBounds();
+                }
             }
             return true;
         }
@@ -2953,6 +3410,10 @@ public class RpAdminScreen extends Screen {
     private void selectFaction(JsonObject f) {
         selFactionId = str(f, "id");
         syncFactionIconTier(f);
+        // 入场电影开关仅在切换选中阵营时同步一次；不能在 rebuild()/sync 里每次覆盖，
+        // 否则点击「入场全屏黑 / 简洁电影」触发 rebuild() 时会被服务端快照回退，开关看似点不动。
+        facCinBlack = boolOf(f, "cinematicBlackScreen", true);
+        facCinCompact = boolOf(f, "cinematicCompact", false);
         rebuild();
     }
 
@@ -2967,6 +3428,16 @@ public class RpAdminScreen extends Screen {
             }
         }
         tierIdx = Math.max(0, Math.min(2, tierOf(f) - 1));
+    }
+
+    private static boolean boolOf(JsonObject o, String key, boolean def) {
+        return o.has(key) && o.get(key).isJsonPrimitive() ? o.get(key).getAsBoolean() : def;
+    }
+
+    /** 开关标签：开 / 关（本地化）。 */
+    private static String onOff(boolean on) {
+        return Component.translatable(on ? "ccnr_rp.gui.admin.value.on" : "ccnr_rp.gui.admin.value.off")
+                .getString();
     }
 
     private void selectLimit(JsonObject r) {
@@ -3005,6 +3476,14 @@ public class RpAdminScreen extends Screen {
             }
             return true;
         }
+        if (iconModalOpen) {
+            // 图标选择弹窗：滚轮滚动网格
+            int visibleRows = Math.max(1, (iconGridY2 - iconGridY1) / (ICON_CELL + 8));
+            int maxScroll = Math.max(0, (iconOptions().size() + ICON_COLS - 1) / ICON_COLS - visibleRows);
+            iconScroll = (int) Math.max(0, Math.min(iconScroll - delta / 8, maxScroll));
+            rebuildIconModalBounds();
+            return true;
+        }
         if (radioModalOpen) {
             // 无线电编辑器：句子列表区滚动
             if (mouseY >= rdY1 + 60 && mouseY <= rdY2 - 24) {
@@ -3023,6 +3502,10 @@ public class RpAdminScreen extends Screen {
         }
         if (tab == TAB_RELATION) {
             relationTab().mouseScrolled((int) mouseX, (int) mouseY, delta);
+            return true;
+        }
+        if (tab == TAB_GROUPS) {
+            groupsTab().mouseScrolled((int) mouseX, (int) mouseY, delta);
             return true;
         }
         if (tab == TAB_PROFESSION) {
@@ -3057,6 +3540,10 @@ public class RpAdminScreen extends Screen {
             spawnModalOpen = false;
             return true;
         }
+        if (iconModalOpen && keyCode == 256) {
+            iconModalOpen = false;
+            return true;
+        }
         if (radioModalOpen && keyCode == 256) {
             closeRadioModal();
             return true;
@@ -3069,6 +3556,9 @@ public class RpAdminScreen extends Screen {
             return true; // 经验规则页签：事件补全候选上/下/回车/Esc
         }
         if (tab == TAB_RELATION && relationTab().keyPressed(keyCode, scanCode, modifiers)) {
+            return true;
+        }
+        if (tab == TAB_GROUPS && groupsTab().keyPressed(keyCode, scanCode, modifiers)) {
             return true;
         }
         if (!camSugItems.isEmpty() && camSugBox != null && camSugBox.isFocused()) {
@@ -3164,11 +3654,18 @@ public class RpAdminScreen extends Screen {
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         renderBackground(g);
         // 模态（弹窗）打开时，仅保留深色背景 + 弹窗本身，彻底隐藏下层管理界面
-        boolean modal = impactOpen || spawnModalOpen || seqModalOpen || radioModalOpen || saveLoadoutOpen;
+        boolean modal =
+                impactOpen || spawnModalOpen || seqModalOpen || radioModalOpen || saveLoadoutOpen || iconModalOpen;
         if (!modal) {
-            RpTheme.terminalPanel(g, px1, py1, px2, py2, RpTheme.RADIUS_LARGE);
+            RpTheme.terminalFrame(g, px1, py1, px2, py2, RpTheme.RADIUS_LARGE);
+            RpTheme.gridOverlay(g, px1 + 4, py1 + 4, px2 - 4, py2 - 4);
             g.drawString(
-                    font, title.getString().toUpperCase(java.util.Locale.ROOT), px1 + 12, py1 + 8, RpTheme.CYAN, true);
+                    font,
+                    "[CCNR] " + title.getString().toUpperCase(java.util.Locale.ROOT),
+                    px1 + 12,
+                    py1 + 8,
+                    RpTheme.CYAN,
+                    true);
             // 素版：不再绘制黄色「● ADMIN」徽章；非管理员保留红色无权限提示
             if (!ClientCharacterState.isAdmin()) {
                 g.drawString(
@@ -3215,7 +3712,7 @@ public class RpAdminScreen extends Screen {
                 }
                 g.drawCenteredString(
                         font,
-                        Component.translatable(TABS[i]).getString(),
+                        RpTheme.tag(Component.translatable(TABS[i]).getString()),
                         (b[0] + b[2]) / 2,
                         b[1] + 6,
                         sel ? RpTheme.ACCENT_TEXT : RpTheme.TEXT_SECONDARY);
@@ -3242,12 +3739,21 @@ public class RpAdminScreen extends Screen {
                 rulesTab().render(g, mouseX, mouseY);
             } else if (tab == TAB_RELATION) {
                 relationTab().render(g, mouseX, mouseY);
+            } else if (tab == TAB_GROUPS) {
+                groupsTab().render(g, mouseX, mouseY);
             } else {
                 renderListTab(g, mouseX, mouseY);
             }
             renderFieldLabels(g);
             if (!notice.isBlank()) {
-                g.drawCenteredString(font, "[ 系统 ] " + notice, (px1 + px2) / 2, py2 - 46, RpTheme.RED_LINE);
+                g.drawCenteredString(
+                        font,
+                        "[ "
+                                + Component.translatable("ccnr_rp.gui.admin.system")
+                                        .getString() + " ] " + notice,
+                        (px1 + px2) / 2,
+                        py2 - 46,
+                        RpTheme.RED_LINE);
             }
             super.render(g, mouseX, mouseY, partialTick);
             // 输入补全框置顶渲染：super.render 会绘制所有 widget（输入框/按钮），
@@ -3261,12 +3767,21 @@ public class RpAdminScreen extends Screen {
             if (tab == TAB_RELATION) {
                 relationTab().renderOverlay(g, mouseX, mouseY);
             }
+            // 阵营组页签成员下拉弹层：盖住输入框，放最后绘制
+            if (tab == TAB_GROUPS) {
+                groupsTab().renderOverlay(g, mouseX, mouseY);
+            }
+            // CRT 扫描线（内容层之上，低透明度屏幕质感；对齐前端 body::before）
+            RpTheme.scanlines(g, px1, py1, px2, py2);
         }
         if (impactOpen) {
             renderImpactModal(g, mouseX, mouseY);
         }
         if (saveLoadoutOpen) {
             renderSaveLoadoutModal(g, mouseX, mouseY);
+        }
+        if (iconModalOpen) {
+            renderIconModal(g, mouseX, mouseY);
         }
         if (spawnModalOpen) {
             renderSpawnModal(g, mouseX, mouseY);
@@ -3723,7 +4238,8 @@ public class RpAdminScreen extends Screen {
             g.drawString(font, main, fx, b[1] + 1, sel ? RpTheme.ACCENT_TEXT : RpTheme.TEXT_PRIMARY, true);
             g.drawString(font, str(item, "id"), fx, b[1] + 11, sel ? RpTheme.ACCENT_TEXT : RpTheme.TEXT_DIM, true);
             if (tab == TAB_LIMITS) {
-                String lim = "上限 " + num(item, "limit", 0);
+                String lim = Component.translatable("ccnr_rp.gui.admin.label.limit", num(item, "limit", 0))
+                        .getString();
                 g.drawString(
                         font,
                         lim,
@@ -3734,7 +4250,8 @@ public class RpAdminScreen extends Screen {
             }
             // 职业缺装备设定 → 右侧小标记
             if (tab == TAB_PROFESSION && isProfessionLoadoutEmpty(item)) {
-                String warn = "缺装备";
+                String warn = Component.translatable("ccnr_rp.gui.admin.label.missing_gear")
+                        .getString();
                 g.drawString(font, warn, b[2] - 8 - font.width(warn), b[1] + 11, 0xFFB4B4B4, true);
             }
         }
@@ -3849,23 +4366,40 @@ public class RpAdminScreen extends Screen {
 
     private static String cfgLabel(String key) {
         return switch (key) {
-            case "deathCooldownMinutes" -> "死亡冷却(分钟)";
-            case "offlineGraceSeconds" -> "离线判死宽限(秒)";
-            case "offlinePollSeconds" -> "离线判死轮询(秒)";
-            case "evalIntervalTicks" -> "事件求值间隔(tick)";
-            case "pollTicks" -> "复活波轮询(tick)";
-            case "deployDelayTicks" -> "部署延迟(tick)";
-            case "dutyXpPerSecond" -> "值班XP/秒";
-            case "taskDefaultXp" -> "任务默认XP";
-            case "evacSafeXp" -> "安全撤离XP";
-            case "evacDiedXp" -> "阵亡XP(可负)";
-            case "evacObservingXp" -> "观察结束XP";
-            case "evacStayBehindXp" -> "留守XP";
-            case "base" -> "等级基数";
-            case "pow" -> "等级指数";
-            case "enabled" -> "头顶标签开关";
-            case "badgeSize" -> "头顶标签徽章大小";
-            case "offset" -> "头顶标签高度(格)";
+            case "deathCooldownMinutes" -> Component.translatable("ccnr_rp.gui.admin.serverconfig.death_cooldown")
+                    .getString();
+            case "offlineGraceSeconds" -> Component.translatable("ccnr_rp.gui.admin.serverconfig.offline_grace")
+                    .getString();
+            case "offlinePollSeconds" -> Component.translatable("ccnr_rp.gui.admin.serverconfig.offline_poll")
+                    .getString();
+            case "evalIntervalTicks" -> Component.translatable("ccnr_rp.gui.admin.serverconfig.eval_interval")
+                    .getString();
+            case "pollTicks" -> Component.translatable("ccnr_rp.gui.admin.serverconfig.wave_poll")
+                    .getString();
+            case "deployDelayTicks" -> Component.translatable("ccnr_rp.gui.admin.serverconfig.deploy_delay")
+                    .getString();
+            case "dutyXpPerSecond" -> Component.translatable("ccnr_rp.gui.admin.serverconfig.duty_xp")
+                    .getString();
+            case "taskDefaultXp" -> Component.translatable("ccnr_rp.gui.admin.serverconfig.task_xp")
+                    .getString();
+            case "evacSafeXp" -> Component.translatable("ccnr_rp.gui.admin.serverconfig.evac_safe_xp")
+                    .getString();
+            case "evacDiedXp" -> Component.translatable("ccnr_rp.gui.admin.serverconfig.evac_died_xp")
+                    .getString();
+            case "evacObservingXp" -> Component.translatable("ccnr_rp.gui.admin.serverconfig.evac_observing_xp")
+                    .getString();
+            case "evacStayBehindXp" -> Component.translatable("ccnr_rp.gui.admin.serverconfig.evac_stay_xp")
+                    .getString();
+            case "base" -> Component.translatable("ccnr_rp.gui.admin.serverconfig.level_base")
+                    .getString();
+            case "pow" -> Component.translatable("ccnr_rp.gui.admin.serverconfig.level_pow")
+                    .getString();
+            case "enabled" -> Component.translatable("ccnr_rp.gui.admin.serverconfig.nametag_enabled")
+                    .getString();
+            case "badgeSize" -> Component.translatable("ccnr_rp.gui.admin.serverconfig.nametag_badge")
+                    .getString();
+            case "offset" -> Component.translatable("ccnr_rp.gui.admin.serverconfig.nametag_offset")
+                    .getString();
             default -> key;
         };
     }
@@ -3898,7 +4432,13 @@ public class RpAdminScreen extends Screen {
         int off = Math.min(scroll, Math.max(0, profs.size() - maxVisible));
         RpRoundRect.outlined(
                 g, listX1 - 2, listY1 - 4, listX2 + 2, listY2 + 2, 4f, RpTheme.PANEL_BORDER, RpTheme.PANEL_BG_EVEN);
-        g.drawString(font, "职业(" + profs.size() + ")", listX1 + 4, listY1 - 4, RpTheme.TEXT_DIM);
+        g.drawString(
+                font,
+                Component.translatable("ccnr_rp.gui.admin.label.professions_count", profs.size())
+                        .getString(),
+                listX1 + 4,
+                listY1 - 4,
+                RpTheme.TEXT_DIM);
         for (int i = 0; i < profs.size() && i < maxVisible; i++) {
             JsonObject p = profs.get(off + i);
             int[] b = rowBounds.get(TABS.length + i);
@@ -3925,7 +4465,13 @@ public class RpAdminScreen extends Screen {
         int rowH = 22;
         RpRoundRect.outlined(
                 g, listX1 - 2, listY1 - 4, listX2 + 2, listY2 + 2, 4f, RpTheme.PANEL_BORDER, RpTheme.PANEL_BG_EVEN);
-        g.drawString(font, "阵营(" + facs.size() + ")", listX1 + 4, listY1 - 4, RpTheme.TEXT_DIM);
+        g.drawString(
+                font,
+                Component.translatable("ccnr_rp.gui.admin.label.factions_count", facs.size())
+                        .getString(),
+                listX1 + 4,
+                listY1 - 4,
+                RpTheme.TEXT_DIM);
         for (int i = 0; i < facs.size(); i++) {
             JsonObject f = facs.get(i);
             int[] b = rowBounds.get(TABS.length + i);

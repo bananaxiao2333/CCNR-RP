@@ -462,17 +462,12 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
                     en.addProperty("icon", f.icon());
                     en.addProperty("tier", f.tier());
                     en.addProperty("factionMusic", f.music());
-                    for (var other : graph.factions().values()) {
-                        if (other.id().equals(f.id())) {
-                            continue;
-                        }
-                        var type = graph.resolve(f.id(), other.id());
-                        if (type != null && type != com.ccnrcom.rp.faction.RelationType.NEUTRAL) {
-                            com.google.gson.JsonObject o = new com.google.gson.JsonObject();
-                            o.addProperty("name", other.name());
-                            o.addProperty("type", type.name().toLowerCase(java.util.Locale.ROOT));
-                            relations.add(o);
-                        }
+                    en.addProperty("cinematicBlackScreen", f.cinematicBlackScreen());
+                    en.addProperty("cinematicCompact", f.cinematicCompact());
+                    // 阵营关系行：按「阵营组 + 关系」合并可合并项（纯逻辑见 CinematicRelations）
+                    for (com.google.gson.JsonObject o :
+                            com.ccnrcom.rp.faction.CinematicRelations.collapse(graph, factionId)) {
+                        relations.add(o);
                     }
                 }
             }

@@ -26,8 +26,8 @@ public final class RpTheme {
     public static final int PANEL_BG_EVEN = 0x9B161616;
     public static final int PANEL_BORDER = 0xFF333333;
     public static final int PANEL_BORDER_BRIGHT = 0xFF666666;
-    public static final int SCANLINE = 0x12FFFFFF;
-    public static final int SHEEN = 0x12FFFFFF;
+    public static final int SCANLINE = 0x05FFFFFF;
+    public static final int SHEEN = 0x05FFFFFF;
 
     // ---- 文字（层级：标题>副标题>正文>弱化；中性灰阶）----
     public static final int TEXT_PRIMARY = 0xFFFFFFFF;
@@ -53,6 +53,9 @@ public final class RpTheme {
     public static final int RED_LINE = 0xFFFF4A40;
     public static final int DANGER = RED_DIM;
     public static final int DANGER_HOVER = RED;
+
+    // ---- 关系类型：友好（蓝，区别于中立白 / 敌对红）----
+    public static final int FRIENDLY = 0xFF4FA6FF;
 
     // ---- 徽章灰阶（机构最高等级最亮）----
     public static final int GOLD = 0xFFB4B4B4;
@@ -112,9 +115,35 @@ public final class RpTheme {
         RpRoundRect.outlined(g, x1, y1, x2, y2, radius, PANEL_BORDER, OVERLAY);
     }
 
+    /**
+     * 终端主容器框（完整视觉层，对齐前端 .terminal-panel / .rp-admin-panel 装饰）：
+     * 素版面板（近黑底+灰描边）+ 顶部高光 rail（透明→亮灰→透明）+ 四角 L 型角标 + 低透明网格叠层。
+     * 供「顶层面板」使用；内嵌弹窗/小卡片仍走 terminalPanel（无角标与网格）。
+     */
+    public static void terminalFrame(GuiGraphics g, int x1, int y1, int x2, int y2, float radius) {
+        terminalPanel(g, x1, y1, x2, y2, radius);
+        int railC = PANEL_BORDER_BRIGHT;
+        int len = Math.max(6, Math.min(14, (x2 - x1) / 64));
+        cornerBrackets(g, x1, y1, x2, y2, len, railC);
+        // 顶部高光 rail（低透明度，避免压过内容）
+        g.fill(x1 + len, y1 + 1, x2 - len, y1 + 2, alphaBlend(railC, 0x2E));
+    }
+
     /** 卡片：深色圆角 + 灰描边。 */
     public static void card(GuiGraphics g, int x1, int y1, int x2, int y2, float radius, int bg) {
         RpRoundRect.outlined(g, x1, y1, x2, y2, radius, PANEL_BORDER, bg);
+    }
+
+    /** 终端面板网格叠层（细灰网格，模拟军用终端底格；对齐前端 .terminal-panel::after）。 */
+    public static void gridOverlay(GuiGraphics g, int x1, int y1, int x2, int y2) {
+        int step = 32;
+        int line = alphaBlend(PANEL_BORDER, 0x0F);
+        for (int x = x1 + step; x < x2; x += step) {
+            g.fill(x, y1, x + 1, y2, line);
+        }
+        for (int y = y1 + step; y < y2; y += step) {
+            g.fill(x1, y, x2, y + 1, line);
+        }
     }
 
     /** 选中高亮（素版）：白底反白字 + 左侧白色高亮线（对齐前端 selected 反白风格）。 */
