@@ -279,13 +279,25 @@ public final class EventModels {
                 tasks.add(new Task(str(t, "id", "task"), (int) num(t, "xp", 50)));
             }
         }
+        // hooks 兼容（docs/15 §6）：startAnimation / spawnWave 可在顶层或 hooks 段声明（顶层优先）
+        String startAnimation = str(o, "startAnimation", "");
+        String spawnWave = str(o, "spawnWave", "");
+        if (o.has("hooks") && o.get("hooks").isJsonObject()) {
+            JsonObject hk = o.getAsJsonObject("hooks");
+            if (startAnimation.isBlank()) {
+                startAnimation = str(hk, "startAnimation", "");
+            }
+            if (spawnWave.isBlank()) {
+                spawnWave = str(hk, "spawnWave", "");
+            }
+        }
         return Optional.of(new EventDefinition(
                 str(o, "id", "?"),
                 !o.has("enabled") || o.get("enabled").getAsBoolean(),
                 triggers,
                 tasks,
-                str(o, "startAnimation", ""),
-                str(o, "spawnWave", ""),
+                startAnimation,
+                spawnWave,
                 str(o, "startSequence", ""),
                 str(o, "notifyTitleKey", ""),
                 num(o, "durationSeconds", 0),

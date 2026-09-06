@@ -5,6 +5,7 @@
 package com.ccnrcom.rp.sequence;
 
 import com.ccnrcom.rp.CCNRRPMod;
+import com.ccnrcom.rp.rule.RuleService;
 import com.ccnrcom.rp.util.JsonUtil;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -14,8 +15,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import org.apache.logging.log4j.LogManager;
@@ -273,10 +277,68 @@ public final class SequenceEngine {
                     }
                 }
                 case "FORCE_PICK" -> forcePick(p, vars);
+                case "RULECHANGE", "RULE_CHANGE" -> ruleChange(p, vars);
+                case "SWITCHPHASE", "SWITCH_PHASE" -> switchPhaseStep(p, vars);
                 default -> LOGGER.warn("[CCNR-RP] 未知序列步骤类型: {}", type);
             }
         } catch (Throwable t) {
             LOGGER.error("[CCNR-RP] 序列步骤执行失败: {}", type, t);
+        }
+    }
+
+    /**
+     * 规则变更动作（P15 §4.5）：{@code buff/nerf} 为即时药水效果；其余（限职业/阵营、目标区、招募方式）
+     * 登记到幕作用域规则层（由 EventManager 在幕切换时自动解除）。
+     */
+    private void ruleChange(JsonObject p, Map<String, String> vars) {
+        if (CCNRRPMod.rules == null) {
+            return;
+        }
+        String rule = str(p, "rule", "");
+        if (RuleService.RULE_BUFF.equals(rule) || RuleService.RULE_NERF.equals(rule)) {
+            applyBuff(p, vars);
+            return;
+        }
+        // 作用域：动作自带 phase 优先，否则当前幕（RuleService.apply 内部回退 currentPhase）
+        CCNRRPMod.rules.apply(p, "");
+        LOGGER.info("[CCNR-RP] ruleChange {}（{} 幕）", rule, CCNRRPMod.rules.currentPhase());
+    }
+
+    /** 强制切幕步骤（switchPhase）：空 phase → 下一幕；否则按 id 切。 */
+    private void switchPhaseStep(JsonObject p, Map<String, String> vars) {
+        if (CCNRRPMod.eventManager == null) {
+            return;
+        }
+        String phase = inject(str(p, "phase", ""), vars);
+        boolean ok = CCNRRPMod.eventManager.switchPhase(phase.isBlank() ? null : phase);
+        if (!ok) {
+            LOGGER.warn("[CCNR-RP] switchPhase 未命中（目标幕不存在或同幕）: {}", phase);
+        }
+    }
+
+    /** 即时增益/限制：对 target（@a 全员/玩家名/UUID）应用药水效果秒数。 */
+    private void applyBuff(JsonObject p, Map<String, String> vars) {
+        String target = inject(str(p, "target", "@a"), vars);
+        String effect = str(p, "effect", "");
+        long seconds = Math.max(1, num(p, "seconds", 30));
+        int amplifier = (int) Math.max(0, num(p, "amplifier", 0));
+        if (effect.isBlank()) {
+            return;
+        }
+        ResourceLocation id = ResourceLocation.tryParse(effect);
+        var mobEffect = id == null ? null : BuiltInRegistries.MOB_EFFECT.get(id);
+        if (mobEffect == null) {
+            LOGGER.warn("[CCNR-RP] ruleChange 效果未知: {}", effect);
+            return;
+        }
+        int ticks = (int) Math.min(Math.max(1, seconds * 20L), 600_000L);
+        for (ServerPlayer pl : server.getPlayerList().getPlayers()) {
+            if (!"@a".equals(target)
+                    && !pl.getName().getString().equalsIgnoreCase(target)
+                    && !pl.getUUID().toString().equals(target)) {
+                continue;
+            }
+            pl.addEffect(new MobEffectInstance(mobEffect, ticks, amplifier));
         }
     }
 

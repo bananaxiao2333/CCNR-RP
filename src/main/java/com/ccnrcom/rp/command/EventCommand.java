@@ -67,6 +67,23 @@ final class EventCommand {
                     return 0;
                 })
                 .build());
+        rp.addChild(Commands.literal("end")
+                .requires(RpCommand.admin(Permissions.ADMIN_EVENT))
+                .executes(ctx -> endRound(ctx.getSource(), ""))
+                .then(Commands.argument("reason", StringArgumentType.greedyString())
+                        .executes(ctx -> endRound(ctx.getSource(), StringArgumentType.getString(ctx, "reason"))))
+                .build());
+    }
+
+    /** /rp end：触发结局剧本（幂等：已结束/待启时空操作）。 */
+    private static int endRound(CommandSourceStack source, String reason) {
+        if (CCNRRPMod.eventManager == null) {
+            return 0;
+        }
+        boolean ok = CCNRRPMod.eventManager.end(reason);
+        source.sendSuccess(
+                () -> Component.translatable(ok ? "ccnr_rp.end.triggered" : "ccnr_rp.end.idle", reason), true);
+        return ok ? 1 : 0;
     }
 
     /** /rp event clear：清空当前正在运行的所有事件（横幅同时清空）；不输出“已清空”文字提示。 */
@@ -163,10 +180,10 @@ final class EventCommand {
         if (CCNRRPMod.eventManager == null) {
             return 0;
         }
-        CCNRRPMod.eventManager.clock().advance();
+        boolean ok = CCNRRPMod.eventManager.switchPhase("");
         source.sendSuccess(
                 () -> Component.translatable(
-                        "ccnr_rp.event.phase.set",
+                        ok ? "ccnr_rp.event.phase.set" : "ccnr_rp.event.phase.no_move",
                         CCNRRPMod.eventManager.clock().phaseId()),
                 false);
         return 1;
