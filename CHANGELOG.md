@@ -1,5 +1,30 @@
 # Changelog
 
+## 2.23.0（P15 补全：规则变更 action + switchPhase + 纯脚本波次 + /rp end 结局闭环 + 开场自动）
+
+- **规则变更 action（`ruleChange`）**：新增 `RuleService`（纯逻辑，幕作用域状态层），事件/序列可发出
+  `{"type":"ruleChange","rule":"..."}`。子类型：`limitProfessions`/`limitFactions`（本幕可部署/可征召职业、
+  阵营，作用于 `SpawnFramework` 波次编制池与自部署校验）、`zoneToggle`（目标区开关）、`recruitMode`
+  （本幕谁能收到邀请：SELF_DEPLOY/RESURRECTION/BOTH）、`buff`/`nerf`（对 target 即时施加药水效果）。
+  规则以幕为作用域，幕切换时 `EventManager` 自动解除该幕规则（`onPhaseEnd`）；同幕冲突后者覆盖。
+- **`switchPhase` 序列/事件步骤**：`{"type":"switchPhase","phase":"<id>"}`（空 phase = 下一幕），强制切幕并
+  触发 `ON_PHASE_END/START` 各一次；`/rp phase set|advance` 同走该通道（先于推进发「第 0 幕开始」信号）。
+- **阶段开始信号修复**：首幕 `ON_PHASE_START` 与首幕内嵌序列现在会在开演时触发（此前阶段 0 从不发开始信号）。
+- **波次库纯脚本/命令召**：移除 `SpawnFramework` 队伍创建自动轮询（不再按 `teamIds` 新增 diff 自动召波），
+  波次仅由事件 `spawnWave`、序列 `WAVE`、`/rp spawn trigger` 显式召。
+- **结局闭环（`ending.json` + `/rp end`）**：新增 `EndingScript` 模型解析结局剧本（`animation`/`notify`/
+  `resetToPhase`/`reward`，按模式路由 `modes/<id>/ending.json`）；`/rp end [reason]`（幂等：已结束不重复处理）
+  播结局动画/通报、追加结算 XP、复位阶段回第 0 幕（或 `resetToPhase`）、清事件运行时并置为空窗期。
+- **开场自动（场景内触发）**：事件可声明 `"start": true` 作为「开局事件」；定义了开局事件时剧本进入「待启」
+  （`running=false`，阶段/事件不自动跑），仅开局事件触发器命中才开局；未定义开局事件则激活即开演（兼容旧行为）。
+  `/rp end` 后空窗期内同样只由开局事件重启。
+- **事件 `hooks` 兼容解析**：`startAnimation`/`spawnWave` 可在事件顶层或 `hooks` 段声明；事件自带
+  `startAnimation` 优先于 `event_start` 钩子播放。
+- **参考模式补齐结局**：`config/ccnr_rp/modes/{scpsl,tac_comp}/{ending.json}` 各写入结局剧本（复位到首幕 +
+  全员 XP 结算 + `game_end` 动画序列），模式 `animations.json` 增补 `game_end` 序列与结尾 lang 键。
+- 测试：新增 `RuleServiceTest`（幕作用域应用/解除/冲突覆盖）+ `EndingScriptTest`（解析与缺省）。
+  LangFileTest zh/en 键同步通过。构建：spotlessApply / build / test -PrunTests 全绿。
+
 ## 2.22.0（多模式编排：模式文件夹化 + 热切换 + 条件驱动阶段）
 
 - **多模式（P15）**：`config/ccnr_rp/modes.json` 登记模式并标记激活；每个模式一整套剧本配置

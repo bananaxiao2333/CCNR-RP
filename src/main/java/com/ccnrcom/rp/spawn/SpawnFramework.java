@@ -18,7 +18,6 @@ import com.ccnrcom.rp.util.JsonUtil;
 import com.google.gson.JsonObject;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -44,7 +43,6 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
 
     private final MinecraftServer server;
     private final List<Wave> waves = new ArrayList<>();
-    private final Map<String, Boolean> teamTriggered = new HashMap<>();
     private final RecruitManager recruit;
     private long pollCounter = 0;
 
@@ -112,7 +110,6 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
     /** 热重载（管理器 CRUD 后调用）：重读 spawn_waves.json 并清空队伍触发记录。 */
     public void reload() {
         waves.clear();
-        teamTriggered.clear();
         loadWaves();
         LOGGER.info("[CCNR-RP] 刷新波已热重载");
     }
@@ -157,9 +154,8 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
                 continue; // 已有征召登记（含挂起中）不再重复邀请
             }
             boolean alive = CCNRRPMod.users.isAlive(uuid);
-            boolean ok = alive
-                    ? wave.mode().aliveReceiveAllowed()
-                    : CCNRRPMod.users.isObserving(uuid) && wave.mode().deadReceiveAllowed();
+            boolean ok =
+                    alive ? recruitAliveAllowed(wave) : CCNRRPMod.users.isObserving(uuid) && recruitDeadAllowed(wave);
             if (ok) {
                 pool.add(p);
             }
@@ -183,12 +179,12 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
             }
             boolean alive = CCNRRPMod.users.isAlive(uuid);
             if (alive) {
-                if (wave.mode().aliveReceiveAllowed()) {
+                if (recruitAliveAllowed(wave)) {
                     alivePool.add(p); // 存活玩家：指定编制式邀请（选岗菜单仅适用于观察角色）
                 }
                 continue;
             }
-            if (!CCNRRPMod.users.isObserving(uuid) || !wave.mode().deadReceiveAllowed()) {
+            if (!CCNRRPMod.users.isObserving(uuid) || !recruitDeadAllowed(wave)) {
                 continue; // 死亡可收到：需要玩家处于观察状态（有可上岗身份）
             }
             cands.add(new Candidate(
@@ -286,7 +282,47 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
                 }
             }
         }
+        // 幕作用域规则（P15 §4.5）：本幕限定职业/阵营时，仅保留允许项（波次按当前幕规则征召）
+        String phase = currentPhase();
+        if (CCNRRPMod.rules != null) {
+            if (CCNRRPMod.rules.limitProfessionsActive(phase)) {
+                out.removeIf(pid -> !CCNRRPMod.rules.isProfessionAllowed(phase, pid));
+            }
+            if (CCNRRPMod.rules.limitFactionsActive(phase)) {
+                out.removeIf(pid -> {
+                    var def = CCNRRPMod.factions.findProfession(pid).orElse(null);
+                    return def != null && !CCNRRPMod.rules.isFactionAllowed(phase, FactionProfessions.factionId(def));
+                });
+            }
+        }
         return out;
+    }
+
+    /** 当前幕 id（剧本运行时；无则空串）。 */
+    private String currentPhase() {
+        return CCNRRPMod.eventManager != null ? CCNRRPMod.eventManager.clock().phaseId() : "";
+    }
+
+    /** 本幕存活玩家可否收到邀请（波配置 mode × ruleChange recruitMode 覆盖）。 */
+    private boolean recruitAliveAllowed(Wave wave) {
+        var rm = CCNRRPMod.rules == null
+                ? com.ccnrcom.rp.rule.RuleService.RecruitMode.NONE
+                : CCNRRPMod.rules.recruitMode(currentPhase());
+        return rm == com.ccnrcom.rp.rule.RuleService.RecruitMode.NONE
+                ? wave.mode().aliveReceiveAllowed()
+                : (rm == com.ccnrcom.rp.rule.RuleService.RecruitMode.SELF_DEPLOY
+                        || rm == com.ccnrcom.rp.rule.RuleService.RecruitMode.BOTH);
+    }
+
+    /** 本幕死亡/观察玩家可否收到邀请（波配置 mode × ruleChange recruitMode 覆盖）。 */
+    private boolean recruitDeadAllowed(Wave wave) {
+        var rm = CCNRRPMod.rules == null
+                ? com.ccnrcom.rp.rule.RuleService.RecruitMode.NONE
+                : CCNRRPMod.rules.recruitMode(currentPhase());
+        return rm == com.ccnrcom.rp.rule.RuleService.RecruitMode.NONE
+                ? wave.mode().deadReceiveAllowed()
+                : (rm == com.ccnrcom.rp.rule.RuleService.RecruitMode.RESURRECTION
+                        || rm == com.ccnrcom.rp.rule.RuleService.RecruitMode.BOTH);
     }
 
     /** 通用波选岗（C2S）：所有权/状态校验后计入已加入。 */
@@ -319,7 +355,10 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
 
     private static final Random RANDOM = new Random();
 
-    /** 队伍创建轮询（20t；检测 scoreboard 团队新增并命中 teamIds → 触发一次）。 */
+    /**
+     * 每 tick（节流）：招募结算 + 部署落位/首次入服兜底。
+     * 波次由脚本/命令显式召（P15 §4.4 纯脚本化）：不再按队伍创建自动触发（移除 teamIds 轮询 diff）。
+     */
     @SubscribeEvent
     public void onServerTick(TickEvent.ServerTickEvent event) {
         if (event.phase != TickEvent.Phase.END) {
@@ -333,59 +372,6 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
         }
         pollCounter = 0;
         recruit.onTick();
-        Set<String> now = new HashSet<>(server.getScoreboard().getTeamNames());
-        boolean changed = false;
-        for (String name : now) {
-            if (!teamTriggered.containsKey(name)) {
-                teamTriggered.put(name, true);
-                changed = true;
-                for (Wave w : waves) {
-                    if (w.enabled()
-                            && w.teamIds().contains(name)
-                            && !w.teamIds().isEmpty()) {
-                        LOGGER.info("[CCNR-RP] 队伍 {} 创建 → 召唤波 {}", name, w.id());
-                        triggerWave(w.id());
-                    }
-                }
-            }
-        }
-        if (changed) {
-            persistTeamState();
-        }
-    }
-
-    private void persistTeamState() {
-        com.ccnrcom.rp.data.Database db = com.ccnrcom.rp.CCNRRPMod.database;
-        if (db != null && db.enabled()) {
-            try {
-                db.write(c -> {
-                    try (java.sql.PreparedStatement del =
-                            c.prepareStatement("DELETE FROM " + db.dialect().quote("team_waves_done"))) {
-                        del.executeUpdate();
-                    }
-                    try (java.sql.PreparedStatement ins =
-                            c.prepareStatement("INSERT INTO " + db.dialect().quote("team_waves_done") + " ("
-                                    + db.dialect().quote("team_id") + ") VALUES (?)")) {
-                        for (String k : teamTriggered.keySet()) {
-                            ins.setString(1, k);
-                            ins.addBatch();
-                        }
-                        ins.executeBatch();
-                    }
-                });
-            } catch (Exception e) {
-                LOGGER.error("[CCNR-RP] team_waves_done 保存失败: {}", e.toString());
-            }
-            return;
-        }
-        JsonObject root = new JsonObject();
-        JsonObject map = new JsonObject();
-        teamTriggered.forEach((k, v) -> map.addProperty(k, v));
-        root.add("teams", map);
-        JsonUtil.atomicWrite(
-                server.getWorldPath(new net.minecraft.world.level.storage.LevelResource("ccnr_rp"))
-                        .resolve("team_wave_done.json"),
-                root);
     }
 
     // ---------- 部署 ----------
@@ -745,6 +731,15 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
             return false;
         }
         String factionId = FactionProfessions.factionId(def);
+        // 幕作用域规则（P15 §4.5）：本幕限定了职业/阵营时，自部署不可选被禁项
+        String phase = currentPhase();
+        if (CCNRRPMod.rules != null
+                && ((CCNRRPMod.rules.limitProfessionsActive(phase)
+                                && !CCNRRPMod.rules.isProfessionAllowed(phase, professionId))
+                        || (CCNRRPMod.rules.limitFactionsActive(phase)
+                                && !CCNRRPMod.rules.isFactionAllowed(phase, factionId)))) {
+            return false;
+        }
         // 找用于部署的刷新波（SELF_DEPLOY/BOTH 且职位匹配）；无匹配默认世界原点
         return deploy(player, professionId, selfDeployWave(professionId, factionId), DeployFlag.of());
     }

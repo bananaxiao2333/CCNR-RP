@@ -37,6 +37,8 @@ public class CCNRRPMod {
     public static com.ccnrcom.rp.config.ManagerSettings managerSettings;
     /** 多模式（P15）：mode 登记/热切换；剧本配置（阶段/事件/波次/动画）按其路由。 */
     public static com.ccnrcom.rp.config.ModeManager modes;
+    /** 规则变更（P15 §4.5）：ruleChange 的幕作用域状态层（限职业/阵营、目标区、招募方式）。 */
+    public static com.ccnrcom.rp.rule.RuleService rules;
     /** 序列引擎（序列编辑器）。 */
     public static com.ccnrcom.rp.sequence.SequenceEngine sequenceEngine;
     /** 角色服务（P3）。 */
@@ -87,6 +89,8 @@ public class CCNRRPMod {
         managerSettings = new com.ccnrcom.rp.config.ManagerSettings();
         // 多模式（P15）：登记 + 激活（剧本配置路由的依据；须在各剧本管理器构造前初始化）
         modes = new com.ccnrcom.rp.config.ModeManager();
+        // 规则变更（P15 §4.5）：幕作用域规则层（事件/波次/部署查询用）
+        rules = new com.ccnrcom.rp.rule.RuleService();
         // 素材库（服务器权威：音乐/阵营图标）——首次启动写入内嵌默认图标
         com.ccnrcom.rp.assets.AssetLibrary.ensureDefaults();
         factions = new FactionManager();
@@ -204,6 +208,7 @@ public class CCNRRPMod {
         spawnFramework = null;
         experience = null;
         modes = null;
+        rules = null;
         statusManager = null;
         characters = null;
         users = null;

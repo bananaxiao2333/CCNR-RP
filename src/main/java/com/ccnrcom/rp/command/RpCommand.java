@@ -54,6 +54,7 @@ public final class RpCommand {
             "ccnr_rp.command.usage.xp",
             "ccnr_rp.command.usage.event",
             "ccnr_rp.command.usage.mode",
+            "ccnr_rp.command.usage.end",
             "ccnr_rp.command.usage.animation",
             "ccnr_rp.command.usage.spawn",
             "ccnr_rp.command.usage.db",
