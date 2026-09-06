@@ -69,6 +69,13 @@ public final class RpSuggest {
                 : List.of());
     }
 
+    /** mode id（多模式登记列表）。 */
+    public static SuggestionProvider<CommandSourceStack> modes() {
+        return from(() -> CCNRRPMod.modes != null
+                ? CCNRRPMod.modes.modes().stream().map(m -> m.id()).toList()
+                : List.of());
+    }
+
     /** 阶段 id。 */
     public static SuggestionProvider<CommandSourceStack> phases() {
         return from(() -> CCNRRPMod.eventManager != null

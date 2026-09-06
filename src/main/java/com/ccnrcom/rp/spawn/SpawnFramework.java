@@ -88,15 +88,25 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
     }
 
     private void loadWaves() {
-        JsonObject root = com.ccnrcom.rp.data.ConfigStore.load("spawn_waves.json")
-                .orElseGet(() -> {
-                    JsonObject d = JsonUtil.readResource("/assets/ccnr_rp/defaults/spawn_waves.json")
-                            .orElseGet(JsonObject::new);
-                    com.ccnrcom.rp.data.ConfigStore.save("spawn_waves.json", d);
-                    return d;
-                });
+        String key = cfgKey("spawn_waves.json");
+        String resource = cfgResource("spawn_waves.json");
+        JsonObject root = com.ccnrcom.rp.data.ConfigStore.load(key).orElseGet(() -> {
+            JsonObject d = JsonUtil.readResource(resource).orElseGet(JsonObject::new);
+            com.ccnrcom.rp.data.ConfigStore.save(key, d);
+            return d;
+        });
         List<String> errors = SpawnModels.parseWaves(root, waves);
         errors.forEach(e -> LOGGER.error("[CCNR-RP] spawn_waves.json: {}", e));
+    }
+
+    /** 剧本配置键按当前模式路由（null-safe；模式未激活回退基础文件名）。 */
+    private static String cfgKey(String base) {
+        return com.ccnrcom.rp.CCNRRPMod.modes != null ? com.ccnrcom.rp.CCNRRPMod.modes.key(base) : base;
+    }
+
+    /** 剧本配置内嵌默认资源路径按当前模式路由（缺档播种用）。 */
+    private static String cfgResource(String base) {
+        return com.ccnrcom.rp.CCNRRPMod.modes != null ? com.ccnrcom.rp.CCNRRPMod.modes.resource(base) : base;
     }
 
     /** 热重载（管理器 CRUD 后调用）：重读 spawn_waves.json 并清空队伍触发记录。 */

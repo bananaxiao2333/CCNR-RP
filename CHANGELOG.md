@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.22.0（多模式编排：模式文件夹化 + 热切换 + 条件驱动阶段）
+
+- **多模式（P15）**：`config/ccnr_rp/modes.json` 登记模式并标记激活；每个模式一整套剧本配置
+  （`modes/<modeId>/{phases,events,spawn_waves,animations}.json`）。新增 `ModeManager` 负责登记/激活/配置键路由；
+  `/rp mode list|set <id>|clear`（权限 `ccnnrp.admin.mode`）。热切换 = 重读新模式剧本配置 + 重置剧本运行时
+  （阶段回第 0 幕 / 事件/波次/动画重载），不重置玩家状态/档案/经验（公共部分全局共享）；模式未激活回退顶层剧本（兼容旧行为）。
+- **阶段改事件/条件驱动**：阶段可声明 `advanceOn`（复用触发器：`CONDITION` 的 DEAD/ALIVE_COUNT、`ON_TIME`），命中即推进到下一幕；
+  `durationMinutes` 仅在未声明 `advanceOn` 时生效（向后兼容）。`/rp phase set|advance` 仍可手动。
+- **剧本配置按模式路由**：EventManager(phases/events)、SpawnFramework(waves)、AnimationEngine(animations) 读当前模式配置；
+  模式激活时按 `modes/<id>/` 路由，未激活回退顶层。
+- **参考模式写入模组配置目录**（不并入源码资源，随服务器实例运行）：`config/ccnr_rp` 下新增 `scpsl`
+  （收容失效：警报→MTF 进场→封锁）与 `tac_comp`（战术团竞：准备→交火→结束）；波次以空 `teamIds`
+  （不经队伍创建自动轮询，仅由事件 `spawnWave`/序列 `WAVE`/命令召）。
+- 测试：新增 `ModeManagerTest`（登记解析）+ `PhaseClockTest` 条件驱动用例。构建：spotlessApply / build / test -PrunTests 全绿。
+
 ## 2.21.5（复活波已加入名单实时同步 + 名单立绘显示玩家本人皮肤）
 
 - **背包「已加入玩家」名单实时刷新**：原背包右上角列表只显示「本玩家自己」已同意的邀请（本地 `OFFERS` 过滤），

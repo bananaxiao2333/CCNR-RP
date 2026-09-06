@@ -17,10 +17,19 @@ import java.util.Set;
 /** 事件/阶段/触发器领域模型与 JSON 解析（纯逻辑，无 MC 依赖）。 */
 public final class EventModels {
 
-    /** 游戏阶段（内嵌行为序列：阶段开始时执行）。 */
-    public record GamePhase(String id, int order, long durationMinutes, List<JsonObject> steps) {
+    /** 游戏阶段（内嵌行为序列：阶段开始时执行）。advanceOn=条件驱动触发器（非空时不按时长自动推进）。 */
+    public record GamePhase(String id, int order, long durationMinutes, Trigger advanceOn, List<JsonObject> steps) {
         public GamePhase(String id, int order, long durationMinutes) {
-            this(id, order, durationMinutes, List.of());
+            this(id, order, durationMinutes, null, List.of());
+        }
+
+        public GamePhase(String id, int order, long durationMinutes, List<JsonObject> steps) {
+            this(id, order, durationMinutes, null, steps);
+        }
+
+        /** 是否条件驱动（advanceOn 非空）——不按时长推进，由触发器命中时 advance。 */
+        public boolean conditionDriven() {
+            return advanceOn != null;
         }
     }
 
@@ -222,10 +231,19 @@ public final class EventModels {
                         str(o, "id", "?"),
                         (int) num(o, "order", out.size()),
                         num(o, "durationMinutes", 30),
+                        parseAdvanceOn(o),
                         parseSteps(o)));
             }
         }
         return out;
+    }
+
+    /** 阶段条件驱动触发器（advanceOn）；非对象或缺参数时返回 null（回退按时长推进）。 */
+    private static Trigger parseAdvanceOn(JsonObject o) {
+        if (!o.has("advanceOn") || !o.get("advanceOn").isJsonObject()) {
+            return null;
+        }
+        return parseTrigger(o.getAsJsonObject("advanceOn"), "advanceOn");
     }
 
     /** 内嵌行为序列（sequence 数组：{type, ...参数}）。 */

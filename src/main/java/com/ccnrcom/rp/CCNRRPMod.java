@@ -35,6 +35,8 @@ public class CCNRRPMod {
     public static FactionManager factions;
     /** 管理器设置（settings.json：入服规则/强制保留；仅服务端）。 */
     public static com.ccnrcom.rp.config.ManagerSettings managerSettings;
+    /** 多模式（P15）：mode 登记/热切换；剧本配置（阶段/事件/波次/动画）按其路由。 */
+    public static com.ccnrcom.rp.config.ModeManager modes;
     /** 序列引擎（序列编辑器）。 */
     public static com.ccnrcom.rp.sequence.SequenceEngine sequenceEngine;
     /** 角色服务（P3）。 */
@@ -83,6 +85,8 @@ public class CCNRRPMod {
         // serverconfig 调参：数据库启用时先从 server_settings（当前配置档）覆盖各 ConfigValue 运行时值
         com.ccnrcom.rp.config.CCNRRPConfig.applyDbOverrides();
         managerSettings = new com.ccnrcom.rp.config.ManagerSettings();
+        // 多模式（P15）：登记 + 激活（剧本配置路由的依据；须在各剧本管理器构造前初始化）
+        modes = new com.ccnrcom.rp.config.ModeManager();
         // 素材库（服务器权威：音乐/阵营图标）——首次启动写入内嵌默认图标
         com.ccnrcom.rp.assets.AssetLibrary.ensureDefaults();
         factions = new FactionManager();
@@ -199,6 +203,7 @@ public class CCNRRPMod {
         animationEngine = null;
         spawnFramework = null;
         experience = null;
+        modes = null;
         statusManager = null;
         characters = null;
         users = null;
