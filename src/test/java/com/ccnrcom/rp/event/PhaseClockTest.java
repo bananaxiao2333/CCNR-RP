@@ -9,8 +9,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.ccnrcom.rp.event.EventModels.GamePhase;
+import com.ccnrcom.rp.event.EventModels.Trigger;
 import com.ccnrcom.rp.event.PhaseClock.Transition;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 /** P6 验收：阶段时钟推进与切换。 */
@@ -58,5 +60,21 @@ class PhaseClockTest {
         PhaseClock c = clock();
         c.set(99);
         assertEquals("end", c.phaseId());
+    }
+
+    @Test
+    void conditionDrivenPhaseSkipsDurationAutoAdvance() {
+        Trigger adv = new Trigger(Trigger.Type.CONDITION, Map.of("cond", "ALIVE_COUNT", "op", "<=", "value", "1"));
+        PhaseClock c = new PhaseClock(List.of(new GamePhase("a", 0, 30, adv, List.of()), new GamePhase("b", 1, 30)));
+        // 远超 30 分钟时长：条件驱动阶段不按时长自动推进
+        Transition t = null;
+        for (int i = 0; i < 30 * 1200 + 1; i++) {
+            t = c.tick();
+        }
+        assertFalse(t.changed());
+        assertEquals("a", c.phaseId());
+        // 手动 advance 仍生效
+        assertTrue(c.advance().changed());
+        assertEquals("b", c.phaseId());
     }
 }

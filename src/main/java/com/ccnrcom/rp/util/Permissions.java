@@ -23,6 +23,8 @@ public final class Permissions {
             new PermissionNode<>("ccnrrp", "admin.event", PermissionTypes.BOOLEAN, (player, uuid, context) -> false);
     public static final PermissionNode<Boolean> ADMIN_PHASE =
             new PermissionNode<>("ccnrrp", "admin.phase", PermissionTypes.BOOLEAN, (player, uuid, context) -> false);
+    public static final PermissionNode<Boolean> ADMIN_MODE =
+            new PermissionNode<>("ccnrrp", "admin.mode", PermissionTypes.BOOLEAN, (player, uuid, context) -> false);
     public static final PermissionNode<Boolean> ADMIN_ANIMATION = new PermissionNode<>(
             "ccnrrp", "admin.animation", PermissionTypes.BOOLEAN, (player, uuid, context) -> false);
     public static final PermissionNode<Boolean> ADMIN_SPAWN =
@@ -44,6 +46,7 @@ public final class Permissions {
                 ADMIN_SETTLE,
                 ADMIN_EVENT,
                 ADMIN_PHASE,
+                ADMIN_MODE,
                 ADMIN_ANIMATION,
                 ADMIN_SPAWN,
                 ADMIN_KILL,

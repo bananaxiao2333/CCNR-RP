@@ -31,16 +31,16 @@ public final class AnimationEngine {
         reload();
     }
 
-    /** 重新加载动画序列与钩子绑定（配置档切换/管理器 CRUD 后调用）。 */
+    /** 重新加载动画序列与钩子绑定（模式切换/配置档切换/管理器 CRUD 后调用）。 */
     public void reload() {
         sequences.clear();
         hookBindings.clear();
-        JsonObject root =
-                com.ccnrcom.rp.data.ConfigStore.load("animations.json").orElseGet(JsonObject::new);
+        String key = cfgKey("animations.json");
+        String resource = cfgResource("animations.json");
+        JsonObject root = com.ccnrcom.rp.data.ConfigStore.load(key).orElseGet(JsonObject::new);
         if (root.size() == 0) {
-            root = JsonUtil.readResource("/assets/ccnr_rp/defaults/animations.json")
-                    .orElseGet(JsonObject::new);
-            com.ccnrcom.rp.data.ConfigStore.save("animations.json", root);
+            root = JsonUtil.readResource(resource).orElseGet(JsonObject::new);
+            com.ccnrcom.rp.data.ConfigStore.save(key, root);
         }
         List<String> errors = AnimationModels.parseAll(root, sequences);
         errors.forEach(e -> LOGGER.error("[CCNR-RP] animations.json: {}", e));
@@ -54,6 +54,16 @@ public final class AnimationEngine {
         hookBindings.putIfAbsent("game_end", "game_end");
         hookBindings.putIfAbsent("event_start", "event_start_alarm");
         hookBindings.putIfAbsent("level_up", "level_up");
+    }
+
+    /** 剧本配置键按当前模式路由（null-safe；模式未激活回退基础文件名）。 */
+    private static String cfgKey(String base) {
+        return com.ccnrcom.rp.CCNRRPMod.modes != null ? com.ccnrcom.rp.CCNRRPMod.modes.key(base) : base;
+    }
+
+    /** 剧本配置内嵌默认资源路径按当前模式路由（缺档播种用）。 */
+    private static String cfgResource(String base) {
+        return com.ccnrcom.rp.CCNRRPMod.modes != null ? com.ccnrcom.rp.CCNRRPMod.modes.resource(base) : base;
     }
 
     public Optional<AnimationModels.Sequence> sequence(String id) {

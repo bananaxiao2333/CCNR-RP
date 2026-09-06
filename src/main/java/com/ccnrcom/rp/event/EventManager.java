@@ -109,12 +109,22 @@ public final class EventManager {
         return root;
     }
 
+    /** 剧本配置键按当前模式路由（null-safe；模式未激活回退基础文件名）。 */
+    private static String cfgKey(String base) {
+        return CCNRRPMod.modes != null ? CCNRRPMod.modes.key(base) : base;
+    }
+
+    /** 剧本配置内嵌默认资源路径按当前模式路由（缺档播种用）。 */
+    private static String cfgResource(String base) {
+        return CCNRRPMod.modes != null ? CCNRRPMod.modes.resource(base) : base;
+    }
+
     private List<GamePhase> loadPhases() {
-        return EventModels.parsePhases(loadOrDefaults("phases.json", "/assets/ccnr_rp/defaults/phases.json"));
+        return EventModels.parsePhases(loadOrDefaults(cfgKey("phases.json"), cfgResource("phases.json")));
     }
 
     private void loadEvents() {
-        JsonObject root = loadOrDefaults("events.json", "/assets/ccnr_rp/defaults/events.json");
+        JsonObject root = loadOrDefaults(cfgKey("events.json"), cfgResource("events.json"));
         for (String e : EventModels.parseEvents(root)) {
             LOGGER.error("[CCNR-RP] events.json: {}", e);
         }
@@ -146,6 +156,16 @@ public final class EventManager {
         evalCounter = 0;
         // 阶段时钟按节流周期推进（修复重复 tick 导致阶段时长偏短、迁移被丢弃、phase 触发器不触发）
         PhaseClock.Transition tr = clock.tick(interval);
+        // 条件驱动阶段：当前幕 advanceOn 触发器命中 → 推进到下一幕（不依赖时长）
+        if (!tr.changed()) {
+            com.ccnrcom.rp.event.EventModels.GamePhase cur = clock.current();
+            if (cur != null && cur.conditionDriven()) {
+                TriggerContext baseCtx = buildContext(tr);
+                if (TriggerEvaluator.evaluate(cur.advanceOn(), baseCtx)) {
+                    tr = clock.advance();
+                }
+            }
+        }
         evaluateAll(tr);
         autoEndRunnings();
     }
@@ -165,25 +185,7 @@ public final class EventManager {
 
     private void evaluateAll(PhaseClock.Transition tr) {
         runPhaseSteps(tr);
-        long gameDay = server.getLevel(net.minecraft.world.level.Level.OVERWORLD) == null
-                ? 0L
-                : server.getLevel(net.minecraft.world.level.Level.OVERWORLD).getDayTime() / 24000L;
-        TriggerContext ctx = new TriggerContext(
-                clock.phaseId(),
-                tr.ended(),
-                clock.ticksInPhase(),
-                gameDay,
-                server.getLevel(net.minecraft.world.level.Level.OVERWORLD) == null
-                        ? 0L
-                        : server.getLevel(net.minecraft.world.level.Level.OVERWORLD)
-                                        .getDayTime()
-                                % 24000L,
-                (System.currentTimeMillis() - startedAtMillis) / 1000L,
-                deadCount(),
-                aliveCount(),
-                scoreboard(),
-                tr.changed() && tr.started() != null,
-                tr.changed() && tr.ended() != null);
+        TriggerContext ctx = buildContext(tr);
         for (int i = 0; i < events.size(); i++) {
             EventDefinition def = events.get(i);
             if (!def.enabled() || def.state() != EventState.SCHEDULED) {
@@ -193,6 +195,28 @@ public final class EventManager {
                 startEvent(i);
             }
         }
+    }
+
+    /** 构建触发器求值上下文（含阶段迁移标记）。 */
+    private TriggerContext buildContext(PhaseClock.Transition tr) {
+        long gameDay = server.getLevel(net.minecraft.world.level.Level.OVERWORLD) == null
+                ? 0L
+                : server.getLevel(net.minecraft.world.level.Level.OVERWORLD).getDayTime() / 24000L;
+        long tickOfDay = server.getLevel(net.minecraft.world.level.Level.OVERWORLD) == null
+                ? 0L
+                : server.getLevel(net.minecraft.world.level.Level.OVERWORLD).getDayTime() % 24000L;
+        return new TriggerContext(
+                clock.phaseId(),
+                tr.ended(),
+                clock.ticksInPhase(),
+                gameDay,
+                tickOfDay,
+                (System.currentTimeMillis() - startedAtMillis) / 1000L,
+                deadCount(),
+                aliveCount(),
+                scoreboard(),
+                tr.changed() && tr.started() != null,
+                tr.changed() && tr.ended() != null);
     }
 
     private void startEvent(int index) {

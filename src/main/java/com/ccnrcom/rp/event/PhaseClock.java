@@ -33,8 +33,12 @@ public final class PhaseClock {
             return new Transition(false, null, null);
         }
         GamePhase p = current();
-        long limit = Math.max(1, p.durationMinutes()) * 1200L; // 时长≤0 时按 1 分钟兜底，避免每 tick 迁移
+        // 条件驱动阶段（advanceOn 非空）：不按时长自动推进，由 EventManager 在触发器命中时 advance。
         ticksInPhase += ticks;
+        if (p.conditionDriven()) {
+            return new Transition(false, null, null);
+        }
+        long limit = Math.max(1, p.durationMinutes()) * 1200L; // 时长≤0 时按 1 分钟兜底，避免每 tick 迁移
         if (ticksInPhase >= limit) {
             String ended = p.id();
             index = Math.min(index + 1, phases.size() - 1);
