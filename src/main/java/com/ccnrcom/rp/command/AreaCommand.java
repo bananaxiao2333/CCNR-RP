@@ -16,6 +16,7 @@ import com.mojang.brigadier.tree.LiteralCommandNode;
 import java.util.List;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.arguments.ResourceLocationArgument;
 import net.minecraft.network.chat.Component;
 
 /**
@@ -34,12 +35,12 @@ final class AreaCommand {
                 .executes(ctx -> RpCommand.usageHint(ctx.getSource(), "ccnr_rp.command.usage.area"));
         base.then(Commands.literal("list").executes(ctx -> list(ctx.getSource())));
         base.then(Commands.literal("info")
-                .then(Commands.argument("id", StringArgumentType.word())
+                .then(Commands.argument("id", StringArgumentType.string())
                         .executes(ctx -> info(ctx.getSource(), StringArgumentType.getString(ctx, "id")))));
         base.then(Commands.literal("at").then(atX()));
         base.then(Commands.literal("add").then(addId()));
         base.then(Commands.literal("remove")
-                .then(Commands.argument("id", StringArgumentType.word())
+                .then(Commands.argument("id", StringArgumentType.string())
                         .executes(ctx -> remove(ctx.getSource(), StringArgumentType.getString(ctx, "id")))));
         rp.addChild(base.build());
     }
@@ -53,13 +54,13 @@ final class AreaCommand {
                         dbl(ctx, "y"),
                         dbl(ctx, "z"),
                         ctx.getSource().getLevel().dimension().location().toString()))
-                .then(Commands.argument("dim", StringArgumentType.word())
+                .then(Commands.argument("dim", ResourceLocationArgument.id())
                         .executes(ctx -> at(
                                 ctx.getSource(),
                                 dbl(ctx, "x"),
                                 dbl(ctx, "y"),
                                 dbl(ctx, "z"),
-                                StringArgumentType.getString(ctx, "dim"))));
+                                ResourceLocationArgument.getId(ctx, "dim").toString())));
         var atY = Commands.argument("y", DoubleArgumentType.doubleArg()).then(atZ);
         return Commands.argument("x", DoubleArgumentType.doubleArg()).then(atY);
     }
@@ -70,7 +71,7 @@ final class AreaCommand {
                 .executes(ctx -> add(
                         ctx.getSource(),
                         StringArgumentType.getString(ctx, "id"),
-                        StringArgumentType.getString(ctx, "dim"),
+                        ResourceLocationArgument.getId(ctx, "dim").toString(),
                         dbl(ctx, "x1"),
                         dbl(ctx, "y1"),
                         dbl(ctx, "z1"),
@@ -83,8 +84,8 @@ final class AreaCommand {
         var z1 = Commands.argument("z1", DoubleArgumentType.doubleArg()).then(x2);
         var y1 = Commands.argument("y1", DoubleArgumentType.doubleArg()).then(z1);
         var x1 = Commands.argument("x1", DoubleArgumentType.doubleArg()).then(y1);
-        var dim = Commands.argument("dim", StringArgumentType.word()).then(x1);
-        return Commands.argument("id", StringArgumentType.word()).then(dim);
+        var dim = Commands.argument("dim", ResourceLocationArgument.id()).then(x1);
+        return Commands.argument("id", StringArgumentType.string()).then(dim);
     }
 
     private static double dbl(CommandContext<CommandSourceStack> ctx, String name) {
@@ -118,7 +119,7 @@ final class AreaCommand {
             return 0;
         }
         source.sendSuccess(
-                () -> Component.translatable("ccnr_rp.command.area.entry", a.id(), a.name(), a.dim(), a.boundsText()),
+                () -> Component.translatable("ccnr_rp.command.area.info", a.id(), a.name(), a.dim(), a.boundsText()),
                 false);
         return 1;
     }

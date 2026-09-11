@@ -51,30 +51,74 @@ final class FactionCommand {
                                                         StringArgumentType.getString(ctx, "type"))))))));
 
         base.then(Commands.literal("group")
-                .executes(ctx -> RpCommand.usageHint(ctx.getSource(), "ccnr_rp.command.usage.faction"))
-                .then(Commands.literal("list").executes(ctx -> list(ctx.getSource())))
-                .then(Commands.literal("create")
-                        .requires(RpCommand.admin(Permissions.ADMIN_FACTION))
-                        .then(Commands.argument("id", StringArgumentType.word())
-                                .then(Commands.argument("members", StringArgumentType.greedyString())
-                                        .executes(ctx -> createGroup(
-                                                ctx.getSource(),
-                                                StringArgumentType.getString(ctx, "id"),
-                                                StringArgumentType.getString(ctx, "members"))))))
-                .then(Commands.literal("relation")
-                        .requires(RpCommand.admin(Permissions.ADMIN_FACTION))
-                        .then(Commands.argument("g1", StringArgumentType.word())
-                                .suggests(RpSuggest.factions())
-                                .then(Commands.argument("g2", StringArgumentType.word())
-                                        .suggests(RpSuggest.factions())
-                                        .then(Commands.argument("type", StringArgumentType.word())
-                                                .executes(ctx -> setRelation(
+                        .executes(ctx -> RpCommand.usageHint(ctx.getSource(), "ccnr_rp.command.usage.faction"))
+                        .then(Commands.literal("list").executes(ctx -> list(ctx.getSource())))
+                        .then(Commands.literal("create")
+                                .requires(RpCommand.admin(Permissions.ADMIN_FACTION))
+                                .then(Commands.argument("id", StringArgumentType.word())
+                                        .then(Commands.argument("members", StringArgumentType.greedyString())
+                                                .executes(ctx -> createGroup(
                                                         ctx.getSource(),
-                                                        StringArgumentType.getString(ctx, "g1"),
-                                                        StringArgumentType.getString(ctx, "g2"),
-                                                        StringArgumentType.getString(ctx, "type"))))))));
+                                                        StringArgumentType.getString(ctx, "id"),
+                                                        StringArgumentType.getString(ctx, "members"))))))
+                        .then(Commands.literal("relation")
+                                .requires(RpCommand.admin(Permissions.ADMIN_FACTION))
+                                .then(Commands.argument("g1", StringArgumentType.word())
+                                        .suggests(RpSuggest.factions())
+                                        .then(Commands.argument("g2", StringArgumentType.word())
+                                                .suggests(RpSuggest.factions())
+                                                .then(Commands.argument("type", StringArgumentType.word())
+                                                        .executes(ctx -> setRelation(
+                                                                ctx.getSource(),
+                                                                StringArgumentType.getString(ctx, "g1"),
+                                                                StringArgumentType.getString(ctx, "g2"),
+                                                                StringArgumentType.getString(ctx, "type"))))))))
+                .then(Commands.literal("warhead")
+                        .requires(RpCommand.admin(Permissions.ADMIN_FACTION))
+                        .then(Commands.argument("faction", StringArgumentType.word())
+                                .suggests(RpSuggest.factions())
+                                .then(Commands.argument(
+                                                "enabled", com.mojang.brigadier.arguments.BoolArgumentType.bool())
+                                        .executes(ctx -> setWarhead(
+                                                ctx.getSource(),
+                                                StringArgumentType.getString(ctx, "faction"),
+                                                com.mojang.brigadier.arguments.BoolArgumentType.getBool(ctx, "enabled"),
+                                                ""))
+                                        .then(Commands.argument("area", StringArgumentType.string())
+                                                .executes(ctx -> setWarhead(
+                                                        ctx.getSource(),
+                                                        StringArgumentType.getString(ctx, "faction"),
+                                                        com.mojang.brigadier.arguments.BoolArgumentType.getBool(
+                                                                ctx, "enabled"),
+                                                        StringArgumentType.getString(ctx, "area")))))));
 
         rp.addChild(base.build());
+    }
+
+    /**
+     * /rp faction warhead &lt;阵营&gt; &lt;true|false&gt; [区域id]：设置"可否启动弹头"与目标区域。
+     * 核弹本体不属本 mod（见 docs/16）：这里只写许可与目标，消费方是外部功能。
+     */
+    private static int setWarhead(CommandSourceStack source, String factionId, boolean enabled, String areaId) {
+        FactionManager mgr = manager();
+        if (mgr == null) {
+            source.sendSuccess(() -> Component.translatable("ccnr_rp.error.not_implemented", "P1"), false);
+            return 0;
+        }
+        List<String> errors = mgr.setFactionWarhead(factionId, enabled, areaId);
+        if (!errors.isEmpty()) {
+            source.sendSuccess(
+                    () -> Component.translatable("ccnr_rp.error.invalid_argument", String.join("; ", errors)), false);
+            return 0;
+        }
+        source.sendSuccess(
+                () -> Component.translatable(
+                        "ccnr_rp.command.faction.warhead",
+                        factionId,
+                        enabled ? "true" : "false",
+                        areaId.isBlank() ? "-" : areaId),
+                false);
+        return 1;
     }
 
     private static FactionManager manager() {

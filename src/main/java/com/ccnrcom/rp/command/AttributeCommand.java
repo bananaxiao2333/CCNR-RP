@@ -20,6 +20,7 @@ import java.util.concurrent.CompletableFuture;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.commands.arguments.ResourceLocationArgument;
 import net.minecraft.network.chat.Component;
 
 /**
@@ -44,13 +45,14 @@ final class AttributeCommand {
         base.then(Commands.literal("set")
                 .then(Commands.argument("faction", StringArgumentType.word())
                         .suggests(RpSuggest.factions())
-                        .then(Commands.argument("attribute", StringArgumentType.word())
+                        // 属性 id 是注册名（含冒号），必须用 ResourceLocation 参数：word() 只吃 [a-zA-Z0-9_]
+                        .then(Commands.argument("attribute", ResourceLocationArgument.id())
                                 .suggests(AttributeCommand::suggestAttributes)
                                 .then(Commands.argument("amount", DoubleArgumentType.doubleArg())
                                         .executes(ctx -> set(
                                                 ctx.getSource(),
                                                 StringArgumentType.getString(ctx, "faction"),
-                                                StringArgumentType.getString(ctx, "attribute"),
+                                                attributeId(ctx),
                                                 DoubleArgumentType.getDouble(ctx, "amount"),
                                                 "add"))
                                         .then(Commands.argument("operation", StringArgumentType.word())
@@ -58,24 +60,29 @@ final class AttributeCommand {
                                                 .executes(ctx -> set(
                                                         ctx.getSource(),
                                                         StringArgumentType.getString(ctx, "faction"),
-                                                        StringArgumentType.getString(ctx, "attribute"),
+                                                        attributeId(ctx),
                                                         DoubleArgumentType.getDouble(ctx, "amount"),
                                                         StringArgumentType.getString(ctx, "operation"))))))));
         base.then(Commands.literal("remove")
                 .then(Commands.argument("faction", StringArgumentType.word())
                         .suggests(RpSuggest.factions())
-                        .then(Commands.argument("attribute", StringArgumentType.word())
+                        .then(Commands.argument("attribute", ResourceLocationArgument.id())
                                 .suggests(AttributeCommand::suggestAttributes)
                                 .executes(ctx -> remove(
                                         ctx.getSource(),
                                         StringArgumentType.getString(ctx, "faction"),
-                                        StringArgumentType.getString(ctx, "attribute"))))));
+                                        attributeId(ctx))))));
         base.then(Commands.literal("clear")
                 .then(Commands.argument("faction", StringArgumentType.word())
                         .suggests(RpSuggest.factions())
                         .executes(ctx ->
                                 write(ctx.getSource(), StringArgumentType.getString(ctx, "faction"), List.of()))));
         rp.addChild(base.build());
+    }
+
+    /** 读取属性参数（ResourceLocation 参数：允许 namespace:path，省略命名空间默认 minecraft）。 */
+    private static String attributeId(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+        return ResourceLocationArgument.getId(ctx, "attribute").toString();
     }
 
     /** 列出已注册属性 id（原版 + 各 mod）；带可选过滤串。 */
