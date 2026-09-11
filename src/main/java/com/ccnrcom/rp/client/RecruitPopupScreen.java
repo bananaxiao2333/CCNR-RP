@@ -6,7 +6,6 @@ package com.ccnrcom.rp.client;
 
 import com.ccnrcom.rp.network.RpChannels;
 import com.ccnrcom.rp.network.RpPackets;
-import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -160,29 +159,9 @@ public class RecruitPopupScreen extends Screen {
         }
     }
 
-    /** 按像素宽度折行（中文/长职位名）。 */
+    /** 按像素宽度贪心断行（共享入口，算法见 RpTheme.wrapText）。 */
     private List<String> wrapText(String text, int maxW) {
-        List<String> out = new ArrayList<>();
-        if (text == null || text.isBlank()) {
-            out.add("");
-            return out;
-        }
-        StringBuilder cur = new StringBuilder();
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            if (c == '\n' || font.width(cur.toString() + c) > maxW) {
-                out.add(cur.toString());
-                cur.setLength(0);
-                if (c == '\n') {
-                    continue;
-                }
-            }
-            cur.append(c);
-        }
-        if (cur.length() > 0) {
-            out.add(cur.toString());
-        }
-        return out;
+        return RpTheme.wrapText(font, text, maxW);
     }
 
     @Override

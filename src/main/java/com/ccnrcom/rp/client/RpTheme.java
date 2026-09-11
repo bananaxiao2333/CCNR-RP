@@ -13,7 +13,7 @@ import net.minecraft.client.gui.GuiGraphics;
  * 布局：严格三栏网格（左：机构徽章导航 / 中：角色档案列表 / 右：详细资料+3D预览+战术装备）。
  * 与前端 ccnr-rp-gui (App.css) 设计语言一致：黑底、白/灰等宽文字、细灰边、白=强调、红=危险。
  *
- * <p>v4.1（2.25.0）为<b>令牌收口</b>：设计语言与调色板不变，把此前散落在各界面的裸色值
+ * <p>v4.1（2.24.1）为<b>令牌收口</b>：设计语言与调色板不变，把此前散落在各界面的裸色值
  * （浮层卡片底/控件底/遮罩/滚动条轨道/徽章底/列表行/立体预览全息层）统一登记为语义令牌，
  * 并提供 {@link #listRow}/{@link #listPanel}/{@link #hudCard}/{@link #popupPanel} 等共享绘制入口，
  * 使同类构件在整个 mod 内只有一种画法。新增界面一律走令牌，禁止再写裸色值（docs/14 §2.1）。
@@ -223,6 +223,72 @@ public final class RpTheme {
     // ================= 共享绘制入口（同类构件只有一种画法） =================
 
     /** CRT 扫描线（每 3px 一微亮线，强化屏幕质感）。 */
+    // ================= 文本布局（同类构件只有一种画法） =================
+
+    /**
+     * 按像素宽度贪心断行：**逐字符累计 {@code font.width}，超宽即断**（CJK 没有空格，按词断行会整行溢出）。
+     * 支持 {@code \n} 强制换行；空/空白串返回单行空串（调用方不必判空）。
+     *
+     * <p>弹窗正文、字幕、简历等一切"多行文本"都走这里，禁止各界面自写一份（docs/14 §2.1 / docs/11 §8.4）。
+     */
+    public static java.util.List<String> wrapText(Font font, String text, int maxWidth) {
+        return wrapText(text, maxWidth, s -> font.width(s));
+    }
+
+    /**
+     * 纯逻辑重载（可脱机单测）：宽度函数由调用方提供（生产传 {@code font::width}，测试传"每字 N 像素"的假函数）。
+     * 算法只有这一份，中文（无空格）与英文（有空格）走同一条逐字符路径。
+     */
+    public static java.util.List<String> wrapText(
+            String text, int maxWidth, java.util.function.ToIntFunction<String> width) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        if (text == null || text.isBlank()) {
+            out.add("");
+            return out;
+        }
+        StringBuilder cur = new StringBuilder();
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '\n' || width.applyAsInt(cur.toString() + c) > maxWidth) {
+                out.add(cur.toString());
+                cur.setLength(0);
+                if (c == '\n') {
+                    continue;
+                }
+            }
+            cur.append(c);
+        }
+        if (cur.length() > 0) {
+            out.add(cur.toString());
+        }
+        return out;
+    }
+
+    /**
+     * 按像素宽度裁剪单行文本（超宽截断加省略号）。
+     * 列表行、表头、弹窗里的"单行标识"（id/名称）统一走这里，避免长 id 压到右侧标签或溢出面板
+     * （docs/11 §8.4）。
+     */
+    public static String clip(Font font, String s, int maxWidth) {
+        return clip(s, maxWidth, t -> font.width(t));
+    }
+
+    /** 纯逻辑重载（可脱机单测）：宽度函数由调用方提供。 */
+    public static String clip(String s, int maxWidth, java.util.function.ToIntFunction<String> width) {
+        if (s == null || s.isEmpty()) {
+            return "";
+        }
+        if (width.applyAsInt(s) <= maxWidth) {
+            return s;
+        }
+        String out = s;
+        while (!out.isEmpty() && width.applyAsInt(out + "…") > maxWidth) {
+            out = out.substring(0, out.length() - 1);
+        }
+        // 极窄列下一个字符都放不下：至少给一个字符，避免返回纯省略号
+        return out.isEmpty() ? s.substring(0, 1) : out + "…";
+    }
+
     public static void scanlines(GuiGraphics g, int x1, int y1, int x2, int y2) {
         for (int y = y1; y < y2; y += 3) {
             g.fill(x1, y, x2, y + 1, SCANLINE);

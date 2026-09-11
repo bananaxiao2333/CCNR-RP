@@ -515,15 +515,8 @@ public final class RpGroupsTab {
         g.disableScissor();
     }
 
-    /** 按像素宽度裁剪文本（超宽截断加省略号）。 */
+    /** 按像素宽度裁剪文本（共享入口，算法见 RpTheme.clip）。 */
     private static String clip(net.minecraft.client.gui.Font font, String s, int maxW) {
-        if (font.width(s) <= maxW) {
-            return s;
-        }
-        String out = s;
-        while (!out.isEmpty() && font.width(out + "…") > maxW) {
-            out = out.substring(0, out.length() - 1);
-        }
-        return out + "…";
+        return RpTheme.clip(font, s, maxW);
     }
 }

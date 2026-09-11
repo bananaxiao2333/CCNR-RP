@@ -1261,33 +1261,9 @@ public class CharacterManagementScreen extends Screen {
         return i < 0 ? new String[] {s, ""} : new String[] {s.substring(0, i), s.substring(i + 4)};
     }
 
-    /**
-     * 阵营水印徽标（硬边构成主义标记）：双层细环 + 红色断弧 + 四向刻度 + 中心十字 + 单扇区排线。
-     * 替代此前 `bigBadge(alpha=36)` 的多层同心 alpha 圆——那会叠成一团看不清的灰色斑块。
-     */
-    /** 按像素宽度折行（中文/长职位名）。 */
+    /** 按像素宽度贪心断行（共享入口，算法见 RpTheme.wrapText）。 */
     private java.util.List<String> wrapText(String text, int maxW) {
-        java.util.List<String> out = new java.util.ArrayList<>();
-        if (text == null || text.isBlank()) {
-            out.add("");
-            return out;
-        }
-        StringBuilder cur = new StringBuilder();
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            if (c == '\n' || font.width(cur.toString() + c) > maxW) {
-                out.add(cur.toString());
-                cur.setLength(0);
-                if (c == '\n') {
-                    continue;
-                }
-            }
-            cur.append(c);
-        }
-        if (cur.length() > 0) {
-            out.add(cur.toString());
-        }
-        return out;
+        return RpTheme.wrapText(font, text, maxW);
     }
 
     private static String str(JsonObject o, String key) {
