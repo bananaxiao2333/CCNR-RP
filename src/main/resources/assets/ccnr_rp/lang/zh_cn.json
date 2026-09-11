@@ -2,7 +2,7 @@
   "ccnr_rp.mod.name": "CCNR-RP",
   "ccnr_rp.command.help": "CCNR-RP 指令列表：",
   "ccnr_rp.command.usage.gui": "界面：按 K 打开角色管理终端（也可用 /rp character list 刷新）",
-  "ccnr_rp.command.usage.faction": "阵营: /rp faction list | relation <a> <b> | relation set <a> <b> <hostile|neutral|friendly> | group list | group create <id> <成员id...> | group relation <g1> <g2> <type>",
+  "ccnr_rp.command.usage.faction": "阵营: /rp faction list | relation <a> <b> | relation set <a> <b> <hostile|neutral|friendly> | group list | group create <id> <成员id...> | group relation <g1> <g2> <type> | warhead <阵营> <true|false> [区域id]",
   "ccnr_rp.command.usage.profession": "职业: /rp profession list | create <id> <阵营id> <true|false> [显示名] | save <id> [--hotbar] | load <id>（save 默认保存全部物品栏/盔甲/副手含 NBT）",
   "ccnr_rp.command.usage.character": "角色: /rp character list | create <名字> <阵营> <职业> [背景] | select|observe|activate|delete|cooldown <id>",
   "ccnr_rp.command.usage.state": "状态: /rp state [玩家] | kill <玩家>",
@@ -565,5 +565,7 @@
   "ccnr_rp.gui.admin.warhead.pick_area": "选择区域",
   "ccnr_rp.gui.admin.warhead.save": "保存",
   "ccnr_rp.gui.admin.warhead.select_first": "请先选择一个阵营",
-  "ccnr_rp.gui.admin.warhead.hint": "本 mod 只发布「哪个阵营有权 + 目标区域」，发射由外部功能负责"
+  "ccnr_rp.gui.admin.warhead.hint": "本 mod 只发布「哪个阵营有权 + 目标区域」，发射由外部功能负责",
+  "ccnr_rp.command.area.info": "区域 %s（%s）| 维度 %s | %s",
+  "ccnr_rp.command.faction.warhead": "阵营 %s 的弹头许可已设为 %s（目标区域：%s）"
 }

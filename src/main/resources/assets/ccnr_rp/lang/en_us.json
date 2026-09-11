@@ -2,7 +2,7 @@
   "ccnr_rp.mod.name": "CCNR-RP",
   "ccnr_rp.command.help": "CCNR-RP commands:",
   "ccnr_rp.command.usage.gui": "GUI: press K to open the character terminal (/rp character list to refresh)",
-  "ccnr_rp.command.usage.faction": "Faction: /rp faction list | relation <a> <b> | relation set <a> <b> <hostile|neutral|friendly> | group list | group create <id> <member ids...> | group relation <g1> <g2> <type>",
+  "ccnr_rp.command.usage.faction": "Faction: /rp faction list | relation <a> <b> | relation set <a> <b> <hostile|neutral|friendly> | group list | group create <id> <members...> | group relation <g1> <g2> <type> | warhead <faction> <true|false> [areaId]",
   "ccnr_rp.command.usage.profession": "Profession: /rp profession list | create <id> <factionId> <true|false> [display name] | save <id> [--hotbar] | load <id> (save defaults to full inventory/armor/offhand incl. NBT)",
   "ccnr_rp.command.usage.character": "Character: /rp character list | create <name> <faction> <profession> [background] | select|observe|activate|delete|cooldown <id>",
   "ccnr_rp.command.usage.state": "State: /rp state [player] | kill <player>",
@@ -565,5 +565,7 @@
   "ccnr_rp.gui.admin.warhead.pick_area": "Pick area",
   "ccnr_rp.gui.admin.warhead.save": "Save",
   "ccnr_rp.gui.admin.warhead.select_first": "Select a faction first",
-  "ccnr_rp.gui.admin.warhead.hint": "This mod only publishes which faction may launch and which area is the target; launching is up to the external feature"
+  "ccnr_rp.gui.admin.warhead.hint": "This mod only publishes which faction may launch and which area is the target; launching is up to the external feature",
+  "ccnr_rp.command.area.info": "Area %s (%s) | dimension %s | %s",
+  "ccnr_rp.command.faction.warhead": "Faction %s warhead launch set to %s (target area: %s)"
 }
