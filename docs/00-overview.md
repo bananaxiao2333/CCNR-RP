@@ -25,6 +25,8 @@ CCNR 服务器 RolePlay 模组（Forge 1.20.1）。世界观为"量子科学"设
 | `character` | `CharacterData`、`CharacterStore`（JSON 存档）、皮肤上传校验 | P3 |
 | `status` | `CharacterStatus` 状态机、`StatusManager`（掉线判死等） | P4 |
 | `corpse` | Corpse 可选联动桥（`CorpseBridge`，探测缺失降级） | P4 |
+| `attribute` | 阵营属性（`AttributeProfile` 纯逻辑 + `PlayerAttributeBridge` 薄适配 + `AttributeService` 编排；FirstAid 可选适配） | P16 |
+| `area` | 区域/目标区（`Area`/`AreaRegistry` 纯逻辑 + `AreaService` 配置读写），外部功能的只读数据接口 | P16 |
 | `experience` | `LevelCurve`/结算器（纯逻辑）、`ExperienceService`（命令结算） | P5 |
 | `event` | 事件定义、`TriggerEvaluator`（纯逻辑）、`EventManager` 生命周期 | P6 |
 | `animation` | 动画序列解析（纯逻辑）、`AnimationEngine`（服务端决策+分发） | P7 |
@@ -42,7 +44,8 @@ CCNR 服务器 RolePlay 模组（Forge 1.20.1）。世界观为"量子科学"设
 | 路径 | 内容 | 管理员可编辑 |
 | --- | --- | --- |
 | `serverconfig/ccnr_rp-server.toml` | 调参（冷却时长、招募超时、经验权重、等级曲线、tick 间隔） | 是 |
-| `config/ccnr_rp/factions.json` | 阵营 + 阵营组 + 关系 + 职业 + 装备 Loadout | 是 |
+| `config/ccnr_rp/factions.json` | 阵营 + 阵营组 + 关系 + 职业 + 装备 Loadout + 阵营属性/弹头许可（docs/16） | 是 |
+| `config/ccnr_rp/areas.json` | 区域（目标区）定义：id/名称/维度/角点坐标（docs/16） | 是 |
 | `config/ccnr_rp/phases.json` | 游戏阶段表 | 是 |
 | `config/ccnr_rp/events.json` | 事件定义与触发器 | 是 |
 | `config/ccnr_rp/animations.json` | 动画序列 | 是 |
@@ -178,9 +181,14 @@ CCNR 服务器 RolePlay 模组（Forge 1.20.1）。世界观为"量子科学"设
 | P8 | 自刷新/复活波/招募三通路 | 0.9.0 |
 | P9 | 全流程演练 100% → 1.0.0 | **1.0.0 ✅（已交付）** |
 
+> 后续阶段（非 P0–P9 闸门体系）：P15 多模式编排（[docs/15](docs/15-模式编排与多模式设计.md)，2.23.0）、
+> P16 属性与区域（[docs/16](docs/16-属性与区域.md)，2.24.0）。
+
 ## 8. 命令树总览（分阶段启用）
 
 `/rp help`、`/rp character …`、`/rp state <player>`、`/rp kill <player>`、
 `/rp settle …`、`/rp evac set …`、`/rp xp <player>`、`/rp level <player>`、
 `/rp faction …`、`/rp profession …`、`/rp event …`、`/rp phase …`、
-`/rp animation play …`、`/rp spawn …`。玩家命令无需权限；管理命令 OP≥2 或 `ccnrrp.admin.*` 节点。
+`/rp animation play …`、`/rp spawn …`、`/rp mode …`、`/rp end …`、
+`/rp attribute …`（阵营属性）、`/rp area …`（区域）。
+玩家命令无需权限；管理命令 OP≥2 或 `ccnrrp.admin.*` 节点。

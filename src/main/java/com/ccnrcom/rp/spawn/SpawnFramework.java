@@ -403,6 +403,9 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
         // 部署前清空背包（含护甲/副手）并重设角色状态（生命/饱食/效果/火/坠落/空气）：
         // 防止死亡/观察期间遗留物品与状态带进新岗位
         clearInventory(p);
+        // 阵营属性（拓展设定）必须在 resetPlayerState **之前**套用：resetPlayerState 用 getMaxHealth() 回满，
+        // 顺序反了就会按旧上限回满（改了血量出门却不是满状态）。首次套用/换阵营都会先清理旧修饰（幂等）。
+        com.ccnrcom.rp.attribute.AttributeService.applyTo(p, factionId);
         resetPlayerState(p);
         if (CCNRRPMod.factions != null) {
             CCNRRPMod.factions.findProfession(professionId).ifPresent(def -> {

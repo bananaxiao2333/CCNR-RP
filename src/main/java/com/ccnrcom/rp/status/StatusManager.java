@@ -17,6 +17,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.GameType;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
@@ -112,6 +113,19 @@ public final class StatusManager {
         }
         DeathSpot spot = deathSpots.remove(player.getUUID());
         if (spot == null) {
+            // 死亡地点缺失（死亡时掉线/服务端重启清表/死亡前就不是在场身份等）：仍然保证进入观察流程，
+            // 而不是退回床边裸复活——否则玩家会停在出生点、既不旁观也拿不到部署提示（issue #1 第二症状）。
+            if (CCNRRPMod.users != null) {
+                String uuid = player.getUUID().toString();
+                boolean deployed =
+                        CCNRRPMod.users.isAlive(uuid) || com.ccnrcom.rp.sequence.SequenceEngine.isConscripted(uuid);
+                if (!deployed) {
+                    player.setGameMode(GameType.SPECTATOR);
+                }
+                if (CCNRRPMod.characters != null) {
+                    CCNRRPMod.characters.sendList(player); // 立即同步档案：K 面板部署入口可用
+                }
+            }
             return;
         }
         player.teleportTo(
@@ -219,7 +233,10 @@ public final class StatusManager {
         // 统一：清除客户端征召身份（幂等）。
         // 注意：不在死亡瞬间切旁观者——否则打断原版掉落与 Corpse 尸体生成；重生时由 onPlayerRespawn 切旁观并传回尸体旁。
         RpChannels.sendTo(player, new RpPackets.ConscriptStateS2C(""));
-        if (CCNRRPMod.users != null && CCNRRPMod.users.isAlive(uuid)) {
+        // 死亡记账范围：正式在场（ALIVE）玩家 + 已有档案但当前不在场者（观察者/残留 DEAD/征召兵）。
+        // 后者过去整段跳过退场，于是"死亡前就不是在场身份"的玩家既不写冷却、也不记死亡地点，
+        // 重生直接退回出生点且不进观察流程（issue #1 第二症状）。
+        if (CCNRRPMod.users != null && (CCNRRPMod.users.isAlive(uuid) || CCNRRPMod.users.hasProfile(uuid))) {
             // 死亡事件（结算开始前赋予）：规则先入列表，随后结算把死亡扣分/加分并入最终结果
             if (CCNRRPMod.experience != null) {
                 CCNRRPMod.experience.emitDeath(uuid, "death");
@@ -397,8 +414,11 @@ public final class StatusManager {
         CharacterStatus st = CCNRRPMod.users.status(playerUuid);
         boolean alive = st == CharacterStatus.ALIVE;
         boolean observingRetire = st == CharacterStatus.OBSERVING && "retire".equals(reason);
+        // 死亡退场（reason=death）对观察者/残留 DEAD 同样要记账：冷却与死亡地点不能因为
+        // "死之前就不是在场身份"而整段跳过（否则重生退回出生点、不进观察流程）。
+        boolean deathRetire = "death".equals(reason);
         // 状态迁移（幂等）：仅 ALIVE 判死生效；观察者退役只加冷却；其余（DEAD 残留由轮询兜底）跳过
-        if (!alive && !observingRetire) {
+        if (!alive && !observingRetire && !deathRetire) {
             return;
         }
         String charName = playerOrNull != null ? playerOrNull.getName().getString() : "";
@@ -419,18 +439,41 @@ public final class StatusManager {
             CCNRRPMod.users.save();
         }
         if (playerOrNull != null && alive) {
+            // 退场即卸下阵营属性（拓展设定）：观察者不带上一局的加成，重新部署时按当前阵营重套
+            com.ccnrcom.rp.attribute.AttributeService.clear(playerOrNull);
             if (CCNRRPMod.characters != null) {
                 CCNRRPMod.characters.sendList(playerOrNull); // 立即刷新用户档案列表（观察模式；K 面板可打开）
             }
-            // 不在死亡瞬间切旁观者（防打断掉落与 Corpse 尸体生成）；重生时由 onPlayerRespawn 切旁观并传回尸体旁
-            if ("death".equals(reason)) {
-                deathSpots.put(
-                        playerOrNull.getUUID(),
-                        new DeathSpot(
-                                (ServerLevel) playerOrNull.level(),
-                                playerOrNull.blockPosition(),
-                                playerOrNull.getYRot(),
-                                playerOrNull.getXRot()));
+        }
+        // 死亡地点：任何在线死亡都记录（重生时由 onPlayerRespawn 切旁观并传回死亡地点）。
+        // 不放在 alive 分支内——观察者/残留状态的死亡同样必须回到死亡地点，而不是出生点/床点。
+        if (playerOrNull != null && deathRetire) {
+            deathSpots.put(
+                    playerOrNull.getUUID(),
+                    new DeathSpot(
+                            (ServerLevel) playerOrNull.level(),
+                            playerOrNull.blockPosition(),
+                            playerOrNull.getYRot(),
+                            playerOrNull.getXRot()));
+        }
+        // 死亡背包处置（issue #1）：原版在 keepInventory=true 或"死亡瞬间处于旁观者模式"时**不会**爆出背包
+        // （ServerPlayer.die 的 if (!isSpectator()) dropAllDeathLoot 直接跳过），离线判死更是没有原版掉落流程；
+        // 而本 mod 恰恰会把未部署玩家强制切成旁观者，且"死亡即清空背包"过去只是遗体 mod 的副作用，遗体 mod 一移除就失效。
+        // 时机：LivingDeathEvent 内、原版掉落之前 → 先清空，原版随后找不到物品（不会重复掉落）。
+        // 范围：只处理真正的死亡（自然死亡 / 离线判死）；管理员 /rp kill、/rp retire 仍走原有行为。
+        if (playerOrNull != null && (deathRetire || offline)) {
+            boolean keepInventory = playerOrNull.level().getGameRules().getBoolean(GameRules.RULE_KEEPINVENTORY);
+            boolean explicit = DeathInventoryPolicy.dropExplicitly(
+                    CorpseBridge.available(), offline, playerOrNull.isSpectator(), keepInventory);
+            if (explicit) {
+                int stacks = DeathDrops.dropAll(playerOrNull);
+                LOGGER.info(
+                        "[CCNR-RP] 无遗体模组：死亡背包显式爆出（{} 组，keepInventory={}，旁观者={}，离线={}）→ {}",
+                        stacks,
+                        keepInventory,
+                        playerOrNull.isSpectator(),
+                        offline,
+                        charName);
             }
         }
         if (spawnCorpse && playerOrNull != null) {
@@ -439,9 +482,11 @@ public final class StatusManager {
                         playerOrNull.getUUID(),
                         new PendingCorpse(playerOrNull, charName)); // 延迟 2 tick 生成（实体移除时序安全），尸体保留在原地
             } else {
-                // 保护：未安装 Corpse 模组时跳过遗体生成，物品按原版正常爆出
+                // 保护：未安装 Corpse 模组时跳过遗体生成，物品按原版正常爆出。
+                // 死亡（自然/离线判死）的爆出已由上方 DeathInventoryPolicy/DeathDrops 补位（原版在 keepInventory
+                // 或旁观者模式下不会爆）；管理员 /rp kill、/rp retire 保持原行为（不掉落、遗物留在玩家身上）。
                 LOGGER.info(
-                        "[CCNR-RP] 未安装 Corpse 模组：跳过遗体生成，{} 的物品按原版爆出",
+                        "[CCNR-RP] 未检测到 Corpse 模组：跳过遗体生成，{} 的物品按原版方式处理",
                         playerOrNull.getGameProfile().getName());
             }
         }
