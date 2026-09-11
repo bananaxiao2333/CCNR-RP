@@ -70,8 +70,17 @@ public final class ClientSetup {
                 var font = net.minecraft.client.Minecraft.getInstance().font;
                 int x = 8;
                 int y = 10;
-                RpRoundRect.fill(gfx, x, y, x + font.width(text) + 12, y + 16, 6f, 0xAA3A3A3A);
-                gfx.drawString(font, text, x + 6, y + 4, 0xFFD8D8D8, true);
+                // 终端小标签：控件底 + 细灰边（与其它浮层同语言）
+                RpRoundRect.outlined(
+                        gfx,
+                        x,
+                        y,
+                        x + font.width(text) + 12,
+                        y + 16,
+                        6f,
+                        RpTheme.PANEL_BORDER,
+                        RpTheme.SURFACE_CONTROL_HOVER);
+                gfx.drawString(font, text, x + 6, y + 4, RpTheme.TEXT_BRIGHT, true);
             }
         });
         event.registerAboveAll("ccnr_rp_cinematic", (gui, gfx, partial, w, h) -> CinematicController.render(gfx, w, h));

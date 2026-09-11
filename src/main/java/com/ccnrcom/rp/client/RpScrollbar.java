@@ -17,10 +17,10 @@ public final class RpScrollbar {
     public static int[] draw(GuiGraphics g, int x, int y1, int y2, int total, int visible, int offset) {
         int h = y2 - y1;
         if (total <= visible || total <= 0 || h <= 0) {
-            g.fill(x, y1, x + 5, y2, 0x40383838);
+            g.fill(x, y1, x + 5, y2, RpTheme.SCROLL_TRACK);
             return new int[] {};
         }
-        g.fill(x, y1, x + 5, y2, 0x80383838); // 槽
+        g.fill(x, y1, x + 5, y2, RpTheme.SCROLL_TRACK_ACTIVE); // 槽
         double thumbH = Math.max(18.0, h * (double) visible / total);
         double maxOff = total - visible;
         double frac = maxOff <= 0 ? 0 : Math.min(1.0, (double) offset / maxOff);
@@ -34,10 +34,10 @@ public final class RpScrollbar {
     public static int[] drawH(GuiGraphics g, int x1, int x2, int y, int total, int visible, int offset) {
         int w = x2 - x1;
         if (total <= visible || total <= 0 || w <= 0) {
-            g.fill(x1, y, x2, y + 5, 0x40383838);
+            g.fill(x1, y, x2, y + 5, RpTheme.SCROLL_TRACK);
             return new int[] {};
         }
-        g.fill(x1, y, x2, y + 5, 0x80383838);
+        g.fill(x1, y, x2, y + 5, RpTheme.SCROLL_TRACK_ACTIVE);
         double thumbW = Math.max(20.0, w * (double) visible / total);
         double maxOff = total - visible;
         double frac = maxOff <= 0 ? 0 : Math.min(1.0, (double) offset / maxOff);

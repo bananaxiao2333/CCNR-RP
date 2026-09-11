@@ -461,7 +461,7 @@ public class CharacterManagementScreen extends Screen {
         // 管理按钮（管理员可开管理面板）
         boolean mgrHover = my >= mgrY1 && my <= mgrY2 && mx >= mgrX1 && mx <= mgrX2;
         if (mgrHover) {
-            g.fill(mgrX1 - 2, mgrY1 - 1, mgrX2 + 2, mgrY2 + 1, 0x605A5A5A);
+            g.fill(mgrX1 - 2, mgrY1 - 1, mgrX2 + 2, mgrY2 + 1, RpTheme.alphaBlend(RpTheme.TEXT_DIM, 0x60));
         }
         g.drawString(
                 font,
@@ -472,9 +472,9 @@ public class CharacterManagementScreen extends Screen {
                 true);
         boolean hover = my >= hdrY1 - 1 && my <= hdrY1 + 17 && mx >= px2 - 28 && mx <= px2 - 10;
         if (hover) {
-            g.fill(px2 - 30, hdrY1 - 2, px2 - 8, hdrY1 + 18, 0xE66F1613);
+            g.fill(px2 - 30, hdrY1 - 2, px2 - 8, hdrY1 + 18, RpTheme.RED_BG_FILL);
         }
-        g.drawString(font, "X", px2 - 20, hdrY1 + 4, hover ? 0xFFFFFFFF : RpTheme.TEXT_SECONDARY, true);
+        g.drawString(font, "X", px2 - 20, hdrY1 + 4, hover ? RpTheme.CYAN : RpTheme.TEXT_SECONDARY, true);
         // 关闭由 mouseClicked 处理（点击才关；悬停只高亮，不关闭）
     }
 
@@ -620,7 +620,7 @@ public class CharacterManagementScreen extends Screen {
             int tx2 = b[2] - 7;
             int color = met ? RpTheme.STATUS_ALIVE : RpTheme.RED_LINE;
             RpRoundRect.fill(g, tx2 - tagW, b[1] + 6, tx2, b[1] + 18, 3f, RpTheme.alphaBlend(color, met ? 0x66 : 0xFF));
-            g.drawString(font, tag, tx2 - tagW + 4, b[1] + 8, met ? color : 0xFFFFFFFF, true);
+            g.drawString(font, tag, tx2 - tagW + 4, b[1] + 8, met ? RpTheme.ACCENT_TEXT : RpTheme.TEXT_PRIMARY, true);
             // 在职/上限小标签（部署限制预览；服务端 deploy 强校验）
             int lim = ClientCharacterState.professionLimit(str(p, "id"));
             if (lim >= 0) {
@@ -632,7 +632,13 @@ public class CharacterManagementScreen extends Screen {
                 int oCol = full ? RpTheme.RED_LINE : RpTheme.STATUS_ALIVE;
                 RpRoundRect.fill(
                         g, ox2 - oTagW, b[1] + 6, ox2, b[1] + 18, 3f, RpTheme.alphaBlend(oCol, full ? 0xFF : 0x66));
-                g.drawString(font, occTag, ox2 - oTagW + 4, b[1] + 8, full ? 0xFFFFFFFF : oCol, true);
+                g.drawString(
+                        font,
+                        occTag,
+                        ox2 - oTagW + 4,
+                        b[1] + 8,
+                        full ? RpTheme.TEXT_PRIMARY : RpTheme.ACCENT_TEXT,
+                        true);
             }
         }
         // 职位列表滚动条（可拖拽）
@@ -655,7 +661,13 @@ public class CharacterManagementScreen extends Screen {
         int y = bodyY1;
         // Reference detail header: name / ID // FACTION / [ LV.REQ | CURRENT ] / PERSONNEL // FACTION
         int cardH = 80;
-        RpTheme.card(g, x, y, x + w, y + cardH, 8f, RpTheme.PANEL_BG);
+        RpTheme.sectionCard(g, x, y, x + w, y + cardH);
+        // 构成主义档案卡框架：左缘红色结构条 + 四角刻度 + 右下斜切楔形 + 顶缘亮线 + 底缘刻度尺
+        g.fill(x, y, x + 3, y + cardH, STRUCT_RED);
+        g.fill(x + 3, y, x + w, y + 1, RpTheme.alphaBlend(RpTheme.PANEL_BORDER_BRIGHT, 0x99));
+        cornerTicks(g, x + 4, y + 1, x + w - 1, y + cardH - 1, 5, RpTheme.PANEL_BORDER_BRIGHT);
+        wedge(g, x, y, x + w, y + cardH, 2, 10, RpTheme.alphaBlend(STRUCT_RED, 0xCC));
+        tickScale(g, x + 6, x + w - 6, y + cardH - 3, 8, 32, RpTheme.alphaBlend(RpTheme.TEXT_DIM, 0xCC));
         if (p == null) {
             g.drawString(
                     font,
@@ -673,15 +685,20 @@ public class CharacterManagementScreen extends Screen {
                     RpTheme.TEXT_DIM);
             return;
         }
-        g.drawString(font, str(p, "name"), x + 8, y + 5, RpTheme.CYAN, true);
+        // 档案标题：字距放大 + 白色，下方一条硬边细线（构成主义标题带）
+        String pname = str(p, "name");
+        String nameFit = font.width(pname) > w - 20 ? font.plainSubstrByWidth(pname, w - 24) + "…" : pname;
+        tracked(g, nameFit, x + 7, y + 4, RpTheme.TEXT_PRIMARY, 1);
+        g.fill(x + 7, y + 15, x + w - 7, y + 16, RpTheme.alphaBlend(RpTheme.CYAN, 0x66));
         String facName = factionName(p, factionMeta);
         String idLine = Component.translatable("ccnr_rp.gui.character.term_id", str(p, "id"), facName)
                 .getString();
-        g.drawString(font, idLine, x + 8, y + 19, RpTheme.TEXT_DIM);
+        String[] idPair = splitPair(idLine);
+        readout(g, x + 7, y + 18, w - 14, 11, idPair[0], idPair[1], RpTheme.TEXT_PRIMARY, STRUCT_RED);
         boolean met = userLevel() >= unlockLevel(p);
         String req = Component.translatable("ccnr_rp.gui.character.term_lvl", unlockLevel(p), userLevel())
                 .getString();
-        g.drawString(font, req, x + 8, y + 31, met ? RpTheme.STATUS_ALIVE : RpTheme.RED_LINE);
+        readout(g, x + 7, y + 31, w - 14, 11, req, "", RpTheme.TEXT_PRIMARY, met ? RpTheme.STATUS_ALIVE : RpTheme.RED);
         // 部署限制与当前在职（全局性限制预览；服务端 deploy 统一入口强校验）
         // 与部署按钮同条件：在职数按「不含本人」计算（在场换岗不重复占位），职业或阵营任一满即标红
         String profId = str(p, "id");
@@ -696,25 +713,33 @@ public class CharacterManagementScreen extends Screen {
         String per = Component.translatable(
                         "ccnr_rp.gui.character.term_personnel", profOcc, profLimit >= 0 ? profLimit : "∞")
                 .getString();
+        String perFac;
         if (facLimit >= 0) {
-            per += Component.translatable("ccnr_rp.gui.character.term_personnel_fac", facOcc, facLimit)
+            perFac = Component.translatable("ccnr_rp.gui.character.term_personnel_fac", facOcc, facLimit)
                     .getString();
         } else {
-            per += Component.translatable("ccnr_rp.gui.character.term_personnel_unlim", facOcc)
+            perFac = Component.translatable("ccnr_rp.gui.character.term_personnel_unlim", facOcc)
                     .getString();
         }
         boolean profFull = profLimit >= 0 && profOcc >= profLimit;
         boolean facFull = facLimit >= 0 && facOcc >= facLimit;
-        g.drawString(font, per, x + 8, y + 43, (profFull || facFull) ? RpTheme.RED_LINE : RpTheme.STATUS_ALIVE);
-        g.drawString(
-                font,
-                "// "
-                        + Component.translatable("ccnr_rp.gui.character.section.preview")
-                                .getString(),
-                x + 8,
-                y + 55,
-                RpTheme.TEXT_DIM,
-                true);
+        readout(
+                g,
+                x + 7,
+                y + 44,
+                w - 14,
+                11,
+                per,
+                perFac.replace(" // ", ""),
+                RpTheme.TEXT_PRIMARY,
+                (profFull || facFull) ? RpTheme.RED_LINE : RpTheme.STATUS_ALIVE);
+        sectionHead(
+                g,
+                x + 7,
+                y + 58,
+                w - 14,
+                "01",
+                Component.translatable("ccnr_rp.gui.character.section.preview").getString());
         JsonObject loadout = loadoutOf(p);
         int contentTop = y + cardH + 2;
         // 项目简历（职业 profile，可选）：展示在战术装备预览之下、部署按钮之上；未配置的职位不占位
@@ -725,20 +750,15 @@ public class CharacterManagementScreen extends Screen {
         int resumeH = resumeLineCount == 0 ? 0 : 15 + resumeLineCount * 10;
         int contentBottom = deployY - 12 - resumeH;
         int modelW = Math.max(88, w * 38 / 100);
-        // 预览区背景阵营徽章（身份归属视觉提示，参考 t-mt8dmt3a 统一徽章封装）：
-        // 大号半透明水印徽章置于装备槽区右侧空白背景，先画背景再画内容（模型/装备槽在上层不遮挡）；
-        // 用 bigBadge(alpha) 实现半透明水印；未知阵营（无元数据）跳过。
+        // 预览区右侧：**阵营图标**（身份归属提示）。用该阵营配置的真实徽章（等级色环 + 图标 + 右下等级刻度），
+        // 而不是抽象水印几何——验收要求此处直接显示图标。先画背景、再画模型/装备槽，故不遮挡内容。
         JsonObject facMeta = factionMeta(str(p, "factionId"));
         if (facMeta != null) {
             g.enableScissor(x, contentTop, x + w, contentBottom);
-            String fIcon = facMeta.has("icon") && !facMeta.get("icon").isJsonNull()
-                    ? facMeta.get("icon").getAsString()
-                    : "hex";
-            int fTier = facMeta.has("tier") ? facMeta.get("tier").getAsInt() : 2;
             int badgeCx = x + modelW + (w - modelW) * 3 / 4;
             int badgeCy = contentBottom - 26;
             int badgeR = Math.max(22, Math.min(40, (contentBottom - contentTop) / 4));
-            com.ccnrcom.rp.client.RpIcons.bigBadge(g, badgeCx, badgeCy, badgeR, fIcon, fTier, 36);
+            RpIcons.factionBadge(g, badgeCx, badgeCy, badgeR, facMeta, false);
             g.disableScissor();
         }
         // 3D 人物立绘（使用玩家自己的皮肤，来自 CharacterPreview；XYZ 锁定正面视角）
@@ -750,20 +770,21 @@ public class CharacterManagementScreen extends Screen {
         int scale = Math.max(12, Math.min(36, Math.min(modelH / 3 - 6, modelW / 3)));
         int cy = contentTop + modelH / 2 + 4;
         // A档：全息投影底座（人物背后光束 + 底部发光地格；纯绘制层，置于模型之后）
-        renderHoloBase(g, x + modelW / 2, contentTop, contentBottom, cy, scale);
+        renderHoloBeam(g, x + modelW / 2, contentTop, contentBottom, cy, scale);
         CharacterPreview.render(g, x + modelW / 2, cy, scale, ch, loadout);
         g.disableScissor();
         // 战术装备实物预览（职位 loadout：头/胸/腿/靴/武器，悬停显示词条）——EQUIPMENT 区块
         int equipTop = contentTop + 10;
-        g.drawString(
-                font,
-                Component.translatable("ccnr_rp.gui.character.section.equipment")
-                        .getString(),
-                x + modelW + 8,
+        int equipX = x + modelW + 8;
+        sectionHead(
+                g,
+                equipX,
                 contentTop,
-                RpTheme.TEXT_DIM,
-                true);
-        renderEquipList(g, x + modelW + 8, x + w - 8, equipTop, contentBottom, loadout, mx, my);
+                (x + w - 8) - equipX,
+                "02",
+                Component.translatable("ccnr_rp.gui.character.section.equipment")
+                        .getString());
+        renderEquipList(g, equipX, x + w - 8, equipTop, contentBottom, loadout, mx, my);
         // 项目简历（装备预览之下、部署按钮之上）
         if (resumeLineCount > 0) {
             renderProfileResume(g, x, w, contentBottom, deployY, resumeLines, resumeLineCount);
@@ -773,24 +794,23 @@ public class CharacterManagementScreen extends Screen {
     /** 项目简历展示区最多行数（超长裁剪；显示区域受限时自动减少行数）。 */
     private static final int MAX_PROFILE_LINES = 4;
 
-    /** 在装备预览之下、部署按钮之上渲染项目简历：分隔线 + 标签 + 折行文本（裁剪到展示区）。 */
+    /** 在装备预览之下、部署按钮之上渲染项目简历：小节头 + 折行文本（裁剪到展示区）。 */
     private void renderProfileResume(
             GuiGraphics g, int x, int w, int top, int buttonTop, List<String> lines, int lineCount) {
         int bottom = buttonTop - 8;
-        g.fill(x + 2, top + 1, x + w - 2, top + 2, RpTheme.PANEL_BORDER);
-        g.drawString(
-                font,
-                "// "
-                        + Component.translatable("ccnr_rp.gui.character.section.profile")
-                                .getString(),
+        sectionHead(
+                g,
                 x + 2,
-                top + 5,
-                RpTheme.TEXT_DIM,
-                true);
+                top + 1,
+                w - 4,
+                "03",
+                Component.translatable("ccnr_rp.gui.character.section.profile").getString());
         g.enableScissor(x, top, x + w, bottom);
         int ly = top + 16;
         for (int i = 0; i < lineCount; i++) {
-            g.drawString(font, lines.get(i), x + 2, ly, RpTheme.TEXT_SECONDARY);
+            // 行首刻度：构成主义「条目」标记
+            g.fill(x + 2, ly + 4, x + 5, ly + 5, RpTheme.alphaBlend(STRUCT_RED, 0xCC));
+            g.drawString(font, lines.get(i), x + 9, ly, RpTheme.TEXT_SECONDARY);
             ly += 10;
         }
         g.disableScissor();
@@ -804,35 +824,27 @@ public class CharacterManagementScreen extends Screen {
     }
 
     /**
-     * A档：全息投影底座（纯绘制，不改模型渲染）。人物背后一条青光柱，脚下透视地格 + 发光底座圆环，
-     * 让立绘看起来像悬浮的全息投影。所有调用方为客户端主线程渲染，无每帧分配。
+     * 全息投影光柱（纯绘制，不改模型渲染）：人物背后一条纵向投影，交代"立绘悬浮"。
+     * 只保留光柱本身——脚下的底座环 / 透视地格 / 汇聚斜线 / 十字 / 刻度尺按验收意见**全部删除**
+     * （那些装饰与人物脚部叠在一起显得杂乱）；硬边取向不变：2px 核心线 + 两侧虚线柱，无柔和渐变。
      */
-    private static void renderHoloBase(GuiGraphics g, int cx, int top, int bottom, int cy, int scale) {
+    private static void renderHoloBeam(GuiGraphics g, int cx, int top, int bottom, int cy, int scale) {
         int baseY = Math.min(bottom - 6, cy + scale);
-        int light = 0x00FFFFFF; // 透明青
-        int beam = 0x4DFFFFFF; // 半透青（CYAN_DIM 低透明度）
-        // 1) 纵向投影光柱：顶部透明 -> 底部泛青，宽度随 scale 变化（top<baseY 才画）
-        if (top < baseY) {
-            int bw = Math.max(6, scale / 2);
-            g.fillGradient(cx - bw, top, cx + bw, baseY, light, beam);
+        if (top >= baseY) {
+            return;
         }
-        // 2) 底部透视地格：几条横向扫掠线（越靠下越密，模拟透视地板）
-        int gx1 = cx - Math.max(20, scale * 3 / 2);
-        int gx2 = cx + Math.max(20, scale * 3 / 2);
-        for (int i = 1; i <= 4; i++) {
-            int yy = baseY - (i * i) * 3; // 越靠近底座越密
-            if (yy < top + 4) {
-                break;
+        int halfW = Math.max(18, scale * 3 / 2);
+        g.fill(cx - 1, top, cx + 1, baseY, RpTheme.PREVIEW_BEAM);
+        for (int i = 1; i <= 3; i++) {
+            int dx = i * Math.max(6, halfW / 4);
+            int c = RpTheme.alphaBlend(RpTheme.CYAN, Math.max(8, 0x24 - i * 7));
+            for (int y = top + i * 3; y < baseY; y += 8) {
+                g.fill(cx - dx, y, cx - dx + 1, Math.min(y + 4, baseY), c);
+                g.fill(cx + dx, y, cx + dx + 1, Math.min(y + 4, baseY), c);
             }
-            int a = 90 - i * 16;
-            g.fill(gx1, yy, gx2, yy + 1, (a << 24) | 0xFFFFFF);
         }
-        // 3) 发光底座：同心圆环 + 底部渐隐
-        int baseR = Math.max(8, Math.min(18, scale));
-        int ring = 0x8CFFFFFF;
-        int disc = 0xFF202020;
-        com.ccnrcom.rp.client.RpIcons.ring(g, cx, baseY, baseR, ring, disc);
-        com.ccnrcom.rp.client.RpIcons.circle(g, cx, baseY, Math.max(2, baseR / 3), (0x5AFFFFFF));
+        // 顶部定位刻度（投影源）
+        g.fill(cx - 4, top, cx + 5, top + 1, RpTheme.alphaBlend(RpTheme.CYAN, 0x66));
     }
 
     private void renderEquipList(
@@ -859,44 +871,63 @@ public class CharacterManagementScreen extends Screen {
         int slotS = Math.min(20, rowH - 4);
         int iy = (slotS - 16) / 2;
         int railX = ex - 4;
-        // B档：负载轨左缘贯穿线（连接五槽，形成整体终端轨）
+        // 负载轨：贯穿细线 + 每槽一个刻度（构成主义工程导轨，替代原先一根裸线）
         int railTop = top + 6;
         int railBot = top + 6 + (labels.length - 1) * rowH + slotS;
-        g.fill(railX, railTop, railX + 1, railBot, RpTheme.alphaBlend(RpTheme.TEXT_DIM, 140));
+        g.fill(railX, railTop, railX + 1, railBot, RpTheme.alphaBlend(RpTheme.TEXT_DIM, 0xCC));
+        int railCap = Math.max(2, rowH / 8);
+        g.fill(railX - railCap, railTop, railX + 1 + railCap, railTop + 1, RpTheme.TEXT_DIM);
+        g.fill(railX - railCap, railBot - 1, railX + 1 + railCap, railBot, RpTheme.TEXT_DIM);
         ItemStack hovered = ItemStack.EMPTY;
         for (int i = 0; i < labels.length; i++) {
             int ry = top + 6 + i * rowH;
             ItemStack stack = stacks[i];
             boolean loaded = stack != null && !stack.isEmpty();
             boolean weapon = i == labels.length - 1;
-            // 状态着色：空槽暗灰 / 已装备青 / 武器红（一眼定位武器）
+            // 状态着色：空槽暗灰 / 已装备亮灰 / 武器红（一眼定位武器）
             int accent;
-            int glow;
+            int inner;
             if (!loaded) {
-                accent = 0xFF4A4A4A;
-                glow = 0;
+                accent = RpTheme.BORDER_DIM;
+                inner = RpTheme.SLOT_BG;
             } else if (weapon) {
                 accent = RpTheme.RED_LINE;
-                glow = RpTheme.alphaBlend(RpTheme.RED, 40);
+                inner = RpTheme.alphaBlend(RpTheme.RED, 40);
             } else {
                 accent = RpTheme.CYAN_DIM;
-                glow = RpTheme.alphaBlend(RpTheme.CYAN, 36);
+                inner = RpTheme.alphaBlend(RpTheme.CYAN, 36);
             }
-            // 槽位卡片：底 + 顶部门闩色条 + 边框按状态着色
-            RpRoundRect.outlined(g, ex, ry, ex + slotS, ry + slotS, 3f, accent, 0xFF2B2B2B);
+            // 槽位卡片：硬边方框 + 顶部门闩色条 + 已装槽四角刻度 / 空槽 45° 排线
+            RpRoundRect.outlined(g, ex, ry, ex + slotS, ry + slotS, 3f, accent, inner);
             g.fill(ex + 1, ry + 1, ex + slotS - 1, ry + 2, accent);
+            // 导轨刻度：把槽位与导轨连成一体
+            g.fill(railX, ry + slotS / 2 - 1, ex, ry + slotS / 2 + 1, accent);
             if (loaded) {
-                // 已装备辉光底衬（青/红），提升立体感
-                g.fill(ex + 1, ry + 3, ex + slotS - 1, ry + slotS - 1, glow);
+                cornerTicks(
+                        g, ex + 1, ry + 1, ex + slotS - 1, ry + slotS - 1, 3, RpTheme.alphaBlend(RpTheme.CYAN, 0xAA));
+                // 武器槽右上角红色楔形（构成主义标记；替代单纯红框）
+                if (weapon) {
+                    wedge(g, ex, ry, ex + slotS, ry + slotS, 1, 6, RpTheme.RED);
+                }
                 g.renderItem(stack, ex + iy, ry + iy);
                 if (mx >= ex && mx <= ex + slotS && my >= ry && my <= ry + slotS) {
                     hovered = stack;
                 }
             } else {
-                g.drawString(font, "—", ex + slotS / 2 - 2, ry + slotS / 2 - 4, RpTheme.TEXT_DIM);
+                hatch(g, ex + 1, ry + 2, ex + slotS - 1, ry + slotS - 1, 4, RpTheme.alphaBlend(RpTheme.TEXT_DIM, 0x88));
+                g.drawString(font, "--", ex + slotS / 2 - 3, ry + slotS / 2 - 4, RpTheme.TEXT_DIM);
+            }
+            // 序号 + 标签（序号为构成主义「条目编号」；宽度不足时自动省略序号）
+            int labelX = ex + slotS + 6;
+            int textW = font.width(labels[i]);
+            int numColor = loaded ? (weapon ? RpTheme.RED : RpTheme.TEXT_SECONDARY) : RpTheme.TEXT_DIM;
+            if (er - labelX > textW + 18) {
+                g.drawString(
+                        font, String.format(Locale.ROOT, "%02d", i + 1), labelX, ry + slotS / 2 - 4, numColor, false);
+                labelX += 14;
             }
             int labelColor = loaded ? (weapon ? RpTheme.RED : RpTheme.TEXT_PRIMARY) : RpTheme.TEXT_DIM;
-            g.drawString(font, labels[i], ex + slotS + 6, ry + slotS / 2 - 4, labelColor, true);
+            g.drawString(font, labels[i], labelX, ry + slotS / 2 - 4, labelColor, true);
         }
         // 悬停物品显示词条
         if (!hovered.isEmpty()) {
@@ -1001,7 +1032,7 @@ public class CharacterManagementScreen extends Screen {
         int ch = 130;
         int cx = px1 + (px2 - px1 - cw) / 2;
         int cy = py1 + (py2 - py1 - ch) / 2;
-        g.fill(0, 0, width, height, 0x99000000); // 半透明遮罩
+        RpTheme.lightScrim(g, width, height);
         RpTheme.terminalPanel(g, cx, cy, cx + cw, cy + ch, 10f);
         g.drawString(
                 font,
@@ -1023,36 +1054,217 @@ public class CharacterManagementScreen extends Screen {
         int[][] rects = confirmButtonRects();
         boolean hYes = mx >= rects[0][0] && mx <= rects[0][2] && my >= rects[0][1] && my <= rects[0][3];
         boolean hNo = mx >= rects[1][0] && mx <= rects[1][2] && my >= rects[1][1] && my <= rects[1][3];
-        RpRoundRect.fill(
+        // 确认/取消走统一按钮配方（主操作=白底反白字 / 次操作=控件底白字）：
+        // 反白底上的文字必须用 ACCENT_TEXT，此前的白底白字不可读。
+        RpButton.draw(
                 g,
                 rects[0][0],
                 rects[0][1],
                 rects[0][2],
                 rects[0][3],
-                5f,
-                hYes ? RpTheme.ACCENT_HOVER : RpTheme.alphaBlend(RpTheme.ACCENT, 0xAA));
-        g.drawCenteredString(
-                font,
                 Component.translatable("ccnr_rp.gui.character.kill_confirm_yes").getString(),
-                (rects[0][0] + rects[0][2]) / 2,
-                rects[0][1] + 6,
-                0xFFFFFFFF);
-        RpRoundRect.fill(
+                RpTheme.CYAN,
+                true,
+                hYes);
+        RpButton.draw(
                 g,
                 rects[1][0],
                 rects[1][1],
                 rects[1][2],
                 rects[1][3],
-                5f,
-                hNo ? RpTheme.PANEL_BORDER_BRIGHT : RpTheme.PANEL_BORDER);
-        g.drawCenteredString(
-                font,
                 Component.translatable("ccnr_rp.gui.character.kill_confirm_no").getString(),
-                (rects[1][0] + rects[1][2]) / 2,
-                rects[1][1] + 6,
-                RpTheme.TEXT_PRIMARY);
+                RpTheme.PANEL_BORDER,
+                false,
+                hNo);
     }
 
+    // ============================================================
+    // 构成主义硬边绘制原语（仅 K 面板使用）
+    // ------------------------------------------------------------
+    // 设计取向（docs/14 §1）：硬边、直角、45° 对角线、黑/白灰/红三色。
+    // 刻意**不**放进 RpTheme/RpIcons：本界面是唯一需要这批原语的地方，留在本地可让改动面
+    // 收敛在这一个文件内，不波及其它界面；若日后第二个界面需要，再提升为共享原语。
+    // 红色在此是**结构色**（序号块/刻度/断弧/楔形），与「危险实心红」RED_BG_FILL 区分。
+    // ============================================================
+
+    /** 结构红：比警戒红略暗，用于线条与小块。 */
+    private static final int STRUCT_RED = 0xFFE03028;
+
+    /** 1px 硬边圆环（仅描边，不填充）：替代多层 alpha 同心圆叠出来的「模糊灰斑」。 */
+    /** 圆弧描边（角度制：0=正右，逆时针为正）：构成主义「未闭合圆」断弧 / 仪表刻度。 */
+    /** 45° 排线（构成主义质感：空槽 / 水印扇区）。step 为线距，内部按面积抬步长做性能护栏。 */
+    private static void hatch(GuiGraphics g, int x1, int y1, int x2, int y2, int step, int color) {
+        int w = x2 - x1;
+        int h = y2 - y1;
+        if (w <= 1 || h <= 1) {
+            return;
+        }
+        int st = Math.max(3, step);
+        long area = (long) w * h;
+        long budget = 1200L; // 单次排线的填充段上限
+        if (area / st > budget) {
+            st = (int) Math.max(st, (area + budget - 1) / budget);
+        }
+        for (int c = x1 - y2; c <= x2 - y1; c += st) {
+            int sx = Math.max(x1, y1 + c);
+            int ex = Math.min(x2, y2 + c);
+            for (int x = sx; x < ex; x++) {
+                int y = x - c;
+                if (y >= y1 && y < y2) {
+                    g.fill(x, y, x + 1, y + 1, color);
+                }
+            }
+        }
+    }
+
+    /** 角落楔形（构成主义斜切块）。corner：0=左上 1=右上 2=右下 3=左下。 */
+    private static void wedge(GuiGraphics g, int x1, int y1, int x2, int y2, int corner, int size, int color) {
+        int s = Math.max(2, Math.min(size, Math.min(x2 - x1, y2 - y1)));
+        for (int i = 0; i < s; i++) {
+            int len = s - i;
+            switch (corner) {
+                case 0 -> g.fill(x1, y1 + i, x1 + len, y1 + i + 1, color);
+                case 1 -> g.fill(x2 - len, y1 + i, x2, y1 + i + 1, color);
+                case 2 -> g.fill(x2 - len, y2 - 1 - i, x2, y2 - i, color);
+                default -> g.fill(x1, y2 - 1 - i, x1 + len, y2 - i, color);
+            }
+        }
+    }
+
+    /** 四角 L 型刻度（工程图角标；比 RpTheme.cornerBrackets 更细，用于卡片与槽位）。 */
+    private static void cornerTicks(GuiGraphics g, int x1, int y1, int x2, int y2, int len, int color) {
+        g.fill(x1, y1, x1 + len, y1 + 1, color);
+        g.fill(x1, y1, x1 + 1, y1 + len, color);
+        g.fill(x2 - len, y1, x2, y1 + 1, color);
+        g.fill(x2 - 1, y1, x2, y1 + len, color);
+        g.fill(x1, y2 - 1, x1 + len, y2, color);
+        g.fill(x1, y2 - len, x1 + 1, y2, color);
+        g.fill(x2 - len, y2 - 1, x2, y2, color);
+        g.fill(x2 - 1, y2 - len, x2, y2, color);
+    }
+
+    /** 顶部刻度尺（工程图纸刻度）：minor 一格，major 处长刻度。 */
+    private static void tickScale(GuiGraphics g, int x1, int x2, int y, int minor, int major, int color) {
+        if (minor < 2 || x2 <= x1) {
+            return;
+        }
+        for (int x = x1; x < x2; x += minor) {
+            boolean maj = major > 0 && ((x - x1) % major) == 0;
+            g.fill(x, y, x + 1, y + (maj ? 4 : 2), color);
+        }
+    }
+
+    /** 全大写 + 字距放大的标题宽度。 */
+    private int trackedWidth(String s, int spacing) {
+        String up = s == null ? "" : s.toUpperCase(Locale.ROOT);
+        if (up.isEmpty()) {
+            return 0;
+        }
+        int w = 0;
+        for (int i = 0; i < up.length(); i++) {
+            w += font.width(up.substring(i, i + 1)) + spacing;
+        }
+        return w - spacing;
+    }
+
+    /** 全大写 + 字距放大的终端标题（字距拉开才有工程图/海报感）。 */
+    private void tracked(GuiGraphics g, String s, int x, int y, int color, int spacing) {
+        String up = s == null ? "" : s.toUpperCase(Locale.ROOT);
+        int cx = x;
+        for (int i = 0; i < up.length(); i++) {
+            String ch = up.substring(i, i + 1);
+            g.drawString(font, ch, cx, y, color, false);
+            cx += font.width(ch) + spacing;
+        }
+    }
+
+    /**
+     * 小节头（构成主义）：红色序号块（反白数字）+ 字距放大标题 + 尾部细线（线首 2px 红）。
+     * 返回占用高度（10），调用方按原节标签位置摆放即可，不改变既有布局。
+     */
+    private int sectionHead(GuiGraphics g, int x, int y, int w, String index, String label) {
+        int h = 10;
+        if (w < 12) {
+            return h;
+        }
+        int cur = x;
+        if (index != null && !index.isEmpty() && w >= 64) {
+            int bw = font.width(index) + 4;
+            g.fill(cur, y, cur + bw, y + h, STRUCT_RED);
+            g.drawString(font, index, cur + 2, y + 1, RpTheme.TEXT_PRIMARY, false);
+            cur += bw + 5;
+        }
+        String text = label == null ? "" : label;
+        int spacing = 1;
+        int tw = trackedWidth(text, spacing);
+        int avail = x + w - cur;
+        if (tw > avail) {
+            spacing = 0;
+            tw = trackedWidth(text, 0);
+        }
+        if (tw > avail) {
+            text = font.plainSubstrByWidth(text.toUpperCase(Locale.ROOT), Math.max(0, avail - 2)) + "…";
+            spacing = 0;
+            tw = trackedWidth(text, 0);
+        }
+        tracked(g, text, cur, y + 1, RpTheme.TEXT_PRIMARY, spacing);
+        cur += tw + 6;
+        int end = x + w;
+        if (end - cur >= 6) {
+            g.fill(cur, y + h / 2, end, y + h / 2 + 1, RpTheme.alphaBlend(RpTheme.PANEL_BORDER_BRIGHT, 0x99));
+            g.fill(cur, y + h / 2, cur + 3, y + h / 2 + 1, STRUCT_RED);
+        }
+        return h;
+    }
+
+    /**
+     * 终端读数框：内陷底 + 左 2px 结构红条 + 顶缘亮线 + 右缘刻度 + 左右两段文字（右段右对齐）。
+     * 替代此前「灰底上一行行裸文字」，让档案/等级/编制读起来像机器读数。
+     */
+    private void readout(
+            GuiGraphics g, int x, int y, int w, int h, String left, String right, int rightColor, int barColor) {
+        if (w < 24 || h < 8) {
+            return;
+        }
+        g.fill(x, y, x + w, y + h, RpTheme.SURFACE_INSET);
+        g.fill(x, y, x + 2, y + h, barColor);
+        g.fill(x + 2, y, x + w, y + 1, RpTheme.alphaBlend(RpTheme.PANEL_BORDER_BRIGHT, 0x66));
+        int tx = x + 5;
+        String rt = right == null ? "" : right;
+        // 窄窗口下右侧字段先按 55% 宽度裁剪，保证左段（ID/等级等关键读数）仍有位置显示
+        int cap = Math.max(20, w * 55 / 100);
+        if (font.width(rt) > cap) {
+            rt = font.plainSubstrByWidth(rt, cap - 1) + "…";
+        }
+        int rw = rt.isEmpty() ? 0 : font.width(rt);
+        int maxLeft = Math.max(0, w - 12 - rw);
+        String lab = left == null ? "" : left;
+        if (font.width(lab) > maxLeft) {
+            lab = font.plainSubstrByWidth(lab, Math.max(0, maxLeft - 1)) + "…";
+        }
+        int ty = y + (h - 8) / 2;
+        g.drawString(font, lab, tx, ty, RpTheme.TEXT_SECONDARY, false);
+        if (rw > 0) {
+            g.drawString(font, rt, x + w - 6 - rw, ty, rightColor, false);
+        }
+        for (int i = 2; i < h - 2; i += 3) {
+            g.fill(x + w - 3, y + i, x + w - 1, y + i + 1, RpTheme.alphaBlend(RpTheme.PANEL_BORDER_BRIGHT, 0x55));
+        }
+    }
+
+    /** 把 "A: x // B: y" 形式的本地化终端行拆成左右两段（无分隔符则整段作左段）。 */
+    private static String[] splitPair(String s) {
+        if (s == null) {
+            return new String[] {"", ""};
+        }
+        int i = s.indexOf(" // ");
+        return i < 0 ? new String[] {s, ""} : new String[] {s.substring(0, i), s.substring(i + 4)};
+    }
+
+    /**
+     * 阵营水印徽标（硬边构成主义标记）：双层细环 + 红色断弧 + 四向刻度 + 中心十字 + 单扇区排线。
+     * 替代此前 `bigBadge(alpha=36)` 的多层同心 alpha 圆——那会叠成一团看不清的灰色斑块。
+     */
     /** 按像素宽度折行（中文/长职位名）。 */
     private java.util.List<String> wrapText(String text, int maxW) {
         java.util.List<String> out = new java.util.ArrayList<>();

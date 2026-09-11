@@ -180,7 +180,7 @@ public final class CinematicController {
         return out;
     }
 
-    /** 关系类型 → 着色键（敌对红 / 友好绿 / 中立白）。 */
+    /** 关系类型 → 着色键（敌对红 / 友好蓝 / 中立白；与关系图、关系页签同一套语义色）。 */
     private static int relationKey(String type) {
         RelationType t = RelationType.parse(type);
         if (t == RelationType.HOSTILE) {
@@ -278,8 +278,8 @@ public final class CinematicController {
         // 全屏黑（覆盖 HUD；阵营配置 cinematicBlackScreen=false 时跳过，仅保留文字/图标）
         boolean blackOn = blackScreen();
         if (blackOn && blackA > 0f) {
-            int a = Math.round(blackA * 255f) << 24;
-            g.fill(0, 0, w, h, 0x00000000 | a);
+            int a = Math.round(blackA * 255f);
+            g.fill(0, 0, w, h, RpTheme.alphaBlend(RpTheme.BLACK, a));
         }
         if (blackA <= 0.01f && textA <= 0.01f) {
             // HUD 电影播完：有 CMDCam 场景则等场景播完再落位；无场景立即落位
@@ -344,7 +344,7 @@ public final class CinematicController {
             cs,
             RpTheme.alphaBlend(RpTheme.RED, ta),
             RpTheme.alphaBlend(RpTheme.FRIENDLY, ta),
-            RpTheme.alphaBlend(0xFFFFFFFF, ta),
+            RpTheme.alphaBlend(RpTheme.NEUTRAL, ta),
         };
         for (int i = 0; i < segLines.size(); i++) {
             String text = texts.get(i);

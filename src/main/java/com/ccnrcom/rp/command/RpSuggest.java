@@ -5,11 +5,13 @@
 package com.ccnrcom.rp.command;
 
 import com.ccnrcom.rp.CCNRRPMod;
+import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import java.util.List;
 import java.util.Locale;
 import java.util.function.Supplier;
 import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.server.level.ServerPlayer;
 
 /** /rp 命令参数补全建议器（Tab 补全列表）。 */
@@ -83,6 +85,36 @@ public final class RpSuggest {
                         .map(p -> p.id())
                         .toList()
                 : List.of());
+    }
+
+    /** 自定义设定变量 id。 */
+    public static SuggestionProvider<CommandSourceStack> variables() {
+        return from(() -> CCNRRPMod.variables != null
+                ? CCNRRPMod.variables.variables().stream().map(v -> v.id()).toList()
+                : List.of());
+    }
+
+    /** 自定义设定预设方案 id。 */
+    public static SuggestionProvider<CommandSourceStack> schemes() {
+        return from(() -> CCNRRPMod.variables != null
+                ? CCNRRPMod.variables.schemes().stream().map(s -> s.id()).toList()
+                : List.of());
+    }
+
+    /** 指定变量的预设值 id（读当前镜像缓存，供 /rp var preset 用）。 */
+    public static SuggestionProvider<CommandSourceStack> presets(String varIdArg) {
+        return (ctx, builder) -> {
+            if (CCNRRPMod.variables == null) {
+                return builder.buildFuture();
+            }
+            String varId = StringArgumentType.getString(ctx, varIdArg);
+            return SharedSuggestionProvider.suggest(
+                    CCNRRPMod.variables
+                            .find(varId)
+                            .map(v -> v.presets().stream().map(p -> p.id()).toList())
+                            .orElse(List.of()),
+                    builder);
+        };
     }
 
     /** 通用调试占位（无实际来源时返回空）。 */

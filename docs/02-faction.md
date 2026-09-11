@@ -7,8 +7,7 @@
 ## 2. 领域模型
 - `Faction {id, name, color(hex), description, icon, tier, music?}`（music 为阵营出场音乐，可选；音乐传递优先级：启动程序指定 > 职业 music > 阵营 music）
 - 阵营 JSON 上还有若干**不进 `Faction` record 的可选字段**（按"单字段接管"写入，只替换自己那一项）：
-  `radio`（无线电）、`spawn`（部署点）、`attributes`（阵营属性，docs/16）、`warheadEnabled`（可否启动弹头，docs/16）、
-  `warheadArea`（弹头目标区域 id，docs/16）。
+  `radio`（无线电）、`spawn`（部署点）、`attributes`（阵营属性，docs/16）。
 - `RelationType {HOSTILE, NEUTRAL, FRIENDLY}`
 - `FactionGroup {id, memberIds[]}`
 - `RelationRule {from[], to?, type}`（**多对多**：from/to 各为一个 id 列表，列表项可为阵营或组，

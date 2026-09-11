@@ -116,8 +116,8 @@ public final class RpIcons {
     /** 机构徽章：环(等级色) + 盘 + 图形 + 右下等级刻度。selected=红色警戒态。 */
     public static void badge(GuiGraphics g, int cx, int cy, int r, String icon, int tier, boolean selected) {
         int ring = selected ? RpTheme.RED_LINE : RpTheme.tierColor(tier);
-        ring(g, cx, cy, r, ring, 0xFF2E2E2E);
-        polygon(g, cx, cy, r - 1, icon, selected ? 0xFFFFFFFF : ring, 0xFF161616);
+        ring(g, cx, cy, r, ring, RpTheme.BADGE_DISC);
+        polygon(g, cx, cy, r - 1, icon, selected ? RpTheme.CYAN : ring, RpTheme.BADGE_PUNCH);
         int n = Math.max(2, r / 4);
         g.fill(cx + r - n - 1, cy + r - n - 1, cx + r, cy + r, ring);
     }
@@ -151,18 +151,25 @@ public final class RpIcons {
         int ring = RpTheme.tierColor(tier);
         circle(g, cx, cy, r + 3, RpTheme.alphaBlend(ring, alpha * 2 / 5));
         circle(g, cx, cy, r + 1, RpTheme.alphaBlend(ring, alpha));
-        ring(g, cx, cy, r, RpTheme.alphaBlend(ring, alpha), RpTheme.alphaBlend(0xFF2E2E2E, alpha));
+        ring(g, cx, cy, r, RpTheme.alphaBlend(ring, alpha), RpTheme.alphaBlend(RpTheme.BADGE_DISC, alpha));
         int inner = Math.max(4, r * 2 / 3);
         circle(g, cx, cy, inner, RpTheme.alphaBlend(ring, alpha * 2 / 5));
-        polygon(g, cx, cy, r - 1, icon, RpTheme.alphaBlend(RpTheme.CYAN, alpha), RpTheme.alphaBlend(0xFF2E2E2E, alpha));
+        polygon(
+                g,
+                cx,
+                cy,
+                r - 1,
+                icon,
+                RpTheme.alphaBlend(RpTheme.CYAN, alpha),
+                RpTheme.alphaBlend(RpTheme.BADGE_DISC, alpha));
         int n = Math.max(3, r / 3);
         g.fill(cx + r - n - 1, cy + r - n - 1, cx + r, cy + r, RpTheme.alphaBlend(ring, alpha));
     }
 
     /** 战术装备槽图标（头/胸/腿/背）。 */
     public static void slot(GuiGraphics g, int x1, int y1, int size, String name, int color) {
-        RpRoundRect.outlined(g, x1, y1, x1 + size, y1 + size, 4f, RpTheme.PANEL_BORDER, 0xFF2F2F2F);
-        glyph(g, x1 + 2, y1 + 2, Math.max(4, size - 4), name, color, 0xE62F2F2F);
+        RpRoundRect.outlined(g, x1, y1, x1 + size, y1 + size, 4f, RpTheme.PANEL_BORDER, RpTheme.SLOT_BG);
+        glyph(g, x1 + 2, y1 + 2, Math.max(4, size - 4), name, color, RpTheme.SLOT_PUNCH);
     }
 
     /** 在盒子内画多边形图标（16 单位盒映射）；img:<名> 时绘制服务器下发的图片徽章。 */

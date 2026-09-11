@@ -80,7 +80,7 @@ public final class StatusHud {
                         : str(faction, "name"))
                 : Component.translatable("ccnr_rp.hud.observe_mode").getString();
         int facColor = (alive || conscriptAlive)
-                ? (faction == null ? 0xFF888888 : parseColor(str(faction, "color"), 0xFF888888))
+                ? (faction == null ? RpTheme.CYAN_DIM : parseColor(str(faction, "color"), RpTheme.CYAN_DIM))
                 : RpTheme.STATUS_OBSERVING;
         float health = mc.player.getHealth();
         float maxHealth = mc.player.getMaxHealth();
@@ -141,7 +141,7 @@ public final class StatusHud {
                     obsColor);
         } else {
             float hpProgress = healthPct / 100f;
-            int hpColor = healthPct > 50 ? 0xFFFFFFFF : (healthPct > 25 ? 0xFFB4B4B4 : 0xFFFF3B30);
+            int hpColor = healthPct > 50 ? RpTheme.TEXT_PRIMARY : (healthPct > 25 ? RpTheme.TEXT_BRIGHT : RpTheme.RED);
             RpIcons.slot(g, px + 1, rowY + 1, iconS - 2, "heart", hpColor);
             drawRow(
                     g,
@@ -171,7 +171,7 @@ public final class StatusHud {
             int color) {
         int bx = px + iconS + 4;
         // 槽
-        RpRoundRect.outlined(g, bx, y, bx + barW, y + barH, 3f, RpTheme.PANEL_BORDER_BRIGHT, 0xB0383838);
+        RpRoundRect.outlined(g, bx, y, bx + barW, y + barH, 3f, RpTheme.PANEL_BORDER_BRIGHT, RpTheme.SURFACE_INSET);
         int fillPx = Math.max(0, Math.min(barW - 2, Math.round(fill * (barW - 2))));
         var font = Minecraft.getInstance().font;
         if (textMode) {
@@ -181,7 +181,8 @@ public final class StatusHud {
         } else {
             g.fill(bx + 1, y + 1, bx + 1 + fillPx, y + barH - 1, color);
             String pct = Math.round(fill * 100f) + "%";
-            g.drawString(font, pct, bx + (barW - font.width(pct)) / 2, y + (barH - 8) / 2 + 1, 0xFF141414);
+            // 亮色填充条上的文字必须用反白色（白条白字不可读）
+            g.drawString(font, pct, bx + (barW - font.width(pct)) / 2, y + (barH - 8) / 2 + 1, RpTheme.ACCENT_TEXT);
         }
     }
 

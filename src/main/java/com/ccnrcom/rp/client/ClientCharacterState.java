@@ -58,8 +58,10 @@ public final class ClientCharacterState {
     private static final List<JsonObject> relations = new ArrayList<>();
     /** 原始关系规则（管理面板编辑用；来自 CharacterListS2C 的 relationRules）。 */
     private static final List<JsonObject> relationRules = new ArrayList<>();
-    /** 区域定义（弹头投放区域；来自 CharacterListS2C 的 areas）。 */
-    private static final List<JsonObject> areas = new ArrayList<>();
+    /** 自定义设定变量（来自 CharacterListS2C 的 variables）。 */
+    private static final List<JsonObject> variables = new ArrayList<>();
+    /** 自定义设定预设方案（来自 CharacterListS2C 的 schemes）。 */
+    private static final List<JsonObject> schemes = new ArrayList<>();
     /** 是否已在本连接内武装过入服自动开面板（每登录一次，防每次列表同步反复弹面板）。 */
     private static boolean autoOpenArmed = false;
     // 用户级身份（v2：删除角色实体后唯一身份）
@@ -166,11 +168,19 @@ public final class ClientCharacterState {
                 }
             }
         }
-        areas.clear();
-        if (root.has("areas") && root.get("areas").isJsonArray()) {
-            for (JsonElement e : root.getAsJsonArray("areas")) {
+        variables.clear();
+        if (root.has("variables") && root.get("variables").isJsonArray()) {
+            for (JsonElement e : root.getAsJsonArray("variables")) {
                 if (e.isJsonObject()) {
-                    areas.add(e.getAsJsonObject());
+                    variables.add(e.getAsJsonObject());
+                }
+            }
+        }
+        schemes.clear();
+        if (root.has("schemes") && root.get("schemes").isJsonArray()) {
+            for (JsonElement e : root.getAsJsonArray("schemes")) {
+                if (e.isJsonObject()) {
+                    schemes.add(e.getAsJsonObject());
                 }
             }
         }
@@ -417,9 +427,14 @@ public final class ClientCharacterState {
         return List.copyOf(groups);
     }
 
-    /** 区域定义（服务端顶层数组；弹头投放目标与区域管理页签列举用）。 */
-    public static synchronized List<JsonObject> areas() {
-        return List.copyOf(areas);
+    /** 自定义设定变量（服务端顶层数组；「自定义设定」页签列举与取值预览用）。 */
+    public static synchronized List<JsonObject> variables() {
+        return List.copyOf(variables);
+    }
+
+    /** 自定义设定预设方案（服务端顶层数组；「自定义设定」页签一键套用/CRUD 用）。 */
+    public static synchronized List<JsonObject> schemes() {
+        return List.copyOf(schemes);
     }
 
     public static synchronized List<JsonObject> professions() {

@@ -439,7 +439,7 @@ public final class StatusManager {
             CCNRRPMod.users.save();
         }
         if (playerOrNull != null && alive) {
-            // 退场即卸下阵营属性（拓展设定）：观察者不带上一局的加成，重新部署时按当前阵营重套
+            // 退场即卸下阵营属性（docs/16）：观察者不带上一局的加成，重新部署时按当前阵营重套
             com.ccnrcom.rp.attribute.AttributeService.clear(playerOrNull);
             if (CCNRRPMod.characters != null) {
                 CCNRRPMod.characters.sendList(playerOrNull); // 立即刷新用户档案列表（观察模式；K 面板可打开）

@@ -161,8 +161,7 @@ public final class RpRulesTab {
         int rightX = ex2;
 
         // 左侧规则列表
-        RpRoundRect.outlined(
-                g, listX1 - 2, listY1 - 4, listX2 + 2, listY2 + 2, 4f, RpTheme.PANEL_BORDER, RpTheme.PANEL_BG_EVEN);
+        RpTheme.listPanel(g, listX1 - 2, listY1 - 4, listX2 + 2, listY2 + 2);
         g.drawString(
                 font,
                 Component.translatable("ccnr_rp.gui.admin.tab.xp").getString() + " (" + rules.size() + ")",
@@ -170,7 +169,7 @@ public final class RpRulesTab {
                 listY1 + 1,
                 RpTheme.TEXT_DIM);
         // 表头带与行列表分隔线（避免表头文字压到首行）
-        g.fill(listX1, listY1 + HDR - 1, listX2, listY1 + HDR, RpTheme.PANEL_BORDER);
+        RpTheme.listHeaderRule(g, listX1, listX2, listY1 + HDR - 1);
         int maxVisible = Math.max(1, (listY2 - listY1 - HDR) / ROW_H);
         int off = Math.min(rulesScroll, Math.max(0, rules.size() - maxVisible));
         for (int i = 0; i < rules.size() && i < maxVisible; i++) {
@@ -182,12 +181,7 @@ public final class RpRulesTab {
             if (s) {
                 RpTheme.selectedBar(g, listX1, y1, listX2, y2, 3f);
             } else {
-                g.fill(
-                        listX1,
-                        y1,
-                        listX2,
-                        y2 + 1,
-                        hov ? RpTheme.PANEL_BG_ALT : (i % 2 == 0 ? RpTheme.PANEL_BG : 0x00000000));
+                RpTheme.listRow(g, listX1, y1, listX2, y2 + 1, i, hov);
             }
             boolean en = !r.has("enabled") || r.get("enabled").getAsBoolean();
             g.drawString(font, en ? "●" : "○", listX1 + 6, y1 + 6, en ? RpTheme.GREEN : RpTheme.TEXT_DIM, true);
@@ -235,7 +229,7 @@ public final class RpRulesTab {
         int paY = ey1 + 176;
         int paH = Math.min(110, py2 - 70 - paY);
         String actEv = activeEventId();
-        RpRoundRect.outlined(g, ex1, paY, rightX, paY + paH, 4f, RpTheme.PANEL_BORDER, RpTheme.PANEL_BG_EVEN);
+        RpTheme.listPanel(g, ex1, paY, rightX, paY + paH);
         g.drawString(
                 font,
                 Component.translatable("ccnr_rp.xp.rules.params").getString() + " (" + actEv + ")",
@@ -259,7 +253,7 @@ public final class RpRulesTab {
                 // 名字按可用宽度裁剪，避免与右侧插入提示重叠
                 int nameMax = rightX - 44 - (ex1 + 8) - 8 - font.width("(" + type + ")");
                 String name = clip(font, p.name(), Math.max(30, nameMax));
-                g.drawString(font, name, ex1 + 8, py + 3, hov ? 0xFFFFFFFF : RpTheme.TEXT_PRIMARY);
+                g.drawString(font, name, ex1 + 8, py + 3, hov ? RpTheme.CYAN : RpTheme.TEXT_PRIMARY);
                 g.drawString(font, "(" + type + ")", ex1 + 8 + font.width(name) + 8, py + 3, RpTheme.TEXT_DIM);
                 g.drawString(font, "⇧ " + tr("ccnr_rp.xp.rules.insert"), rightX - hintW, py + 3, RpTheme.CYAN);
                 paramBounds.add(new int[] {ex1, py, rightX, py + 15});
@@ -307,11 +301,11 @@ public final class RpRulesTab {
         int sy = eventBox.getY() + 20;
         int sw = eventBox.getWidth();
         int n = Math.min(6, evSugItems.size());
-        g.fill(sx - 1, sy - 1, sx + sw + 1, sy + n * 12 + 1, 0xE0323232);
-        g.fill(sx - 1, sy - 1, sx + sw + 1, sy, 0xFF5F5F5F);
+        RpTheme.suggestionPopup(g, sx, sy, sw, n);
         for (int i = 0; i < n; i++) {
             int yy = sy + i * 12;
-            g.drawString(font, evSugItems.get(i), sx + 4, yy + 2, RpTheme.CYAN, false);
+            boolean rowHov = mx >= sx && mx <= sx + sw && my >= yy && my <= yy + 12;
+            RpTheme.suggestionRow(g, font, sx, yy, sw, evSugItems.get(i), i == evSugIdx, rowHov);
             evSugBounds.add(new int[] {sx, yy, sx + sw, yy + 12});
         }
     }
@@ -342,31 +336,29 @@ public final class RpRulesTab {
         int bw = 56;
         int bx = rightX - 2 * bw - 8;
         boolean hov1 = mx >= bx && mx <= bx + bw && my >= y + 2 && my <= y + 18;
-        RpRoundRect.outlined(
+        RpButton.draw(
                 g,
                 bx,
                 y + 2,
                 bx + bw,
                 y + 18,
-                3f,
-                hov1 ? RpTheme.PANEL_BORDER_BRIGHT : RpTheme.PANEL_BORDER,
-                RpTheme.PANEL_BG_ALT);
-        g.drawCenteredString(
-                font, Component.translatable("ccnr_rp.xp.rules.test").getString(), bx + bw / 2, y + 6, 0xFFFFFFFF);
+                Component.translatable("ccnr_rp.xp.rules.test").getString(),
+                RpTheme.PANEL_BORDER,
+                false,
+                hov1);
         btnBounds.add(new int[] {bx, y + 2, bx + bw, y + 18, BTN_TEST});
         int sx = rightX - bw;
         boolean hov2 = mx >= sx && mx <= rightX && my >= y + 2 && my <= y + 18;
-        RpRoundRect.outlined(
+        RpButton.draw(
                 g,
                 sx,
                 y + 2,
                 rightX,
                 y + 18,
-                3f,
-                hov2 ? RpTheme.PANEL_BORDER_BRIGHT : RpTheme.PANEL_BORDER,
-                RpTheme.PANEL_BG_ALT);
-        g.drawCenteredString(
-                font, Component.translatable("ccnr_rp.xp.rules.save").getString(), sx + bw / 2, y + 6, 0xFFFFFFFF);
+                Component.translatable("ccnr_rp.xp.rules.save").getString(),
+                RpTheme.PANEL_BORDER,
+                false,
+                hov2);
         btnBounds.add(new int[] {sx, y + 2, rightX, y + 18, BTN_SAVE});
         // 试算结果（3 秒）
         if (System.currentTimeMillis() - testAt < 3000L) {
@@ -445,6 +437,23 @@ public final class RpRulesTab {
     }
 
     public boolean mouseClicked(int mx, int my, int button) {
+        if (button == 1) {
+            // 右键规则行 = 删除该规则（与「删除」按钮同一确认入口，docs/01 §10.2）
+            int idx = ruleRowAt(mx, my);
+            if (idx >= 0) {
+                sel = idx;
+                String rid = str(rules.get(idx), "id");
+                screen.confirmDelete(
+                        Component.translatable("ccnr_rp.gui.admin.confirm.del_msg", tr("ccnr_rp.gui.admin.tab.xp"), rid)
+                                .getString(),
+                        () -> {
+                            sendEdit("remove", rid);
+                            sel = -1;
+                        });
+                return true;
+            }
+            return false;
+        }
         if (button != 0) {
             return false;
         }
@@ -545,8 +554,16 @@ public final class RpRulesTab {
             }
             case BTN_REMOVE -> {
                 if (sel >= 0 && sel < rules.size()) {
-                    sendEdit("remove", str(rules.get(sel), "id"));
-                    sel = -1;
+                    // 删除经验规则：一律先二次确认（右键条目与「删除」按钮共用，docs/01 §10.2）
+                    String rid = str(rules.get(sel), "id");
+                    screen.confirmDelete(
+                            Component.translatable(
+                                            "ccnr_rp.gui.admin.confirm.del_msg", tr("ccnr_rp.gui.admin.tab.xp"), rid)
+                                    .getString(),
+                            () -> {
+                                sendEdit("remove", rid);
+                                sel = -1;
+                            });
                 }
             }
             case BTN_TOGGLE -> {
@@ -589,6 +606,22 @@ public final class RpRulesTab {
             testLines.add(tr("ccnr_rp.xp.rules.v.titleErr", e.getMessage()));
         }
         testAt = System.currentTimeMillis();
+    }
+
+    /** 命中规则行的绝对下标（考虑滚动偏移；未命中返回 -1）。 */
+    private int ruleRowAt(int mx, int my) {
+        if (mx < listX1 || mx > listX2 || my < listY1 || my > listY2) {
+            return -1;
+        }
+        int maxVisible = Math.max(1, (listY2 - listY1 - HDR) / ROW_H);
+        int off = Math.min(rulesScroll, Math.max(0, rules.size() - maxVisible));
+        for (int i = 0; i < rules.size() && i < maxVisible; i++) {
+            int y1 = listY1 + HDR + i * ROW_H;
+            if (my >= y1 && my <= y1 + ROW_H - 1) {
+                return off + i;
+            }
+        }
+        return -1;
     }
 
     private void sendEdit(String action, String id) {
@@ -650,15 +683,6 @@ public final class RpRulesTab {
                 continue; // 事件下拉选项不是按钮
             }
             boolean hov = mx >= b[0] && mx <= b[2] && my >= b[1] && my <= b[3];
-            RpRoundRect.outlined(
-                    g,
-                    b[0],
-                    b[1],
-                    b[2],
-                    b[3],
-                    3f,
-                    hov ? RpTheme.PANEL_BORDER_BRIGHT : RpTheme.PANEL_BORDER,
-                    RpTheme.PANEL_BG_ALT);
             String key =
                     switch (b[4]) {
                         case BTN_ADD -> "ccnr_rp.xp.rules.add";
@@ -667,8 +691,16 @@ public final class RpRulesTab {
                         default -> "";
                     };
             if (!key.isEmpty()) {
-                g.drawCenteredString(
-                        font, Component.translatable(key).getString(), (b[0] + b[2]) / 2, b[1] + 4, 0xFFFFFFFF);
+                RpButton.draw(
+                        g,
+                        b[0],
+                        b[1],
+                        b[2],
+                        b[3],
+                        Component.translatable(key).getString(),
+                        RpTheme.PANEL_BORDER,
+                        false,
+                        hov);
             }
         }
     }
