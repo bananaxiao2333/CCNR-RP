@@ -3558,7 +3558,7 @@ public class RpAdminScreen extends Screen {
             return;
         }
         confirmDelete(
-                Component.translatable("ccnr_rp.gui.admin.confirm.del_msg", label, id)
+                Component.translatable("ccnr_rp.gui.admin.confirm.del_msg", label, clipTarget(id))
                         .getString(),
                 () -> {
                     JsonObject del = new JsonObject();
@@ -3594,12 +3594,21 @@ public class RpAdminScreen extends Screen {
         return true;
     }
 
+    /**
+     * 确认文案里的"目标标识"裁剪：id 可能很长（如关系规则的 from/to 列表会拼出几十个字符），
+     * 原样塞进弹窗会撑爆布局——按像素裁成一行；完整内容在列表/表单里本来就看得到。
+     */
+    private String clipTarget(String target) {
+        return RpTheme.clip(font, target, Math.min(320, width - 120));
+    }
+
     /** 危险操作二次确认弹窗（手动绘制无 widget；主按钮白底反色，文字必须用 ACCENT_TEXT）。 */
     private void renderDangerModal(GuiGraphics g, int mouseX, int mouseY) {
         RpTheme.modalScrim(g, width, height);
         int w = Math.min(400, width - 80);
-        int lines = Math.max(1, (font.width(dangerMsg) / (w - 32)) + 1);
-        int h = 74 + lines * 12 + 34;
+        // 正文先按像素贪心断行再算行数：按空格断行对中文无效，会整行溢出并压到按钮上
+        java.util.List<String> msgLines = RpTheme.wrapText(font, dangerMsg, w - 28);
+        int h = 74 + msgLines.size() * 12 + 34;
         dgX1 = (width - w) / 2;
         dgY1 = (height - h) / 2;
         dgX2 = dgX1 + w;
@@ -3615,12 +3624,20 @@ public class RpAdminScreen extends Screen {
                 RpTheme.RED_LINE,
                 true);
         g.fill(dgX1 + 8, dgY1 + 28, dgX2 - 8, dgY1 + 29, RpTheme.CYAN_DIM);
-        drawWrappedText(g, dangerMsg, dgX1 + 14, dgY1 + 38, w - 28, RpTheme.TEXT_PRIMARY);
+        int msgY = dgY1 + 38;
+        for (String line : msgLines) {
+            g.drawString(font, line, dgX1 + 14, msgY, RpTheme.TEXT_PRIMARY);
+            msgY += 12;
+        }
         g.drawString(
                 font,
-                Component.translatable("ccnr_rp.gui.admin.confirm.del_hint").getString(),
+                RpTheme.clip(
+                        font,
+                        Component.translatable("ccnr_rp.gui.admin.confirm.del_hint")
+                                .getString(),
+                        w - 28),
                 dgX1 + 14,
-                dgY1 + 38 + lines * 12 + 4,
+                msgY + 4,
                 RpTheme.TEXT_DIM);
         int bw = Math.max(88, (w - 48) / 2);
         int by = dgY2 - 32;
@@ -3654,25 +3671,6 @@ public class RpAdminScreen extends Screen {
                 hNo ? RpTheme.RED : RpTheme.TEXT_SECONDARY,
                 false,
                 hNo);
-    }
-
-    /** 简易按宽度换行绘制（确认文案含 id，可能较长；弹窗高度按行数算）。 */
-    private void drawWrappedText(GuiGraphics g, String text, int x, int y, int maxW, int color) {
-        StringBuilder line = new StringBuilder();
-        int cy = y;
-        for (String word : text.split(" ")) {
-            String next = line.isEmpty() ? word : line + " " + word;
-            if (font.width(next) > maxW && !line.isEmpty()) {
-                g.drawString(font, line.toString(), x, cy, color);
-                cy += 12;
-                line = new StringBuilder(word);
-            } else {
-                line = new StringBuilder(next);
-            }
-        }
-        if (!line.isEmpty()) {
-            g.drawString(font, line.toString(), x, cy, color);
-        }
     }
 
     /** 影响确认「确认执行」：按入队顺序执行全部挂起的写。 */
@@ -4407,7 +4405,8 @@ public class RpAdminScreen extends Screen {
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         renderBackground(g);
         // 模态（弹窗）打开时，仅保留深色背景 + 弹窗本身，彻底隐藏下层管理界面
-        boolean modal = impactOpen
+        boolean modal = dangerOpen() // 危险操作二次确认（删除）：同样必须隐藏下层（docs/01 §10-1）
+                || impactOpen
                 || spawnModalOpen
                 || seqModalOpen
                 || radioModalOpen
@@ -4866,7 +4865,8 @@ public class RpAdminScreen extends Screen {
                 RpTheme.TEXT_DIM);
         y += 14;
         for (String line : impactLines) {
-            g.drawString(font, "• " + line, mX1 + 18, y, RpTheme.RED_LINE);
+            // 引用行可能很长（"用户(12): a, b, c…"），按面板宽裁剪（docs/11 §8.4）
+            g.drawString(font, RpTheme.clip(font, "• " + line, w - 36), mX1 + 18, y, RpTheme.RED_LINE);
             y += 12;
         }
         int bw = Math.max(90, (w - 48) / 2);

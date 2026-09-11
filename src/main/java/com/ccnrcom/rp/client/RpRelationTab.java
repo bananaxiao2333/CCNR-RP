@@ -481,19 +481,23 @@ public final class RpRelationTab {
                 });
     }
 
-    /** 规则显示名（from → to，用于确认文案）。 */
+    /**
+     * 规则显示名（用于删除确认文案）：**与列表行同一文案**（内部: a, b / a × b + 类型），
+     * 不直接倒 from/to 原始 JSON——那会拼出几十个字符的长串，在确认框里既不可读又撑爆布局。
+     */
     private String ruleLabel(int index) {
         List<JsonObject> rules = ClientCharacterState.relationRules();
         if (index < 0 || index >= rules.size()) {
             return "";
         }
         JsonObject r = rules.get(index);
-        StringBuilder sb = new StringBuilder(idList(r, "from").toString());
+        List<String> from = idList(r, "from");
         List<String> to = idList(r, "to");
-        if (!to.isEmpty()) {
-            sb.append(" -> ").append(to);
-        }
-        return sb.toString();
+        String type = str(r, "type", "neutral");
+        String raw = sameSet(from, to)
+                ? tr("ccnr_rp.gui.admin.relation.internal") + ": " + sideLabel(from)
+                : sideLabel(from) + " × " + sideLabel(to);
+        return raw + " " + typeTag(type);
     }
 
     /** 选中规则的原始 from/to（未选中时为空数组；to 为空则省略 = 内部关系）。 */
@@ -765,16 +769,9 @@ public final class RpRelationTab {
         return shortenIds(ids);
     }
 
-    /** 按像素宽度裁剪文本（超宽截断加省略号），避免长规则名溢出行宽。 */
+    /** 按像素宽度裁剪文本（共享入口，算法见 RpTheme.clip）。 */
     private static String clip(net.minecraft.client.gui.Font font, String s, int maxW) {
-        if (font.width(s) <= maxW) {
-            return s;
-        }
-        String out = s;
-        while (!out.isEmpty() && font.width(out + "…") > maxW) {
-            out = out.substring(0, out.length() - 1);
-        }
-        return out + "…";
+        return RpTheme.clip(font, s, maxW);
     }
 
     private static String typeTag(String type) {

@@ -729,22 +729,8 @@ public final class RpRulesTab {
         return Component.translatable(key, arg).getString();
     }
 
-    /** 按像素宽裁剪文本（超宽加省略号），避免行内重叠。 */
+    /** 按像素宽度裁剪文本（共享入口，算法见 RpTheme.clip）。 */
     private static String clip(net.minecraft.client.gui.Font font, String s, int maxW) {
-        if (s == null) {
-            return "";
-        }
-        if (font.width(s) <= maxW) {
-            return s;
-        }
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < s.length(); i++) {
-            String t = sb.toString() + s.charAt(i);
-            if (font.width(t) > maxW - 8) {
-                break;
-            }
-            sb.append(s.charAt(i));
-        }
-        return sb + "...";
+        return RpTheme.clip(font, s, maxW);
     }
 }
