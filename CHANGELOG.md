@@ -1,5 +1,42 @@
 # Changelog
 
+## 2.24.0（issue 收口：#1 死亡背包清理 + #2 玩家属性编辑器（含 FirstAid 解耦适配）+ #3 特殊按钮落到拓展设定）
+
+- **死亡背包清理（issue #1 修复）**：新增 `DeathInventoryPolicy`（纯逻辑）+ `DeathDrops`（薄适配）。
+  原版在三条路径上**不会**爆出背包：`keepInventory=true`、死亡瞬间处于旁观者模式
+  （`ServerPlayer.die` 的 `if (!isSpectator()) dropAllDeathLoot` 直接跳过）、离线判死（没有原版掉落流程）；
+  而"死亡即清空背包"过去只是 Corpse 模组的副作用（它 `removeDrops()` 把物品收进遗体），遗体 mod 一移除就失效。
+  现在：**未装遗体模组时由本 mod 显式爆出并清空背包**（0-35 背包 + 36-39 护甲 + 40 副手；消失诅咒按原版销毁），
+  在死亡事件内先于原版掉落执行 → 原版随后找不到物品（不重复掉落）；装了遗体模组仍由它收纳（本 mod 不插手）。
+  管理员 `/rp kill`、`/rp retire` 保持原行为。
+- **死亡记账范围修正（issue #1 第二症状）**：死亡退场从"仅在场（ALIVE）玩家"放宽到"有档案但当时不在场"
+  （观察者 / 残留 DEAD / 征召兵）——这类死亡过去整段跳过，导致既不写复活冷却、也不记死亡地点，
+  重生直接退回床边且不进观察流程。现在一律记账；死亡地点在**任何在线死亡**时记录，
+  重生由 `onPlayerRespawn` 传回死亡地点并切旁观；地点缺失（死亡瞬间掉线、服务端重启清表）时也不再裸复活，
+  而是强制进入观察流程 + 立即同步档案（K 面板部署入口可用）。
+- **玩家属性编辑器（issue #2）**：新增 `attribute` 包——`AttributeProfile`（纯逻辑：解析/校验/结算，无 MC import）、
+  `PlayerAttributeBridge`（薄适配，MC 类型只在此）、`AttributeService`（套用时机编排）。
+  阵营配置新增可选 `attributes` 字段；管理面板「阵营」页签新增**属性**弹窗编辑器（行编辑 id/数值/运算 + 增删）；
+  部署时在 `resetPlayerState` **之前**套用（改血量后出门仍是满状态），登录与配置保存即时重套，退场自动卸下。
+  命令：`/rp attribute list|get|set|remove|clear`（权限 `ccnrrp.admin.attribute`）。
+  - 属性 id 用**注册名**寻址：原版属性与任意 mod 属性走同一条路径，未注册 id 执行期跳过并 WARN
+    （"装对应 mod 后生效"）——不写死任何 mod，这是"原版优先、mod 自然扩展"的解耦边界。
+  - **FirstAid 适配**：FirstAid 把血量换成 8 个部位血量（原版 `generic.max_health` 仅用于显示钳制），
+    因此"改血量"按倍率翻译为"缩放部位血量上限并补满"；适配层为私有内部类 + 纯反射 + `ModList` 探测，
+    **不引入任何编译期依赖**（对齐 `CamSceneBridge`），未安装或反射失败只记一次 WARN 并保持 FirstAid 原血量。
+- **特殊按钮 → 拓展设定（issue #3）**：阵营新增 `warheadEnabled`（阵营管理界面第三连开关「可否启动弹头」）
+  与 `warheadArea` 目标区域；新增 `area` 包（`Area`/`AreaRegistry` 纯逻辑 + `AreaService`）与**拓展设定**页签，
+  管理区域（id/名称/维度/两角点，退化区域与非法 id 拒绝、上限 64）；命令 `/rp area list|info|at|add|remove`
+  （权限 `ccnrrp.admin.area`）。核弹**功能本体不属于本 mod**：本仓库只发布"哪个阵营有权、目标区域在哪、
+  某点属于哪个区域"这些事实（配置文件 + `AreaService` 只读查询 + 单向依赖：外部 → 本 mod），执行由外部功能负责。
+  按维护者定调，安全/突袭的"类原版按钮触发机制"**未实现**（等对局状态机完善后再评估）。
+- 测试：新增 `DeathInventoryPolicyTest`（issue #1 回归：三条原版不掉路径 + 正常路径不重复处理）、
+  `AttributeProfileTest`（正常/非法/边界/结算顺序/去重/上限/roundtrip）、`AreaRegistryTest`（归一化/维度/退化/上限）、
+  `FactionExtrasSaveTest`（单字段接管不吞其它字段 + 非法拒绝不留半份改动）。LangFileTest zh/en 同步通过。
+- 文档：新增 docs/16（属性与区域）；docs/00 包布局与文件表、docs/01 权限节点与弹窗表、docs/02 阵营字段、
+  docs/05 死亡背包语义、docs/09 部署套用顺序、docs/14 验收清单同步。
+- 构建：spotlessApply / build / test -PrunTests 全绿；版本号 **2.24.0**。
+
 ## 2.23.0（P15 补全：规则变更 action + switchPhase + 纯脚本波次 + /rp end 结局闭环 + 开场自动）
 
 - **规则变更 action（`ruleChange`）**：新增 `RuleService`（纯逻辑，幕作用域状态层），事件/序列可发出

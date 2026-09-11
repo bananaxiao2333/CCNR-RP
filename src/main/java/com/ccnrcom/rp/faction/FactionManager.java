@@ -696,6 +696,124 @@ public final class FactionManager {
         return List.of("未找到阵营: " + factionId);
     }
 
+    // ---------- 阵营属性 / 弹头许可（拓展设定：均为可选字段，不进 Faction record，按"单字段接管"写入） ----------
+
+    /**
+     * 阵营属性配置原文（factions.json 的 {@code faction.attributes} 数组；未配置/非数组返回空数组）。
+     * 解析与校验见 {@link com.ccnrcom.rp.attribute.AttributeProfile}——属性 id 一律用注册名，
+     * 原版属性与 mod 属性同构（mod 没装时执行期跳过，不算配置错误）。
+     */
+    public com.google.gson.JsonElement factionAttributes(String factionId) {
+        JsonObject f = factionObject(factionId);
+        return f != null && f.has("attributes") ? f.get("attributes") : new com.google.gson.JsonArray();
+    }
+
+    /** 单字段接管：只替换 attributes（deepCopy + 全量校验 + 落盘），不触碰阵营其他字段。 */
+    public List<String> setFactionAttributes(String factionId, com.google.gson.JsonElement attributes) {
+        if (!graph.factions().containsKey(factionId)) {
+            return List.of("未找到阵营: " + factionId);
+        }
+        com.ccnrcom.rp.attribute.AttributeProfile.ParseResult parsed =
+                com.ccnrcom.rp.attribute.AttributeProfile.parse(attributes);
+        if (!parsed.success()) {
+            return new java.util.ArrayList<>(parsed.errors());
+        }
+        JsonObject candidate = root.deepCopy();
+        JsonArray fa = candidate.has("factions") ? candidate.getAsJsonArray("factions") : new JsonArray();
+        for (int i = 0; i < fa.size(); i++) {
+            JsonObject o = fa.get(i).getAsJsonObject();
+            if (!str(o, "id", "").equals(factionId)) {
+                continue;
+            }
+            // 规范化写回（去重后的条目的标准形态），保证盘上内容与解析结果一致
+            o.add("attributes", com.ccnrcom.rp.attribute.AttributeProfile.toJson(parsed.entries()));
+            for (String w : parsed.warnings()) {
+                LOGGER.warn("[CCNR-RP] 阵营 {} 属性：{}", factionId, w);
+            }
+            if (!ConfigStore.save("factions.json", candidate)) {
+                return List.of("配置文件写入失败");
+            }
+            this.root = candidate;
+            return List.of();
+        }
+        return List.of("未找到阵营: " + factionId);
+    }
+
+    /**
+     * 该阵营是否被允许启动弹头（核弹）。
+     *
+     * <p>本 mod **不含**核弹功能本体（非本仓库内容，见 docs/16）：这里只发布"哪个阵营有此权限"这一事实，
+     * 由外部功能（另一个 mod / 命令）读取后自行执行；本仓库不提供发射逻辑，也不依赖任何外部 mod。
+     */
+    public boolean warheadEnabled(String factionId) {
+        JsonObject f = factionObject(factionId);
+        return f != null && boolOf(f, "warheadEnabled", false);
+    }
+
+    /** 弹头目标区域 id（区域定义见 areas.json / {@code AreaService}）；未配置返回空串。 */
+    public String warheadArea(String factionId) {
+        JsonObject f = factionObject(factionId);
+        return f == null ? "" : str(f, "warheadArea", "");
+    }
+
+    /**
+     * 单字段接管：同时写 warheadEnabled / warheadArea（同一功能的一对配置，必须一起写以免出现"有目标但无权限"的中间态）。
+     * areaId 非空时会校验区域是否存在（悬挂引用会让外部功能拿到无效目标，宁可拒绝保存）。
+     */
+    public List<String> setFactionWarhead(String factionId, boolean enabled, String areaId) {
+        if (!graph.factions().containsKey(factionId)) {
+            return List.of("未找到阵营: " + factionId);
+        }
+        String area = areaId == null ? "" : areaId.trim();
+        if (!area.isBlank()
+                && com.ccnrcom.rp.CCNRRPMod.areas != null
+                && com.ccnrcom.rp.CCNRRPMod.areas.find(area).isEmpty()) {
+            return List.of("未找到区域: " + area + "（请先在拓展设定里创建区域）");
+        }
+        JsonObject candidate = root.deepCopy();
+        JsonArray fa = candidate.has("factions") ? candidate.getAsJsonArray("factions") : new JsonArray();
+        for (int i = 0; i < fa.size(); i++) {
+            JsonObject o = fa.get(i).getAsJsonObject();
+            if (!str(o, "id", "").equals(factionId)) {
+                continue;
+            }
+            if (enabled) {
+                o.addProperty("warheadEnabled", true);
+            } else {
+                o.remove("warheadEnabled"); // 关闭即移除字段：盘上只保留"开"的事实
+            }
+            if (area.isBlank()) {
+                o.remove("warheadArea");
+            } else {
+                o.addProperty("warheadArea", area);
+            }
+            if (!ConfigStore.save("factions.json", candidate)) {
+                return List.of("配置文件写入失败");
+            }
+            this.root = candidate;
+            return List.of();
+        }
+        return List.of("未找到阵营: " + factionId);
+    }
+
+    /** 取阵营 JSON 对象（只读定位用；不存在返回 null）。 */
+    private JsonObject factionObject(String factionId) {
+        if (root == null || factionId == null || factionId.isBlank() || !root.has("factions")) {
+            return null;
+        }
+        JsonArray fa = root.getAsJsonArray("factions");
+        for (int i = 0; i < fa.size(); i++) {
+            if (!fa.get(i).isJsonObject()) {
+                continue;
+            }
+            JsonObject o = fa.get(i).getAsJsonObject();
+            if (str(o, "id", "").equals(factionId)) {
+                return o;
+            }
+        }
+        return null;
+    }
+
     /** 删除职业定义。 */
     public List<String> deleteProfession(String id) {
         JsonObject candidate = root.deepCopy();

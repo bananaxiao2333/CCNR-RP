@@ -52,6 +52,9 @@
 ## 4. 部署链路（统一 deploy()）
 校验（素材同步/状态/职位）→ LoadoutManager.apply（P2 装备，含 NBT）→ 正式用户：状态 → ALIVE、冷却清零；
 临时征召（TEMP）：不改用户状态，仅推送征召身份给客户端。
+**顺序约定（2.24.0）**：`applyDeployCore` 内为 清空背包 → **套用阵营属性**（`AttributeService.applyTo`）→
+`resetPlayerState`。属性必须先于 `resetPlayerState`：后者用 `getMaxHealth()` 回满，顺序反了会按旧上限回满
+（配置了血量却不是满状态）。详见 docs/16。
 时序（2.14.0 起「先播后落位」；2.14.5 起电影 HUD/音乐与 CMDCam 解耦）：
 - 入场电影 HUD（黑屏/图标/文字）+ 出场音乐【始终播放】（未 SKIP_CINEMATIC / NO_MUSIC）；CMDCam 场景为可选叠加层。
 - 已设定 CMDCam 场景（场景名非空且 CMDCam 已装）：部署触发 → 强制旁观者 + 电影 HUD 与 CMDCam 场景【同一时刻开始播放】

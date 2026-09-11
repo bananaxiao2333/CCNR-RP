@@ -57,6 +57,8 @@ public class CCNRRPMod {
     public static com.ccnrcom.rp.animation.AnimationEngine animationEngine;
     /** 数据库后端（P0 起）；未启用（db.enabled=false）时为 disabled 实例。 */
     public static com.ccnrcom.rp.data.Database database;
+    /** 区域服务（拓展设定：目标区定义/查询；crop 只在服务端，ServerStopping 置空）。 */
+    public static com.ccnrcom.rp.area.AreaService areas;
 
     public CCNRRPMod() {
         ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, CCNRRPConfig.SPEC);
@@ -95,6 +97,8 @@ public class CCNRRPMod {
         com.ccnrcom.rp.assets.AssetLibrary.ensureDefaults();
         factions = new FactionManager();
         factions.load();
+        // 区域注册表（拓展设定）：供外部功能/管理面板按 id 引用目标区；须在 FactionManager 之后（弹头目标校验用）
+        areas = new com.ccnrcom.rp.area.AreaService();
         characters = new CharacterService(event.getServer());
         users = new com.ccnrcom.rp.user.UserService(
                 event.getServer().getWorldPath(new net.minecraft.world.level.storage.LevelResource("ccnr_rp")));
@@ -147,6 +151,10 @@ public class CCNRRPMod {
             // 死亡强制旁观者：登录时若用户处于复活冷却（近期死亡/判死）且无在场 → 旁观者模式（不传送）
             if (CCNRRPMod.users != null && !CCNRRPMod.users.isAlive(uuid) && CCNRRPMod.users.onCooldown(uuid)) {
                 player.setGameMode(net.minecraft.world.level.GameType.SPECTATOR);
+            }
+            // 阵营属性（拓展设定）：在场玩家重连后按当前配置重套一次（永久修饰随存档保留，这里保证与配置一致）
+            if (CCNRRPMod.users != null && CCNRRPMod.users.isAlive(uuid)) {
+                com.ccnrcom.rp.attribute.AttributeService.applyTo(player, CCNRRPMod.users.factionId(uuid));
             }
         }
         // 补发离线期间的结算通知（死亡/断联结算结果）+ 经验规则集（管理面板展示）
@@ -213,6 +221,10 @@ public class CCNRRPMod {
         characters = null;
         users = null;
         factions = null;
+        if (areas != null) {
+            areas.clear(); // 区域缓存对称清理（静态态不跨世界残留）
+        }
+        areas = null;
         managerSettings = null;
         database = null;
         LOGGER.info("[CCNR-RP] 服务端运行时清理完成");

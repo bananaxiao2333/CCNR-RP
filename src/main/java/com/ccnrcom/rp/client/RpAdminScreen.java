@@ -36,6 +36,7 @@ public class RpAdminScreen extends Screen {
     private static final int TAB_LIMITS = 7;
     private static final int TAB_XP = 8;
     private static final int TAB_RELATION = 9;
+    private static final int TAB_EXTENSION = 10;
 
     private int tab = TAB_SETTINGS;
     /** 经验规则页签（经验系统 v3）：自包含编辑器；首次使用才构造（避免构造期 this 逃逸）。 */
@@ -44,6 +45,8 @@ public class RpAdminScreen extends Screen {
     private RpRelationTab relationTab;
     /** 阵营组页签（阵营组即关系声明的批量容器）：组列表 + 编辑器；与关系管理页签并列。 */
     private RpGroupsTab groupsTab;
+    /** 拓展设定页签：区域管理（区域 CRUD）+ 阵营弹头设定（单字段写）；与阵营组页签并列。 */
+    private RpExtensionTab extensionTab;
     // 页签栏横向滚动（过窄时可滚动，滚动条可拖拽）
     private int tabScroll = 0;
     private int maxTabScroll = 0;
@@ -76,6 +79,13 @@ public class RpAdminScreen extends Screen {
         return groupsTab;
     }
 
+    private RpExtensionTab extensionTab() {
+        if (extensionTab == null) {
+            extensionTab = new RpExtensionTab(this);
+        }
+        return extensionTab;
+    }
+
     private int px1, py1, px2, py2;
     private int listX1, listX2, listY1, listY2;
     /** 通用列表表头带高度：表头占独立一行，行列表从表头下方开始，避免表头与首行文字重叠。 */
@@ -99,6 +109,12 @@ public class RpAdminScreen extends Screen {
     private boolean facCinBlack = true;
 
     private boolean facCinCompact = false;
+    /**
+     * 阵营弹头开关（per-faction 编辑态：warheadEnabled）。阵营表单的全量保存（kind=faction）不认识该字段，
+     * 因此保存时按「与选中阵营现值不同才补发」的方式走单字段写（kind=warhead, action=set）。
+     */
+    private boolean facWarhead = false;
+
     private EditBox unlockLevelBox;
     /** serverconfig 程序化设定：key → 数值输入框（设定标签）。 */
     private final java.util.Map<String, net.minecraft.client.gui.components.EditBox> cfgBoxes =
@@ -125,6 +141,30 @@ public class RpAdminScreen extends Screen {
     private final List<int[]> spRemoveBounds = new ArrayList<>();
     /** 部署点弹窗每行「传送」按钮矩形（渲染与点击共用）。 */
     private final List<int[]> spTeleportBounds = new ArrayList<>();
+
+    // 阵营属性档案弹窗（kind="attribute", action="set"）：可变行列表（属性 id + 数值 + 运算），仿部署点弹窗
+    private boolean attributeModalOpen = false;
+    /** 属性档案弹窗目标阵营 id（保存时作为 payload.factionId）。 */
+    private String attributeModalTarget = "";
+    /** 属性行工作副本：每行 {id, amount 文本, operation}。 */
+    private final List<String[]> attrRows = new ArrayList<>();
+    /** 每行输入框 {idBox, amountBox}，与 attrRows 同索引；弹窗打开/增删行时重建，关闭统一移除（docs/01 §10-3）。 */
+    private final List<Object[]> attrEdits = new ArrayList<>();
+
+    private int attrScroll = 0;
+    private int atX1, atY1, atX2, atY2;
+    private int atListY1, atListY2;
+    private int atAddX1, atAddY1, atAddX2, atAddY2;
+    private int atSaveX1, atSaveY1, atSaveX2, atSaveY2;
+    private int atCancelX1, atCancelY1, atCancelX2, atCancelY2;
+    /** 每行「删除」/「运算」按钮矩形（渲染与点击共用；末位元素=行下标）。 */
+    private final List<int[]> atDelBounds = new ArrayList<>();
+
+    private final List<int[]> atOpBounds = new ArrayList<>();
+    private static final int ATTR_ROW_H = 24;
+    private static final int ATTR_MAX_ROWS = 16;
+    /** 属性运算类型（与服务端契约一致：add | multiply_base | multiply_total）。 */
+    private static final String[] ATTR_OPS = {"add", "multiply_base", "multiply_total"};
 
     // 阵营图标选择弹窗：网格列出可选图标（徽章），点选即设 iconIdx（阵营表单）
     private boolean iconModalOpen = false;
@@ -259,9 +299,17 @@ public class RpAdminScreen extends Screen {
     private int slX1, slY1, slX2, slY2;
     private int slOkX1, slOkY1, slOkX2, slOkY2;
     private int slNoX1, slNoY1, slNoX2, slNoY2;
-    private String pendingKind = "";
-    private String pendingAction = "";
-    private JsonObject pendingPayload;
+    /**
+     * 影响预检在途/待确认的写队列（FIFO）。同一动作可能连发多笔写（如阵营表单保存 + 弹头单字段写），
+     * 单槽字段会被后一笔覆盖：服务端首个预检回执到达时读到的已是后一笔载荷，前一笔被静默丢弃。
+     * 故按请求顺序入队、按回执顺序（同通道有序）出队逐笔执行。
+     */
+    private final java.util.ArrayDeque<PendingCrud> pendingCruds = new java.util.ArrayDeque<>();
+    /** 已回报「有波及」、等待影响确认弹窗确认的写（确认=统一执行，取消=统一丢弃）。 */
+    private final java.util.ArrayDeque<PendingCrud> impactAwaiting = new java.util.ArrayDeque<>();
+
+    /** 一笔待执行的管理写（kind/action/payload）。 */
+    private record PendingCrud(String kind, String action, JsonObject payload) {}
 
     private static final String[] ICONS = {"hex", "shield", "claw", "storm", "eye", "target", "cross", "gear"};
 
@@ -286,7 +334,8 @@ public class RpAdminScreen extends Screen {
         "ccnr_rp.gui.admin.tab.wave",
         "ccnr_rp.gui.admin.tab.limits",
         "ccnr_rp.gui.admin.tab.xp",
-        "ccnr_rp.gui.admin.tab.relation"
+        "ccnr_rp.gui.admin.tab.relation",
+        "ccnr_rp.gui.admin.tab.extension"
     };
 
     /** 限制类型（部署人数上限规则）：GLOBAL=通用角色上限（职业无专属时兜底）/ FACTION=阵营上限 / PROFESSION=职业上限。 */
@@ -336,6 +385,12 @@ public class RpAdminScreen extends Screen {
         clearWidgets();
         rowBounds.clear();
         fieldLabels.clear();
+        // 属性档案弹窗的行输入框是本屏在弹窗打开时注册的；clearWidgets 会把它们一并清掉，
+        // 而弹窗期间仍可能收到服务端配置刷新触发的 rebuild（所见即所得全量刷新），
+        // 故此处按工作副本重建（先收集输入框现值，不丢已输入内容）。
+        if (attributeModalOpen) {
+            rebuildAttrEdits();
+        }
         // 页签栏几何是所有页签共用的，必须先填充（render/鼠标分发都依赖 rowBounds 前 8 项）。
         // 过窄时横向滚动：保持页签可读宽度，超出的部分通过 tabScroll 偏移 + 底部滚动条查看。
         int avail = px2 - px1 - 24; // 页签可用宽（左右各 12）
@@ -358,6 +413,10 @@ public class RpAdminScreen extends Screen {
         }
         if (tab == TAB_GROUPS) {
             groupsTab().rebuild(px1, py1, px2, py2);
+            return;
+        }
+        if (tab == TAB_EXTENSION) {
+            extensionTab().rebuild(px1, py1, px2, py2);
             return;
         }
         if (tab == TAB_SETTINGS) {
@@ -1252,8 +1311,9 @@ public class RpAdminScreen extends Screen {
         camSceneBox =
                 mkBox(x, y, w, "ccnr_rp.gui.admin.field.cam_scene", fac == null ? "" : str(fac, "cmdcamScene"), false);
         y += 30;
-        // 入场电影 per-faction 开关：全屏黑（cinematicBlackScreen）与简洁模式（cinematicCompact）
-        int bw2 = (w - 4) / 2;
+        // 入场电影 per-faction 开关 + 弹头发射开关：全屏黑（cinematicBlackScreen）/ 简洁模式（cinematicCompact）/
+        // 弹头（warheadEnabled，单字段写）。三者并排一行——新增独立纵向行会在最小面板高度下压到提示行。
+        int bw2 = (w - 8) / 3;
         addRenderableWidget(RpButton.secondary(
                 x,
                 y,
@@ -1280,8 +1340,21 @@ public class RpAdminScreen extends Screen {
                     facCinCompact = !facCinCompact;
                     rebuild();
                 }));
+        addRenderableWidget(RpButton.secondary(
+                x + (bw2 + 4) * 2,
+                y,
+                bw2,
+                18,
+                Component.literal(Component.translatable("ccnr_rp.gui.admin.faction.warhead")
+                                .getString()
+                        + ": "
+                        + onOff(facWarhead)),
+                b -> {
+                    facWarhead = !facWarhead;
+                    rebuild();
+                }));
         y += 30;
-        // 管理快捷操作（阵营级）：无线电管理 / 管理部署点 —— 两个长按钮压成一行短按钮并排
+        // 管理快捷操作（阵营级）：无线电管理 / 管理部署点 / 属性档案 —— 长按钮压成一行短按钮并排
         buttonRow(
                 x,
                 y,
@@ -1297,7 +1370,12 @@ public class RpAdminScreen extends Screen {
                                 Component.translatable("ccnr_rp.gui.admin.field.manage_spawn")
                                         .getString(),
                                 1,
-                                () -> openSpawnModal("faction"))));
+                                () -> openSpawnModal("faction")),
+                        new ActButton(
+                                Component.translatable("ccnr_rp.gui.admin.faction.attributes")
+                                        .getString(),
+                                1,
+                                () -> openAttributeModal())));
         y += 26;
         int bw3 = Math.max(60, w / 4);
         addRenderableWidget(RpButton.primary(
@@ -1321,6 +1399,7 @@ public class RpAdminScreen extends Screen {
                     tierIdx = 1;
                     facCinBlack = true;
                     facCinCompact = false;
+                    facWarhead = false;
                     rebuild();
                 }));
         // 关系管理与关系测定图已并入独立页签（TAB_RELATION），不再放在阵营表单内
@@ -1753,6 +1832,387 @@ public class RpAdminScreen extends Screen {
             }
         }
         return false;
+    }
+
+    // ---------- 阵营属性档案弹窗（kind="attribute", action="set"） ----------
+
+    /** 打开阵营属性档案弹窗：把选中阵营的 attributes 数组载入可编辑工作副本（无则空表）。 */
+    private void openAttributeModal() {
+        JsonObject fac = selFaction();
+        if (fac == null || str(fac, "id").isBlank()) {
+            notice = Component.translatable("ccnr_rp.gui.admin.notice.select_left_faction")
+                    .getString();
+            return;
+        }
+        attributeModalTarget = str(fac, "id");
+        attrRows.clear();
+        if (fac.has("attributes") && fac.get("attributes").isJsonArray()) {
+            for (JsonElement e : fac.getAsJsonArray("attributes")) {
+                if (!e.isJsonObject() || attrRows.size() >= ATTR_MAX_ROWS) {
+                    continue;
+                }
+                JsonObject o = e.getAsJsonObject();
+                attrRows.add(new String[] {str(o, "id", ""), attrAmountText(o), attrOpOf(o)});
+            }
+        }
+        attrScroll = 0;
+        rebuildAttrEdits();
+        notice = "";
+        attributeModalOpen = true;
+    }
+
+    /** 数值展示文本（整数值不带 .0；缺失/非法回退空串，由用户补填）。 */
+    private static String attrAmountText(JsonObject o) {
+        if (!o.has("amount") || !o.get("amount").isJsonPrimitive()) {
+            return "";
+        }
+        try {
+            double d = o.get("amount").getAsDouble();
+            return d == Math.rint(d) ? String.valueOf((long) d) : String.valueOf(d);
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    /** 运算类型（契约外取值回退 add，避免把未知字符串回传给服务端）。 */
+    private static String attrOpOf(JsonObject o) {
+        String op = str(o, "operation", "add").toLowerCase(java.util.Locale.ROOT);
+        for (String s : ATTR_OPS) {
+            if (s.equals(op)) {
+                return s;
+            }
+        }
+        return "add";
+    }
+
+    private static String attrOpLabel(String op) {
+        return Component.translatable("ccnr_rp.gui.admin.attribute.op." + op).getString();
+    }
+
+    /** 属性行输入框（弹窗内手动 render/命中；不注册 fieldLabels，关闭时由 closeAttributeModal 统一清理）。 */
+    private EditBox attrBox(String hintKey, String value, int maxLen) {
+        String hint = Component.translatable(hintKey).getString();
+        EditBox box = new EditBox(font, 0, 0, 10, 18, Component.literal(hint));
+        box.setMaxLength(maxLen);
+        box.setValue(value == null ? "" : value);
+        box.setTextColor(RpTheme.CYAN);
+        box.setSuggestion(hint); // 值空时显示已本地化的占位提示
+        addRenderableWidget(box);
+        return box;
+    }
+
+    /** 按工作副本重建行输入框（打开弹窗/增删行/底层 rebuild 清理控件后调用；位置由 render 每帧校正）。 */
+    private void rebuildAttrEdits() {
+        collectAttrRows();
+        for (Object[] e : attrEdits) {
+            removeWidget((EditBox) e[0]);
+            removeWidget((EditBox) e[1]);
+        }
+        attrEdits.clear();
+        for (String[] row : attrRows) {
+            attrEdits.add(new Object[] {
+                attrBox("ccnr_rp.gui.admin.attribute.id", row[0], 128),
+                attrBox("ccnr_rp.gui.admin.attribute.amount", row[1], 16)
+            });
+        }
+    }
+
+    /** 把行输入框当前值写回工作副本（增删行/保存前调用，防编辑内容丢失）。 */
+    private void collectAttrRows() {
+        for (int i = 0; i < attrEdits.size() && i < attrRows.size(); i++) {
+            Object[] e = attrEdits.get(i);
+            String[] row = attrRows.get(i);
+            row[0] = ((EditBox) e[0]).getValue().trim();
+            row[1] = ((EditBox) e[1]).getValue().trim();
+        }
+    }
+
+    private void attrModalAddRow() {
+        collectAttrRows();
+        if (attrRows.size() >= ATTR_MAX_ROWS) {
+            notice = Component.translatable("ccnr_rp.gui.admin.attribute.max_rows", ATTR_MAX_ROWS)
+                    .getString();
+            return;
+        }
+        attrRows.add(new String[] {"", "", ATTR_OPS[0]});
+        rebuildAttrEdits();
+        attrScroll = attrRows.size(); // 渲染时按可视行数收敛，保证新增行可见
+    }
+
+    private void attrModalRemoveRow(int idx) {
+        collectAttrRows();
+        if (idx < 0 || idx >= attrRows.size()) {
+            return;
+        }
+        attrRows.remove(idx);
+        rebuildAttrEdits();
+    }
+
+    private void attrModalCycleOp(int idx) {
+        collectAttrRows();
+        if (idx < 0 || idx >= attrRows.size()) {
+            return;
+        }
+        String[] row = attrRows.get(idx);
+        int cur = 0;
+        for (int i = 0; i < ATTR_OPS.length; i++) {
+            if (ATTR_OPS[i].equals(row[2])) {
+                cur = i;
+            }
+        }
+        row[2] = ATTR_OPS[(cur + 1) % ATTR_OPS.length];
+    }
+
+    /** 保存属性档案：跳过空 id 行与非法数值行，最多 ATTR_MAX_ROWS 条；发出后关闭弹窗。 */
+    private void saveAttributeModal() {
+        if (attributeModalTarget.isBlank()) {
+            notice = Component.translatable("ccnr_rp.gui.admin.notice.select_target")
+                    .getString();
+            return;
+        }
+        collectAttrRows();
+        JsonArray arr = new JsonArray();
+        for (String[] row : attrRows) {
+            String id = row[0] == null ? "" : row[0].trim();
+            if (id.isBlank() || arr.size() >= ATTR_MAX_ROWS) {
+                continue; // 未填 id 的行跳过：不把未完成的行发给服务端
+            }
+            double amount;
+            try {
+                amount = Double.parseDouble(row[1] == null ? "" : row[1].trim());
+            } catch (Exception ignored) {
+                continue; // 数值缺失/非法的行跳过（宁可少写一条，也不回传垃圾）
+            }
+            JsonObject o = new JsonObject();
+            o.addProperty("id", id);
+            o.addProperty("amount", amount);
+            o.addProperty("operation", row[2]);
+            arr.add(o);
+        }
+        JsonObject p = payload();
+        p.addProperty("factionId", attributeModalTarget);
+        p.add("attributes", arr);
+        closeAttributeModal();
+        requestCrud("attribute", "set", p);
+    }
+
+    /** 关闭属性档案弹窗：移除专属输入框 + 清空集合 + 释放焦点（docs/01 §10-3）。 */
+    private void closeAttributeModal() {
+        for (Object[] e : attrEdits) {
+            removeWidget((EditBox) e[0]);
+            removeWidget((EditBox) e[1]);
+        }
+        attrEdits.clear();
+        attrRows.clear();
+        atDelBounds.clear();
+        atOpBounds.clear();
+        attrScroll = 0;
+        setFocused(null);
+        attributeModalOpen = false;
+    }
+
+    /** 渲染属性档案弹窗（每帧；按钮手动绘制、行输入框手动 render，命中在 attributeModalClick）。 */
+    private void renderAttributeModal(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+        g.fill(0, 0, width, height, 0xA6000000);
+        int w = Math.min(620, width - 40);
+        int h = Math.min(400, height - 40);
+        atX1 = (width - w) / 2;
+        atY1 = (height - h) / 2;
+        atX2 = atX1 + w;
+        atY2 = atY1 + h;
+        RpTheme.terminalPanel(g, atX1, atY1, atX2, atY2, RpTheme.RADIUS_LARGE);
+        g.drawString(
+                font,
+                Component.translatable("ccnr_rp.gui.admin.attribute.title", attributeModalTarget)
+                        .getString(),
+                atX1 + 14,
+                atY1 + 10,
+                RpTheme.CYAN,
+                true);
+        g.fill(atX1 + 8, atY1 + 26, atX2 - 8, atY1 + 27, RpTheme.CYAN_DIM);
+
+        int cx = atX1 + 14;
+        int cw = atX2 - 14;
+        int cy = atY1 + 38;
+        int bw = Math.max(72, (cw - cx - 12) / 4);
+        int border = RpTheme.PANEL_BORDER;
+        int borderHover = RpTheme.PANEL_BORDER_BRIGHT;
+        // 新增一行
+        atAddX1 = cx;
+        atAddY1 = cy;
+        atAddX2 = cx + bw;
+        atAddY2 = cy + 18;
+        RpButton.draw(
+                g,
+                atAddX1,
+                atAddY1,
+                atAddX2,
+                atAddY2,
+                Component.translatable("ccnr_rp.gui.admin.attribute.add_row").getString(),
+                inRect(mouseX, mouseY, atAddX1, atAddY1, atAddX2, atAddY2) ? borderHover : border,
+                false);
+        // 保存
+        atSaveX1 = atAddX2 + 4;
+        atSaveY1 = cy;
+        atSaveX2 = atSaveX1 + bw;
+        atSaveY2 = cy + 18;
+        RpButton.draw(
+                g,
+                atSaveX1,
+                atSaveY1,
+                atSaveX2,
+                atSaveY2,
+                Component.translatable("ccnr_rp.gui.admin.crud.save").getString(),
+                inRect(mouseX, mouseY, atSaveX1, atSaveY1, atSaveX2, atSaveY2) ? borderHover : border,
+                true);
+        // 取消
+        atCancelX1 = atSaveX2 + 4;
+        atCancelY1 = cy;
+        atCancelX2 = atCancelX1 + bw;
+        atCancelY2 = cy + 18;
+        RpButton.draw(
+                g,
+                atCancelX1,
+                atCancelY1,
+                atCancelX2,
+                atCancelY2,
+                Component.translatable("ccnr_rp.gui.admin.field.close").getString(),
+                inRect(mouseX, mouseY, atCancelX1, atCancelY1, atCancelX2, atCancelY2) ? borderHover : border,
+                false);
+        g.drawString(
+                font,
+                Component.literal(attrRows.size() + " / " + ATTR_MAX_ROWS),
+                atCancelX2 + 8,
+                cy + 5,
+                RpTheme.TEXT_DIM);
+        cy += 26;
+
+        g.drawString(
+                font, Component.translatable("ccnr_rp.gui.admin.attribute.hint").getString(), cx, cy, RpTheme.TEXT_DIM);
+        cy += 16;
+
+        // 行列表（滚动）：列头 + 每行「属性 id 输入框 / 数值输入框 / 运算切换 / 删除」
+        atListY1 = cy + 12;
+        atListY2 = atY2 - 14;
+        int maxVis = Math.max(1, (atListY2 - atListY1) / ATTR_ROW_H);
+        attrScroll = Math.max(0, Math.min(attrScroll, Math.max(0, attrRows.size() - maxVis)));
+        int rowW = (cw - cx) - 8; // 右侧留出滚动条槽
+        int delW = 44;
+        int opW = Math.max(96, rowW / 4);
+        int amtW = 64;
+        int idW = Math.max(60, rowW - delW - opW - amtW - 12);
+        int amtX = cx + idW + 4;
+        int opX = amtX + amtW + 4;
+        int delX = cx + rowW - delW;
+        // 列头：对齐各列，避免管理员分不清每个输入框的用途
+        g.drawString(
+                font, Component.translatable("ccnr_rp.gui.admin.attribute.id").getString(), cx, cy, RpTheme.TEXT_DIM);
+        g.drawString(
+                font,
+                Component.translatable("ccnr_rp.gui.admin.attribute.amount").getString(),
+                amtX,
+                cy,
+                RpTheme.TEXT_DIM);
+        g.drawString(
+                font,
+                Component.translatable("ccnr_rp.gui.admin.attribute.operation").getString(),
+                opX,
+                cy,
+                RpTheme.TEXT_DIM);
+        atDelBounds.clear();
+        atOpBounds.clear();
+        g.enableScissor(cx, atListY1, cw, atListY2);
+        for (int i = attrScroll; i < attrRows.size() && i < attrScroll + maxVis; i++) {
+            int ry = atListY1 + (i - attrScroll) * ATTR_ROW_H;
+            String[] row = attrRows.get(i);
+            if (i < attrEdits.size()) {
+                Object[] e = attrEdits.get(i);
+                EditBox idEdit = (EditBox) e[0];
+                idEdit.setX(cx);
+                idEdit.setY(ry);
+                idEdit.setWidth(idW);
+                idEdit.render(g, mouseX, mouseY, partialTick);
+                EditBox amtEdit = (EditBox) e[1];
+                amtEdit.setX(amtX);
+                amtEdit.setY(ry);
+                amtEdit.setWidth(amtW);
+                amtEdit.render(g, mouseX, mouseY, partialTick);
+            }
+            atOpBounds.add(new int[] {opX, ry, opX + opW, ry + 18, i});
+            RpButton.draw(
+                    g,
+                    opX,
+                    ry,
+                    opX + opW,
+                    ry + 18,
+                    attrOpLabel(row[2]),
+                    inRect(mouseX, mouseY, opX, ry, opX + opW, ry + 18) ? borderHover : border,
+                    false);
+            atDelBounds.add(new int[] {delX, ry, delX + delW, ry + 18, i});
+            RpButton.draw(
+                    g,
+                    delX,
+                    ry,
+                    delX + delW,
+                    ry + 18,
+                    Component.translatable("ccnr_rp.gui.admin.attribute.remove").getString(),
+                    inRect(mouseX, mouseY, delX, ry, delX + delW, ry + 18) ? borderHover : border,
+                    false);
+        }
+        g.disableScissor();
+        if (attrRows.isEmpty()) {
+            g.drawString(
+                    font,
+                    Component.translatable("ccnr_rp.gui.admin.attribute.empty").getString(),
+                    cx,
+                    atListY1 + 4,
+                    RpTheme.TEXT_DIM);
+        }
+        RpScrollbar.draw(g, cw - 5, atListY1, atListY2, attrRows.size(), maxVis, attrScroll);
+    }
+
+    /** 属性档案弹窗命中（在 mouseClicked 顶部接管；未命中也不放行到底层）。 */
+    private boolean attributeModalClick(double mx, double my, int button) {
+        int x = (int) mx;
+        int y = (int) my;
+        if (inRect(x, y, atAddX1, atAddY1, atAddX2, atAddY2)) {
+            attrModalAddRow();
+            return true;
+        }
+        if (inRect(x, y, atSaveX1, atSaveY1, atSaveX2, atSaveY2)) {
+            saveAttributeModal();
+            return true;
+        }
+        if (inRect(x, y, atCancelX1, atCancelY1, atCancelX2, atCancelY2)) {
+            closeAttributeModal();
+            return true;
+        }
+        for (int[] b : atOpBounds) {
+            if (inRect(x, y, b[0], b[1], b[2], b[3])) {
+                attrModalCycleOp(b[4]);
+                return true;
+            }
+        }
+        for (int[] b : atDelBounds) {
+            if (inRect(x, y, b[0], b[1], b[2], b[3])) {
+                attrModalRemoveRow(b[4]);
+                return true;
+            }
+        }
+        // 行输入框为手动 render 的控件，不走 super 分发：需手动命中 + 把屏幕焦点给到该输入框
+        for (Object[] e : attrEdits) {
+            EditBox idEdit = (EditBox) e[0];
+            if (idEdit.mouseClicked(mx, my, button)) {
+                setFocused(idEdit);
+                return true;
+            }
+            EditBox amtEdit = (EditBox) e[1];
+            if (amtEdit.mouseClicked(mx, my, button)) {
+                setFocused(amtEdit);
+                return true;
+            }
+        }
+        return true;
     }
 
     // ---------- 无线电编辑器（阵营/职业共用弹窗：speaker + 多句 text/wait；职业另有禁用开关） ----------
@@ -2814,6 +3274,17 @@ public class RpAdminScreen extends Screen {
         p.addProperty("cinematicBlackScreen", facCinBlack);
         p.addProperty("cinematicCompact", facCinCompact);
         requestCrud("faction", edit ? "update" : "create", p);
+        // 弹头发射开关：kind=faction 的服务端处理器不认识该字段（全量保存会把它当未知字段忽略），
+        // 故按单字段写补发（kind=warhead, action=set）；仅当与当前选中阵营的现值不同才发，避免无谓写入。
+        // areaId 取选中阵营当前值原样回传 —— 单字段写不得用空串覆盖另一字段（docs/01 §11.1）。
+        boolean curWarhead = fac != null && boolOf(fac, "warheadEnabled", false);
+        if (facWarhead != curWarhead) {
+            JsonObject wp = payload();
+            wp.addProperty("factionId", p.get("id").getAsString());
+            wp.addProperty("enabled", facWarhead);
+            wp.addProperty("areaId", fac == null ? "" : str(fac, "warheadArea", ""));
+            requestCrud("warhead", "set", wp);
+        }
     }
 
     // ---------- 音乐管理 ----------
@@ -2965,9 +3436,7 @@ public class RpAdminScreen extends Screen {
             sendCrud(kind, action, payload);
             return;
         }
-        pendingKind = kind;
-        pendingAction = action;
-        pendingPayload = payload;
+        pendingCruds.add(new PendingCrud(kind, action, payload));
         RpChannels.sendToServer(new RpPackets.ManagerImpactC2S(kind, action, payload.toString()));
     }
 
@@ -2980,6 +3449,10 @@ public class RpAdminScreen extends Screen {
     }
 
     private void applyImpact(String payloadJson) {
+        PendingCrud pending = pendingCruds.poll();
+        if (pending == null) {
+            return; // 无在途请求（服务端重复/迟到的回执）：忽略
+        }
         JsonObject root;
         try {
             root = com.ccnrcom.rp.util.JsonUtil.GSON.fromJson(payloadJson, JsonObject.class);
@@ -2987,22 +3460,43 @@ public class RpAdminScreen extends Screen {
             root = null;
         }
         if (root == null) {
-            sendCrud(pendingKind, pendingAction, pendingPayload);
+            sendCrud(pending.kind(), pending.action(), pending.payload());
             return;
         }
-        impactLines.clear();
+        List<String> fresh = new ArrayList<>();
         if (root.has("lines") && root.get("lines").isJsonArray()) {
             for (var e : root.getAsJsonArray("lines")) {
-                impactLines.add(e.getAsString());
+                fresh.add(e.getAsString());
             }
         }
-        if (impactLines.isEmpty()) {
-            // 无波及 → 直接执行
-            sendCrud(pendingKind, pendingAction, pendingPayload);
+        if (fresh.isEmpty()) {
+            // 无波及 → 直接执行该笔
+            sendCrud(pending.kind(), pending.action(), pending.payload());
             return;
         }
-        impactTitle = root.has("id") ? root.get("id").getAsString() : "";
+        // 有波及 → 挂起等待确认（多笔挂起时合并展示，确认/取消统一处理）
+        if (!impactOpen) {
+            impactLines.clear();
+            impactTitle = "";
+        }
+        impactAwaiting.add(pending);
+        impactLines.addAll(fresh);
+        impactTitle = root.has("id") ? root.get("id").getAsString() : impactTitle;
         impactOpen = true;
+    }
+
+    /** 影响确认「确认执行」：按入队顺序执行全部挂起的写。 */
+    private void confirmImpact() {
+        for (PendingCrud pending = impactAwaiting.poll(); pending != null; pending = impactAwaiting.poll()) {
+            sendCrud(pending.kind(), pending.action(), pending.payload());
+        }
+        impactLines.clear();
+    }
+
+    /** 影响确认「取消」/Esc：丢弃全部挂起的写（不执行 CRUD）。 */
+    private void cancelImpact() {
+        impactAwaiting.clear();
+        impactLines.clear();
     }
 
     /** 开关当前值（缺省按 ManagerSettings 默认值，与服务端一致）。 */
@@ -3034,6 +3528,12 @@ public class RpAdminScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
+        // 属性档案弹窗最优先接管：它盖住整个下层面板，且行输入框为手动渲染（不走 super 分发）。
+        // 放在补全提示之前，避免用上一帧残留的补全命中区吞掉弹窗内点击（docs/01 §10-1）。
+        if (attributeModalOpen) {
+            attributeModalClick(mx, my, button);
+            return true;
+        }
         // CMDCam 场景补全提示点击优先（选中项填入场景框）
         if (!camSugBounds.isEmpty()) {
             for (int i = 0; i < camSugBounds.size(); i++) {
@@ -3111,7 +3611,7 @@ public class RpAdminScreen extends Screen {
             }
         }
         // 列表滚动条：按住游标拖拽 / 点击轨道跳转（经验规则/关系管理/阵营组页签为自包含页签，无通用列表行高，跳过）
-        if (tab != TAB_SETTINGS && tab != TAB_XP && tab != TAB_RELATION && tab != TAB_GROUPS) {
+        if (tab != TAB_SETTINGS && tab != TAB_XP && tab != TAB_RELATION && tab != TAB_GROUPS && tab != TAB_EXTENSION) {
             int maxRows = Math.max(1, (listY2 - listY1 - LIST_HDR_H) / rowHeight());
             int ns = RpScrollbar.clickV(
                     (int) mx,
@@ -3132,11 +3632,12 @@ public class RpAdminScreen extends Screen {
         if (impactOpen) {
             if (mx >= okX1 && mx <= okX2 && my >= okY1 && my <= okY2) {
                 impactOpen = false;
-                sendCrud(pendingKind, pendingAction, pendingPayload);
+                confirmImpact();
                 return true;
             }
             if (mx >= noX1 && mx <= noX2 && my >= noY1 && my <= noY2) {
                 impactOpen = false;
+                cancelImpact();
                 return true;
             }
             return true;
@@ -3175,6 +3676,10 @@ public class RpAdminScreen extends Screen {
         }
         // 阵营组页签成员下拉/注入：同样须在 super 之前命中
         if (tab == TAB_GROUPS && groupsTab().mouseClickedOverlay((int) mx, (int) my, button)) {
+            return true;
+        }
+        // 拓展设定页签目标区域下拉：同样须在 super 之前命中
+        if (tab == TAB_EXTENSION && extensionTab().mouseClickedOverlay((int) mx, (int) my, button)) {
             return true;
         }
         if (super.mouseClicked(mx, my, button)) {
@@ -3232,6 +3737,11 @@ public class RpAdminScreen extends Screen {
         }
         if (tab == TAB_GROUPS) {
             if (groupsTab().mouseClicked((int) mx, (int) my, button)) {
+                return true;
+            }
+        }
+        if (tab == TAB_EXTENSION) {
+            if (extensionTab().mouseClicked((int) mx, (int) my, button)) {
                 return true;
             }
         }
@@ -3419,6 +3929,8 @@ public class RpAdminScreen extends Screen {
         // 否则点击「入场全屏黑 / 简洁电影」触发 rebuild() 时会被服务端快照回退，开关看似点不动。
         facCinBlack = boolOf(f, "cinematicBlackScreen", true);
         facCinCompact = boolOf(f, "cinematicCompact", false);
+        // 弹头发射开关同理：只在选中时同步一次（保存时按「与现值不同才补发单字段写」处理）
+        facWarhead = boolOf(f, "warheadEnabled", false);
         rebuild();
     }
 
@@ -3498,6 +4010,14 @@ public class RpAdminScreen extends Screen {
             }
             return true;
         }
+        if (attributeModalOpen) {
+            // 属性档案弹窗：仅行列表区滚动
+            if (mouseY >= atListY1 && mouseY <= atListY2) {
+                int maxVis = Math.max(1, (atListY2 - atListY1) / ATTR_ROW_H);
+                attrScroll = (int) Math.max(0, Math.min(attrScroll - delta / 8, Math.max(0, attrRows.size() - maxVis)));
+            }
+            return true;
+        }
         if (impactOpen || spawnModalOpen || saveLoadoutOpen) {
             return true; // 弹窗打开时不滚动底层列表
         }
@@ -3511,6 +4031,10 @@ public class RpAdminScreen extends Screen {
         }
         if (tab == TAB_GROUPS) {
             groupsTab().mouseScrolled((int) mouseX, (int) mouseY, delta);
+            return true;
+        }
+        if (tab == TAB_EXTENSION) {
+            extensionTab().mouseScrolled((int) mouseX, (int) mouseY, delta);
             return true;
         }
         if (tab == TAB_PROFESSION) {
@@ -3535,6 +4059,7 @@ public class RpAdminScreen extends Screen {
         // Esc：先关弹窗返回上层表单（影响确认/部署点/无线电/流程编辑器），而不是关闭整个管理面板
         if (impactOpen && keyCode == 256) {
             impactOpen = false; // Esc = 取消（等同「否」），不执行 CRUD
+            cancelImpact();
             return true;
         }
         if (saveLoadoutOpen && keyCode == 256) {
@@ -3557,6 +4082,10 @@ public class RpAdminScreen extends Screen {
             closeSequenceModal();
             return true;
         }
+        if (attributeModalOpen && keyCode == 256) {
+            closeAttributeModal();
+            return true;
+        }
         if (tab == TAB_XP && rulesTab().keyPressed(keyCode, scanCode, modifiers)) {
             return true; // 经验规则页签：事件补全候选上/下/回车/Esc
         }
@@ -3564,6 +4093,9 @@ public class RpAdminScreen extends Screen {
             return true;
         }
         if (tab == TAB_GROUPS && groupsTab().keyPressed(keyCode, scanCode, modifiers)) {
+            return true;
+        }
+        if (tab == TAB_EXTENSION && extensionTab().keyPressed(keyCode, scanCode, modifiers)) {
             return true;
         }
         if (!camSugItems.isEmpty() && camSugBox != null && camSugBox.isFocused()) {
@@ -3659,8 +4191,13 @@ public class RpAdminScreen extends Screen {
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         renderBackground(g);
         // 模态（弹窗）打开时，仅保留深色背景 + 弹窗本身，彻底隐藏下层管理界面
-        boolean modal =
-                impactOpen || spawnModalOpen || seqModalOpen || radioModalOpen || saveLoadoutOpen || iconModalOpen;
+        boolean modal = impactOpen
+                || spawnModalOpen
+                || seqModalOpen
+                || radioModalOpen
+                || saveLoadoutOpen
+                || iconModalOpen
+                || attributeModalOpen;
         if (!modal) {
             RpTheme.terminalFrame(g, px1, py1, px2, py2, RpTheme.RADIUS_LARGE);
             RpTheme.gridOverlay(g, px1 + 4, py1 + 4, px2 - 4, py2 - 4);
@@ -3746,6 +4283,8 @@ public class RpAdminScreen extends Screen {
                 relationTab().render(g, mouseX, mouseY);
             } else if (tab == TAB_GROUPS) {
                 groupsTab().render(g, mouseX, mouseY);
+            } else if (tab == TAB_EXTENSION) {
+                extensionTab().render(g, mouseX, mouseY);
             } else {
                 renderListTab(g, mouseX, mouseY);
             }
@@ -3776,6 +4315,10 @@ public class RpAdminScreen extends Screen {
             if (tab == TAB_GROUPS) {
                 groupsTab().renderOverlay(g, mouseX, mouseY);
             }
+            // 拓展设定页签目标区域下拉弹层：盖住输入框，放最后绘制
+            if (tab == TAB_EXTENSION) {
+                extensionTab().renderOverlay(g, mouseX, mouseY);
+            }
             // CRT 扫描线（内容层之上，低透明度屏幕质感；对齐前端 body::before）
             RpTheme.scanlines(g, px1, py1, px2, py2);
         }
@@ -3799,6 +4342,9 @@ public class RpAdminScreen extends Screen {
             // 序列弹窗内 id 输入框（波 ID/职业/阵营）补全：在弹窗内容之后绘制，置顶于弹窗控件之上
             resolveIdSugSource();
             renderIdSuggestions(g);
+        }
+        if (attributeModalOpen) {
+            renderAttributeModal(g, mouseX, mouseY, partialTick);
         }
     }
 
