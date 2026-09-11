@@ -154,7 +154,11 @@ public final class XpHudOverlay {
         int cx = w - CX_INSET;
         int numTop = h - BOTTOM_INSET - NUM_H;
         g.drawCenteredString(
-                font, net.minecraft.network.chat.Component.literal(String.valueOf(animTotal)), cx, numTop, 0xFFFFFFFF);
+                font,
+                net.minecraft.network.chat.Component.literal(String.valueOf(animTotal)),
+                cx,
+                numTop,
+                RpTheme.TEXT_PRIMARY);
     }
 
     private static void drawAnim(GuiGraphics g, int w, int h, float t) {
@@ -179,7 +183,11 @@ public final class XpHudOverlay {
             drawItem(g, flying, cx, y, alpha);
         }
         g.drawCenteredString(
-                font, net.minecraft.network.chat.Component.literal(String.valueOf(animTotal)), cx, numTop, 0xFFFFFFFF);
+                font,
+                net.minecraft.network.chat.Component.literal(String.valueOf(animTotal)),
+                cx,
+                numTop,
+                RpTheme.TEXT_PRIMARY);
     }
 
     /** 一行：严格「符号数值 标题」（如 +100 击杀奖金）；正=绿、负=红。 */
@@ -187,7 +195,7 @@ public final class XpHudOverlay {
         var font = Minecraft.getInstance().font;
         String sign = it.value() >= 0 ? "+" : "-";
         String text = sign + Math.abs(it.value()) + " " + it.title();
-        int base = it.value() >= 0 ? 0xFFB4B4B4 : 0xFFFF4C4C;
+        int base = it.value() >= 0 ? RpTheme.TEXT_BRIGHT : RpTheme.RED_LINE;
         int color = (base & 0x00FFFFFF) | ((alpha & 0xFF) << 24);
         g.drawCenteredString(font, net.minecraft.network.chat.Component.literal(text), cx, y, color);
     }

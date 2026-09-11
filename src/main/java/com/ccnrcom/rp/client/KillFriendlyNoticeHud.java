@@ -79,8 +79,9 @@ public final class KillFriendlyNoticeHud {
         if (y < 10) {
             y = 10; // 兜底：聊天区异常高（如全屏聊天）时至少留在屏幕内
         }
-        RpRoundRect.fill(g, x, y, x + bw, y + boxH, 8f, 0xEE2E2E2E);
-        RpRoundRect.fill(g, x, y, x + 3, y + boxH, 8f, RpTheme.STATUS_DEAD); // 左侧红色状态条
+        // 警示浮层卡片（与事件横幅同款底；红边 + 左侧红色状态条）
+        RpTheme.hudCard(g, x, y, x + bw, y + boxH, RpTheme.RED_DIM, RpTheme.SURFACE_ALERT);
+        RpTheme.accentBar(g, x, y, x + 3, y + boxH, RpTheme.STATUS_DEAD);
         g.drawString(font, title, x + 14, y + 6, RpTheme.RED, true);
         g.drawString(font, line2, x + 14, y + 6 + ROW_H + LINE_GAP, RpTheme.TEXT_PRIMARY, true);
         g.drawString(font, line3, x + 14, y + 6 + (ROW_H + LINE_GAP) * 2, RpTheme.TEXT_SECONDARY, true);

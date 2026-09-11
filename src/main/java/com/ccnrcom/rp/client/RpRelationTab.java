@@ -215,12 +215,17 @@ public final class RpRelationTab {
             Minecraft.getInstance().setScreen(new FactionGraphScreen());
             return true;
         }
-        // 列表行选择
+        // 列表行选择（右键 = 删除该规则，先二次确认）
         List<JsonObject> rules = rules();
         for (int i = 0; i < rules.size(); i++) {
             int ry = listY1 + HDR + (i - scroll) * ROW_H;
             if (ry >= listY1 - ROW_H && ry <= listY2 && mx >= listX1 && mx <= listX2 && my >= ry && my <= ry + ROW_H) {
-                loadEditor(i);
+                if (button == 1) {
+                    loadEditor(i); // 先定位到该行（删除用的是选中规则的原始 from/to）
+                    askRemoveRule();
+                } else {
+                    loadEditor(i);
+                }
                 return true;
             }
         }
@@ -453,14 +458,42 @@ public final class RpRelationTab {
             notice("ccnr_rp.gui.admin.relation.select_first");
             return;
         }
-        JsonObject req = new JsonObject();
-        req.addProperty("action", "remove");
-        // 删除针对选中规则本身（用原始 from/to 定位），而非输入框当前内容
-        req.add("rule", originalRule());
-        com.ccnrcom.rp.network.RpChannels.sendToServer(
-                new com.ccnrcom.rp.network.RpPackets.RelationEditC2S(req.toString()));
-        clearEditor();
-        refresh();
+        askRemoveRule();
+    }
+
+    /** 删除关系规则：一律先二次确认（右键条目与「删除」按钮共用，docs/01 §10.2）。 */
+    private void askRemoveRule() {
+        screen.confirmDelete(
+                Component.translatable(
+                                "ccnr_rp.gui.admin.confirm.del_msg",
+                                tr("ccnr_rp.gui.admin.tab.relation"),
+                                ruleLabel(selIndex))
+                        .getString(),
+                () -> {
+                    JsonObject req = new JsonObject();
+                    req.addProperty("action", "remove");
+                    // 删除针对选中规则本身（用原始 from/to 定位），而非输入框当前内容
+                    req.add("rule", originalRule());
+                    com.ccnrcom.rp.network.RpChannels.sendToServer(
+                            new com.ccnrcom.rp.network.RpPackets.RelationEditC2S(req.toString()));
+                    clearEditor();
+                    refresh();
+                });
+    }
+
+    /** 规则显示名（from → to，用于确认文案）。 */
+    private String ruleLabel(int index) {
+        List<JsonObject> rules = ClientCharacterState.relationRules();
+        if (index < 0 || index >= rules.size()) {
+            return "";
+        }
+        JsonObject r = rules.get(index);
+        StringBuilder sb = new StringBuilder(idList(r, "from").toString());
+        List<String> to = idList(r, "to");
+        if (!to.isEmpty()) {
+            sb.append(" -> ").append(to);
+        }
+        return sb.toString();
     }
 
     /** 选中规则的原始 from/to（未选中时为空数组；to 为空则省略 = 内部关系）。 */
@@ -488,8 +521,7 @@ public final class RpRelationTab {
         var font = Minecraft.getInstance().font;
         List<JsonObject> rules = rules();
         // 左侧：规则列表（面板 + 标题 + 可滚动行，与其它页签列表风格一致）
-        RpRoundRect.outlined(
-                g, listX1 - 2, listY1 - 4, listX2 + 2, listY2 + 2, 4f, RpTheme.PANEL_BORDER, RpTheme.PANEL_BG_EVEN);
+        RpTheme.listPanel(g, listX1 - 2, listY1 - 4, listX2 + 2, listY2 + 2);
         g.drawString(
                 font,
                 Component.translatable("ccnr_rp.gui.admin.relation.list").getString() + " (" + rules.size() + ")",
@@ -497,7 +529,7 @@ public final class RpRelationTab {
                 listY1 + 1,
                 RpTheme.TEXT_DIM);
         // 表头带与行列表分隔线（避免表头文字压到首行）
-        g.fill(listX1, listY1 + HDR - 1, listX2, listY1 + HDR, RpTheme.PANEL_BORDER);
+        RpTheme.listHeaderRule(g, listX1, listX2, listY1 + HDR - 1);
         g.enableScissor(listX1, listY1 + HDR, listX2, listY2);
         for (int i = 0; i < rules.size(); i++) {
             int ry = listY1 + HDR + (i - scroll) * ROW_H;
@@ -508,8 +540,8 @@ public final class RpRelationTab {
             boolean sel = i == selIndex;
             if (sel) {
                 RpTheme.selectedBar(g, listX1, ry, listX2, ry + ROW_H, 3f);
-            } else if (i % 2 == 0) {
-                g.fill(listX1, ry, listX2, ry + ROW_H, 0x1FFFFFFF);
+            } else {
+                RpTheme.listRow(g, listX1, ry, listX2, ry + ROW_H, i, mx, my);
             }
             List<String> from = idList(r, "from");
             List<String> to = idList(r, "to");
@@ -553,7 +585,7 @@ public final class RpRelationTab {
                     };
             int color =
                     switch (i) {
-                        case 0 -> 0xFFFFFFFF;
+                        case 0 -> RpTheme.NEUTRAL;
                         case 1 -> RpTheme.RED;
                         default -> RpTheme.FRIENDLY;
                     };
@@ -565,7 +597,7 @@ public final class RpRelationTab {
                     ey + 20,
                     3f,
                     sel ? color : RpTheme.PANEL_BORDER,
-                    sel ? RpTheme.alphaBlend(color, 0x22) : 0xA8323232);
+                    sel ? RpTheme.alphaBlend(color, 0x22) : RpTheme.SURFACE_CONTROL);
             String key =
                     switch (i) {
                         case 0 -> "ccnr_rp.gui.admin.relation.type_neutral";
@@ -613,8 +645,8 @@ public final class RpRelationTab {
         }
         g.drawString(font, Component.translatable("ccnr_rp.gui.admin.relation.hint"), ex, py2 - 40, RpTheme.TEXT_DIM);
         // 输入框背景（EditBox 自身绘制，此处仅补充面板底色一致性）
-        g.fill(ex - 1, listY1 + 37, ex + (px2 - ex - 12) + 1, listY1 + 57, 0x99383838);
-        g.fill(ex - 1, listY1 + 93, ex + (px2 - ex - 12) + 1, listY1 + 113, 0x99383838);
+        g.fill(ex - 1, listY1 + 37, ex + (px2 - ex - 12) + 1, listY1 + 57, RpTheme.SURFACE_INSET);
+        g.fill(ex - 1, listY1 + 93, ex + (px2 - ex - 12) + 1, listY1 + 113, RpTheme.SURFACE_INSET);
     }
 
     // ---------- 阵营下拉渲染 ----------
@@ -636,15 +668,7 @@ public final class RpRelationTab {
         boolean open = isFrom ? fromDdOpen : toDdOpen;
         int idx = isFrom ? fromDdIdx : toDdIdx;
         boolean hov = mx >= ex && mx <= ex + ddW && my >= y && my <= y + DD_H;
-        RpRoundRect.outlined(
-                g,
-                ex,
-                y,
-                ex + ddW,
-                y + DD_H,
-                3f,
-                open || hov ? RpTheme.PANEL_BORDER_BRIGHT : RpTheme.PANEL_BORDER,
-                open ? 0xA83A3A3A : RpTheme.PANEL_BG_ALT);
+        RpTheme.controlBox(g, ex, y, ex + ddW, y + DD_H, open || hov);
         List<JsonObject> facs = ClientCharacterState.factions();
         String label = facs.isEmpty() || idx < 0 || idx >= facs.size()
                 ? tr("ccnr_rp.gui.admin.relation.pick_faction")
@@ -681,21 +705,20 @@ public final class RpRelationTab {
         int h = ddPopupH(isFrom);
         int scroll = isFrom ? fromDdScroll : toDdScroll;
         int cur = isFrom ? fromDdIdx : toDdIdx;
-        RpRoundRect.outlined(g, ex, top, ex + ddW, top + h, 4f, RpTheme.PANEL_BORDER_BRIGHT, 0xF01B1E23);
+        RpTheme.popupPanel(g, ex, top, ex + ddW, top + h);
         g.enableScissor(ex, top, ex + ddW, top + h);
         for (int i = scroll; i < facs.size() && i < scroll + DD_MAX_VISIBLE; i++) {
             int y1 = ddPopupItemY(isFrom, i);
             int y2 = y1 + DD_ITEM_H;
             boolean hov = mx >= ex && mx <= ex + ddW && my >= y1 && my <= y2;
-            if (hov) {
-                g.fill(ex + 1, y1, ex + ddW - 1, y2, RpTheme.PANEL_BG_ALT);
-            }
+            boolean cur2 = i == cur;
+            RpTheme.popupRow(g, ex + 1, y1, ex + ddW - 1, y2, cur2, hov);
             g.drawString(
                     font,
                     Component.literal(clip(font, facLabel(facs.get(i)), ddW - 10)),
                     ex + 5,
                     y1 + 3,
-                    i == cur ? RpTheme.CYAN : (hov ? 0xFFFFFFFF : RpTheme.TEXT_PRIMARY));
+                    RpTheme.popupRowText(cur2, hov));
         }
         g.disableScissor();
     }
@@ -773,6 +796,6 @@ public final class RpRelationTab {
         if (t == RelationType.FRIENDLY) {
             return RpTheme.FRIENDLY;
         }
-        return 0xFFFFFFFF;
+        return RpTheme.NEUTRAL;
     }
 }

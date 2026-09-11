@@ -140,7 +140,14 @@ public final class RecruitOverlayHud {
         for (OfferEntry o : toRender) {
             int w = 120;
             int h = 44;
-            RpRoundRect.fill(gfx, x, y, x + w, y + h, 8f, o.accepted() ? 0xEE1A1A1A : 0xEE3A3A3A);
+            RpTheme.hudCard(
+                    gfx,
+                    x,
+                    y,
+                    x + w,
+                    y + h,
+                    RpTheme.PANEL_BORDER,
+                    o.accepted() ? RpTheme.SURFACE_CARD : RpTheme.SURFACE_CARD_DIM);
             // 左侧类型色条（与弹窗一致：征召红/指定编制金/通用选岗青；已同意=绿）
             int kc = o.accepted()
                     ? RpTheme.STATUS_ALIVE
@@ -150,7 +157,7 @@ public final class RecruitOverlayHud {
                         case "pick" -> RpTheme.CYAN;
                         default -> RpTheme.ACCENT;
                     };
-            RpRoundRect.fill(gfx, x, y, x + 3, y + h, 8f, kc);
+            RpTheme.accentBar(gfx, x, y, x + 3, y + h, kc);
             // 人物立绘（战术装备预览同款：XYZ 锁定正面视角，带职位装备）。
             // 临时征召的 charId 不在角色列表，直接按邀请的 professionId 取职业装备渲染
             CharacterPreview.renderPortrait(
@@ -222,7 +229,7 @@ public final class RecruitOverlayHud {
             y += 16;
             for (com.ccnrcom.rp.network.RpPackets.RecruitRosterS2C.RosterEntry e : rs.entries()) {
                 int h = 24;
-                RpRoundRect.outlined(gfx, x, y, x + 140, y + h, 5f, RpTheme.PANEL_BORDER, 0xEE1A1A1A);
+                RpTheme.hudCard(gfx, x, y, x + 140, y + h, RpTheme.PANEL_BORDER);
                 // 显示该玩家本人皮肤（不再清一色本地玩家皮肤）
                 CharacterPreview.renderPlayerSkin(
                         gfx,
@@ -265,7 +272,7 @@ public final class RecruitOverlayHud {
             y += 16;
             for (OfferEntry o : accepted) {
                 int h = 24;
-                RpRoundRect.outlined(gfx, x, y, x + 140, y + h, 5f, RpTheme.PANEL_BORDER, 0xEE1A1A1A);
+                RpTheme.hudCard(gfx, x, y, x + 140, y + h, RpTheme.PANEL_BORDER);
                 CharacterPreview.renderPlayerSkin(
                         gfx,
                         x + 13,

@@ -38,9 +38,9 @@ public final class Permissions {
     /** 阵营属性（玩家属性编辑器）：可单独授权的管理节点。 */
     public static final PermissionNode<Boolean> ADMIN_ATTRIBUTE = new PermissionNode<>(
             "ccnrrp", "admin.attribute", PermissionTypes.BOOLEAN, (player, uuid, context) -> false);
-    /** 区域/拓展设定（目标区定义）：可单独授权的管理节点。 */
-    public static final PermissionNode<Boolean> ADMIN_AREA =
-            new PermissionNode<>("ccnrrp", "admin.area", PermissionTypes.BOOLEAN, (player, uuid, context) -> false);
+    /** 自定义设定（变量/预设方案读写）：可单独授权的管理节点。 */
+    public static final PermissionNode<Boolean> ADMIN_VAR =
+            new PermissionNode<>("ccnrrp", "admin.var", PermissionTypes.BOOLEAN, (player, uuid, context) -> false);
 
     private Permissions() {}
 
@@ -59,7 +59,7 @@ public final class Permissions {
                 ADMIN_XP,
                 ADMIN_DB,
                 ADMIN_ATTRIBUTE,
-                ADMIN_AREA);
+                ADMIN_VAR);
     }
 
     /** 管理资格：OP（>= 2 级）或拥有对应权限节点。 */

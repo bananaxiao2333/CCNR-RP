@@ -28,6 +28,34 @@ class LangFileTest {
     private static final Set<String> REQUIRED_KEYS =
             Set.of("ccnr_rp.mod.name", "ccnr_rp.command.help", "ccnr_rp.status.alive", "ccnr_rp.status.dead");
 
+    /**
+     * 自定义设定（docs/17）的必需键：命令输出与页签标签漏掉任何一个都会在游戏里显示成原始键。
+     * 新增页签/命令时在这里登记，漏翻会被本用例挡下。
+     */
+    private static final Set<String> VARIABLE_KEYS = Set.of(
+            "ccnr_rp.command.usage.var",
+            "ccnr_rp.command.var.list_header",
+            "ccnr_rp.command.var.unknown",
+            "ccnr_rp.command.var.saved",
+            "ccnr_rp.command.var.preset_applied",
+            "ccnr_rp.command.var.scheme_applied",
+            "ccnr_rp.gui.admin.tab.variables",
+            "ccnr_rp.gui.admin.var.list",
+            "ccnr_rp.gui.admin.var.id",
+            "ccnr_rp.gui.admin.var.preset_value",
+            "ccnr_rp.gui.admin.var.scheme_id");
+
+    /** 已删除功能（区域 / 弹头许可，docs/16 §5）的键必须清理干净，不得留死键。 */
+    private static final Set<String> REMOVED_KEYS = Set.of(
+            "ccnr_rp.command.usage.area",
+            "ccnr_rp.command.area.list_header",
+            "ccnr_rp.command.area.info",
+            "ccnr_rp.command.faction.warhead",
+            "ccnr_rp.gui.admin.area.list",
+            "ccnr_rp.gui.admin.warhead.list",
+            "ccnr_rp.gui.admin.faction.warhead",
+            "ccnr_rp.gui.admin.tab.extension");
+
     private Map<String, String> load(String path) {
         try (InputStream in = LangFileTest.class.getResourceAsStream(path)) {
             assertNotNull(in, "资源不存在: " + path);
@@ -56,5 +84,27 @@ class LangFileTest {
                 "缺少必需键，差异: "
                         + new TreeSet<>(REQUIRED_KEYS)
                                 .stream().filter(k -> !zh.containsKey(k)).toList());
+    }
+
+    @Test
+    void variableFeatureKeysExistInBothLanguages() {
+        for (String path : new String[] {"/assets/ccnr_rp/lang/zh_cn.json", "/assets/ccnr_rp/lang/en_us.json"}) {
+            Map<String, String> lang = load(path);
+            assertTrue(
+                    lang.keySet().containsAll(VARIABLE_KEYS),
+                    path + " 缺少自定义设定键: "
+                            + new TreeSet<>(VARIABLE_KEYS)
+                                    .stream().filter(k -> !lang.containsKey(k)).toList());
+        }
+    }
+
+    @Test
+    void removedFeatureKeysAreGone() {
+        for (String path : new String[] {"/assets/ccnr_rp/lang/zh_cn.json", "/assets/ccnr_rp/lang/en_us.json"}) {
+            Map<String, String> lang = load(path);
+            Set<String> leftovers = new TreeSet<>(REMOVED_KEYS);
+            leftovers.retainAll(lang.keySet());
+            assertTrue(leftovers.isEmpty(), path + " 残留已删除功能的死键: " + leftovers);
+        }
     }
 }

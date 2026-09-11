@@ -134,10 +134,8 @@ public final class ClientPacketHandlers {
         String prof = ClientCharacterState.professionName(msg.killerProfessionId);
         Component factionComp = Component.literal(fac + (prof.isBlank() ? "" : " · " + prof))
                 .withStyle(s -> s.withColor(factionColor(msg.killerFactionId)).withClickEvent(ev));
-        // 击杀者名字（按关系：友好=绿/敌对=红/中立=白；非玩家击杀无关系=白）
-        final int relColor = "friendly".equals(msg.relation)
-                ? 0xFFB4B4B4
-                : ("hostile".equals(msg.relation) ? 0xFFFF3B30 : 0xFFFFFFFF);
+        // 击杀者名字（关系语义色：友好蓝/敌对红/中立白，与关系图、关系页签同源；非玩家击杀无关系=中立白）
+        final int relColor = RpTheme.relationColor(msg.relation);
         Component killerComp = Component.literal(msg.killerName)
                 .withStyle(s -> s.withColor(relColor).withClickEvent(ev));
         MutableComponent base;
@@ -191,7 +189,7 @@ public final class ClientPacketHandlers {
 
     private static int factionColor(String factionId) {
         if (factionId == null || factionId.isBlank()) {
-            return 0xFFFFFFFF;
+            return RpTheme.TEXT_PRIMARY;
         }
         for (JsonObject f : ClientCharacterState.factions()) {
             if (factionId.equals(
@@ -203,13 +201,13 @@ public final class ClientPacketHandlers {
                     try {
                         return 0xFF000000 | Integer.parseInt(c.substring(1), 16);
                     } catch (NumberFormatException ignored) {
-                        return 0xFFFFFFFF;
+                        return RpTheme.TEXT_PRIMARY;
                     }
                 }
-                return 0xFFFFFFFF;
+                return RpTheme.TEXT_PRIMARY;
             }
         }
-        return 0xFFFFFFFF;
+        return RpTheme.TEXT_PRIMARY;
     }
 
     /** 部署完成通知：显示常驻「已部署」横幅，并清空侧面/背包邀请面板、关闭邀请弹窗（已部署不再保留待处理邀请）。 */

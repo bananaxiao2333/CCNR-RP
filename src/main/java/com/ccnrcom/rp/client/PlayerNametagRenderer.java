@@ -49,17 +49,17 @@ public final class PlayerNametagRenderer {
 
     // ---- 颜色（复用 RpTheme；避免散落魔法数字）----
     /** 玩家名（白）。 */
-    private static final int COLOR_NAME = 0xFFFFFFFF;
-    /** 血量心形（红；文字颜色按 RGB 使用，高位 alpha 被忽略）。 */
-    private static final int COLOR_HEART = 0xFFFF5555;
-    /** 血量分隔符（灰）。 */
-    private static final int COLOR_HP_DIVIDER = 0xFFAAAAAA;
-    /** 徽章盘底色（深灰）。 */
-    private static final int COLOR_BADGE_DISC = 0xFF2E2E2E;
-    /** 徽章图形挖空色（深蓝黑）。 */
-    private static final int COLOR_BADGE_PUNCH = 0xFF161616;
-    /** 文字行半透明底衬。 */
-    private static final int COLOR_LINE_BG = 0x66000000;
+    private static final int COLOR_NAME = RpTheme.TEXT_PRIMARY & 0xFFFFFF;
+    /** 血量心形（红；与 HUD 血量同色，世界渲染按 RGB 使用，高位 alpha 被忽略）。 */
+    private static final int COLOR_HEART = RpTheme.RED & 0xFFFFFF;
+    /** 血量分隔符（次灰）。 */
+    private static final int COLOR_HP_DIVIDER = RpTheme.TEXT_SECONDARY & 0xFFFFFF;
+    /** 徽章盘底色（与 RpIcons 徽章一致）。 */
+    private static final int COLOR_BADGE_DISC = RpTheme.BADGE_DISC & 0xFFFFFF;
+    /** 徽章图形挖空色（与 RpIcons 徽章一致）。 */
+    private static final int COLOR_BADGE_PUNCH = RpTheme.BADGE_PUNCH & 0xFFFFFF;
+    /** 文字行半透明底衬（统一条底阴影）。 */
+    private static final int COLOR_LINE_BG = RpTheme.SHADOW;
     /** 默认阵营色（青，与 RpTheme.CYAN 一致）。 */
     private static final int COLOR_FACTION_DEFAULT = RpTheme.CYAN & 0xFFFFFF;
 

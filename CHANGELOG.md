@@ -1,5 +1,141 @@
 # Changelog
 
+## 2.25.1（缺陷修复：预设删除被整条覆盖 + 删除交互统一为「右键 + 二次确认」）
+
+- **缺陷修复（本轮 review 发现，根因值得记一笔）**：面板「删除预设」当时**把该变量的预设全删了**，而且类型/取值/显示名/说明一起被清空。根因不是删除逻辑，而是
+  `CharacterService` 的 action `switch` 用 `default` 兜底"整条 upsert"：面板发的 `presetRemove` 没有对应 `case`，
+  于是带着 `{id, presetId}` 落进了覆盖分支 —— 类型回退成 `text`、取值回退成空、预设被写成空数组。
+  修法有两层：① 补上 `presetRemove` / `presetSave`（并支持 `presetIds` 批量）；②**把兜底去掉**——
+  `var`/`scheme` 的全部 action 显式列出，未知 action 直接报错（`未知操作: xxx`），
+  杜绝"漏写一个 case 就变成整条覆盖"这类静默数据损坏。
+- **删除交互统一为「右键 + 二次确认」（按验收反馈，全管理面板）**：入口绑定到"用户点中的那一条"——
+  列表项/胶囊**右键即删除该条目**，删除按钮与右键是同一入口的两个触发方式，命中后都先进确认框
+  （显示"类型 + id"，Esc/取消丢弃不落盘）。覆盖：阵营/职业/事件/阶段/刷新波/限制、阵营组、关系规则、
+  经验规则、自定义设定（变量/预设值/预设方案）、以及弹窗内的行删除（属性行/部署点行/无线电行）；
+  「清空全部限制」按整批给一条确认（含条数）。自定义设定页签额外提供勾选框做多选批量删。
+  原「选中条目 → 点删除按钮」的问题：按钮删的是表单里的 id，与"刚才点中的那一条"没有视觉绑定，容易删错对象。
+  实现上确认框只有一份（`RpAdminScreen.confirmDelete`），打开期间在 `mouseClicked`/`keyPressed`/`charTyped`
+  三处吞掉输入（否则弹窗背后的输入框仍会接收键入）；右键提示行在各定义页签底部常显。
+  **规范已沉淀到 docs/01 §10.2**（含"新增删除入口"的逐条核对清单）。
+
+- **规范沉淀**：docs/01 新增 **§10.2 破坏性操作交互规范**（入口绑定条目 / 删除按钮走同一确认 / 任何删除都要二次确认 /
+  批量整体确认 / 模态吞输入 / 实现只有一份），附"新增删除入口"的逐条核对清单；docs/14、docs/17 与本节互链。
+- 构建：`spotlessApply` / `build` / `test -PrunTests` 全绿（213 用例 0 失败）；版本号 **2.25.1**。
+
+## 2.25.0（自定义设定：全局变量系统替代区域/弹头许可；命令与 GUI 双通道 CRUD）
+
+- **需求来源**：维护者要求把"授权方式"改成**自定义设定区**——可创建变量、命令或 GUI 做 CRUD、
+  命令读取**直接返回值**、可预览值、可建预设值**点击直接切换**（预设值也要 CRUD）。
+  上一版的"弹头许可 + 目标区域"做法（2.24.0）属于为单一需求硬编码字段，本次整体删除，由变量系统替代。
+- **新增 `variable` 包（纯逻辑 + 薄服务）**：
+  - `VariableType`（`bool`/`number`/`text` 解析与**归一化**：布尔接受 `true/false/on/off/yes/no/1/0`；
+    数值必须有限且整数写成 `1` 而非 `1.0`；文本去首尾空白、≤256 字符）。
+  - `Variable`（`id/type/name/desc/value/presets[]`）与 `VariableScheme`（整套变量值的命名快照）。
+  - `VariableRegistry`：`parse` **全量校验、任何一条非法即整体拒绝**（不做部分提交）；上限变量 128 / 方案 32 /
+    每变量预设 32；id 规则 `[a-z0-9_.-]{1,64}`；`applyScheme` 只覆盖方案里列出的变量，未列出的保持原值（跳过项记 WARN）。
+  - `VariableService`（`CCNRRPMod.variables`，`ServerAboutToStart` 构造 / `ServerStopping` 清空）：唯一读写入口，
+    写入一律"读整份 → deepCopy → 改 → 全量校验 → `ConfigStore.save` → 换缓存"；**删除变量会自动摘掉所有方案里
+    对它的引用**（否则整份配置会因悬挂引用被拒绝落盘，管理员会陷入"删不掉也改不了"的死局）。
+- **对外只读取值接口（单向依赖：外部 → 本 mod）**：`raw(id,def)` / `bool(id,def)` / `number(id,def)` / `text(id,def)`；
+  取不到或类型不符时返回调用方给的默认值，不抛异常；外部**只能读**，写入只经命令/面板（同一份校验）。
+- **命令 `/rp var`（权限 `ccnrrp.admin.var`）**：`list` / `get <id>` / `info <id>` / `set <id> <值>` /
+  `create <id> <bool|number|text> <值>` / `remove <id>` / `preset list|apply|set|remove` /
+  `scheme list|apply|save|remove` / `reload`。
+  **`get` 只发 `Component.literal(值)`**（无前缀、无翻译、无装饰），供命令方块与 RCON 直接消费；找不到变量则不输出且返回 0
+  （要看元信息用 `info`）。`scheme save <id> [名称]` = 把当前所有变量值快照成一套方案，免去逐个填 `values`。
+  补全：`RpSuggest.variables()/schemes()/presets(id)` 实时读镜像缓存。
+- **管理面板「自定义设定」页签（替换原「拓展设定」页签）**：左侧列表（随子页签在"变量/预设方案"间切换，
+  行文字 `名称 (id) = 当前值` 即**取值预览**）＋右侧编辑器三个子页签分段承载全部字段——
+  「变量」（id/显示名/**类型点击循环** /当前值/说明 + 新建·保存·删除）、
+  「预设值」（预设**胶囊点击即切换取值** + 预设 id/显示名/取值 + 新增·保存·删除）、
+  「方案」（方案**胶囊点击即整套套用** + 方案 id/显示名 + 新建·保存·删除）。
+  分三段而非纵向堆叠的原因：面板最小高度仅 340px，堆叠溢出可视区（docs/01 §10.1）。
+  预设/方案胶囊悬停走白底反白（文字用 `ACCENT_TEXT`），遵守可读性硬约束。
+- **删除区域系统**：`area` 包（`Area`/`AreaRegistry`/`AreaService`）、`/rp area`（含 `AreaCommand`）、
+  `config/ccnr_rp/areas.json` 内嵌默认、`gui.admin.area.*` 语言键、`AreaRegistryTest`；
+  `CharacterListS2C` 的 `areas` 投影、`ClientCharacterState.areas()` 镜像、影响预检的"弹头目标引用"行一并移除。
+- **删除阵营弹头许可**：`warheadEnabled` / `warheadArea` 字段与 `FactionManager.warheadEnabled/warheadArea/setFactionWarhead`、
+  `/rp faction warhead`（`command.usage.faction` 尾巴同步收缩）、阵营页签第三连开关（入场电影那行由三连退回两连，
+  按钮宽 `bw2` 由 `(w-8)/3` 改 `(w-4)/2`）、`gui.admin.warhead.*` 语言键。
+  **老 `factions.json` 里遗留的 `warheadEnabled`/`warheadArea` 键不再被读取**，也不做迁移，
+  且单字段写不会清除它们（`FactionExtrasSaveTest` 已把"历史遗留键原样保留"断言下来）。
+- **替换权限节点**：`ccnrrp.admin.area` → `ccnrrp.admin.var`（`CharacterService.crudNode` 按 `kind ∈ {var, scheme}` 选中；
+  服务端权威判定，客户端说什么不算）。
+- **测试**：新增 `VariableRegistryTest`（解析 / 类型归一化含 `1.0`→`1`、`on`→`true` / 非法 id·类型·数值·超长 /
+  重复 id / 预设上限 / 方案引用不存在的变量 / 方案套用跳过未列出项 / roundtrip）；删掉 `AreaRegistryTest` 与
+  `FactionExtrasSaveTest` 的弹头用例；`LangFileTest` 增加两条断言（自定义设定必需键在两个语言包中齐备 /
+  已删功能的键不得残留）。`test -PrunTests` 213 用例 0 失败。
+- 构建：`spotlessApply` / `build` / `test -PrunTests` 全绿（`LangFileTest` zh_cn/en_us 键数一致）；版本号 **2.25.0**。
+- 文档：新增 docs/17（自定义设定：数据模型 / 两级预设粒度 / 对外接口 / 命令 / 界面 / 取舍）；
+  docs/16 删掉区域章节并更名为「玩家属性」（新增变更记录）；docs/00 包表与文件表、docs/01 权限节点、
+  docs/02 阵营字段、docs/10 命令与配置文件表、docs/14 §7 追加 2.25.0 条目；README 同步。
+
+## 2.24.1（界面整备：全量 GUI 样式收口到 RpTheme 令牌体系 + 修掉白底白字等可读性缺陷）
+
+- **主题令牌收口（RpTheme v4.1）**：设计语言与调色板不变，把此前散落在各界面里的裸色值登记为语义令牌——
+  底板明度阶梯（`SURFACE_CARD`/`SURFACE_CARD_DIM`/`SURFACE_ALERT`/`SURFACE_POPUP`/`SURFACE_CONTROL`/
+  `_HOVER`/`_ON`/`_OFF`/`SURFACE_INSET`/`SURFACE_SUNKEN`/`SURFACE_DISC`/`SURFACE_SCREEN`）、遮罩
+  （`SCRIM`/`SCRIM_LIGHT`/`VEIL`/`SHADOW`/`TRANSPARENT`/`BLACK`）、列表（`ROW_STRIPE`/`ROW_SEL`/`ROW_SEL_HOVER`/
+  `ROW_IDLE`）、滚动条（`SCROLL_TRACK`/`SCROLL_TRACK_ACTIVE`/`TAB_TRACK`）、徽章槽位（`BADGE_DISC`/`BADGE_PUNCH`/
+  `SLOT_BG`/`SLOT_PUNCH`）、立体预览全息层（`PREVIEW_*`）、文字补充（`TEXT_BRIGHT`/`TEXT_DISABLED`）、
+  主操作填充（`ACCENT_FILL`/`ACCENT_FILL_HOVER`）、危险填充（`RED_BG_SOFT`/`RED_BG_HOVER`/`RED_BG_FILL`）、
+  关系语义色（`NEUTRAL`/`HOSTILE` + `relationColor(String)`）。`com.ccnrcom.rp.client` 内的样式裸色值**清零**
+  （仅余 `#RRGGBB` 解析用的 alpha 掩码）。
+- **共享绘制入口（同类构件只有一种画法）**：新增 `listRow`（斑马纹+悬停，含鼠标命中重载）、`listPanel`、
+  `sectionCard`、`listHeaderRule`、`hudCard`（浮层卡片，可指定底/边）、`accentBar`（左侧状态条）、
+  `popupPanel`/`popupRow`/`popupRowText`（下拉与浮层）、`suggestionPopup`/`suggestionRow`（输入补全）、
+  `controlBox`（输入/下拉控件框）、`modalScrim`/`lightScrim`（模态遮罩）。
+- **列表行统一**：管理面板五个页签（经验规则/关系/阵营组/拓展设定/设置）与 K 面板此前各有 4 套列表行画法
+  （有的无悬停、有的用白色条纹、有的整列同色）；现全部走 `RpTheme.listRow`——斑马纹 + 统一悬停高亮 +
+  选中反白（`selectedBar` + `ACCENT_TEXT`）。
+- **浮层统一**：部署横幅/击杀友好提示/招募悬浮卡片/事件横幅此前有的无描边、底色三种深浅不一；
+  现统一 `hudCard`（近黑实心底 + 细灰边），警示类统一 `SURFACE_ALERT` 底 + 红系边 + 红色状态条。
+  四个补全浮层（音乐/相机场景/限制目标/通用 id/事件）与三处页签阵营下拉此前各写一份同构绘制代码，
+  现收敛到 `suggestionPopup`/`suggestionRow` 与 `popupPanel`/`popupRow`，候选行新增键盘当前项反白 + 鼠标悬停高亮。
+- **控件统一**：`RpButton.draw` 增加悬停重载，次级按钮底色统一到 `SURFACE_CONTROL`；经验规则页签的
+  「试算/保存/新增/删除/启停」与 K 面板确认框按钮改用同一配方；开关/分段控件/页签滚动轨道走令牌。
+- **可读性修复（缺陷）**：K 面板部署确认「确认」按钮此前是**白底白字**（白底填充 + 白色文字，实测不可读）
+  → 改走主按钮配方（白底 + `ACCENT_TEXT` 深色墨字）；职业列表的 `Lv x` / 在职上限标签同样改为
+  「亮底深字 / 红底白字」；`StatusHud` 进度条百分比文字改 `ACCENT_TEXT`（亮色填充条上不再白字）。
+- **语义一致性修复**：击杀者名字的「友好」关系色此前是亮灰，与关系图 / 关系页签 / 入场电影的
+  「友好=蓝」不一致 → 统一走 `RpTheme.relationColor()`（中立白 / 敌对红 / 友好蓝），四处同源；
+  关系页签与阵营组页签下拉底色的 v3 冷色残留（`0xF01B1E23`）、关系图节点遮罩（`0xA80E1014`）、
+  经验 HUD 的异色红（`0xFFFF4C4C`）与玩家名牌的红（`0xFFFF5555`）一并归一到令牌。
+  玩家名牌颜色常量改为引用 `RpTheme`（世界渲染取 RGB），`RadioPlayer`/`XpHudOverlay` 等白字改 `TEXT_PRIMARY`。
+- **K 面板构成主义硬边化（仅 `CharacterManagementScreen`）**：只改这一个界面，管理面板 / HUD / 世界渲染均不动。
+  - **删掉「糊掉的灰斑」**：预览区阵营水印此前用 `RpIcons.bigBadge(alpha=36)`——多层同心 alpha 圆在低透明度下
+    糊成一团灰，观感像污渍而不是水印。改为硬边构成主义标记 `emblemWatermark`：双层 1px 细环 + 两段红色断弧
+    （粗/细）+ 四向超出环外的刻度 + 中心十字 + 单扇区 45° 排线。
+  - **全息底座由「柔光」改「工程投影」**：去掉宽幅 `fillGradient` 光柱与多层同心圆 → 2px 核心竖线 +
+    三对虚线侧柱 + 顶部定位刻度 + 等距透视线与两条汇聚斜线 + 基线刻度尺 + 2px 硬环与八向刻度 + 左下红色断弧。
+  - **档案卡改「机器读数」**：左缘 3px 结构红条 + 四角刻度 + 右下斜切楔形 + 底缘刻度尺；职业名改字距放大白字 +
+    硬边标题线；`ID // FACTION`、`LV.REQ`、`PERSONNEL` 三行由裸灰字改为**内陷读数框**（左红条、右缘刻度、
+    左右两端对齐；窄窗口先裁右侧字段再裁左段，避免关键读数被挤掉）；`LV.REQ` 左条按是否达标显示白/红。
+  - **小节头带序号**：`01 PREVIEW` / `02 EQUIPMENT` / `03 PROFILE`——红底反白序号块 + 字距放大标题 +
+    尾部细线（线首 3px 红），替代原来的暗灰 `EQUIPMENT` / `// PROFILE` 裸标签；宽度不足时自动省略序号或截断标题。
+  - **装备轨改造**：贯穿导轨改为「细线 + 上下端帽 + 每槽刻度」，槽位与导轨用刻度连成一体；空槽改 45° 排线 +
+    `--`，已装槽加四角刻度，武器槽右上角加红色楔形（不再只靠红框）；每槽前缀 `01..05` 条目编号（窄列自动省略）。
+  - **实现边界**：新增原语全部是 `CharacterManagementScreen` 内的私有方法（`ringOutline`/`arcOutline`/`hatch`/
+    `wedge`/`cornerTicks`/`tickScale`/`tracked`/`sectionHead`/`readout`/`splitPair`/`emblemWatermark`），
+    **未改动 `RpTheme`/`RpIcons` 等共享文件**，因此不存在波及其它界面的可能；文案全部沿用既有语言包键
+    （`term_id` 只按既有 `" // "` 分隔符拆左右两段，未增删任何 lang 键）；卡片高度 80px、装备行距、
+    部署按钮位置等布局常量一律未动。
+- **边界（不变的部分）**：只改视觉层——布局 / 几何 / 行为 / 配置 / 网络 / 存档 / 运行时逻辑均未改动；
+  唯一保留的彩色仍是红色警戒与关系语义蓝（友好），其余全程黑白灰（docs/14 §6）。
+- **颜色守护测试（新增 `RpThemeTest`，10 用例）**：docs/14 一直写着「CI 无颜色守护（无快照测试），一致性靠人工 review」，
+  本次把设计契约变成可执行断言——反射遍历 `RpTheme` 全部颜色令牌，非中性灰的必须在「刻意保留清单」
+  （红族 + 关系友好蓝 + 观察态弱灰青）内；反白填充 + `ACCENT_TEXT` 对比度 ≥ 4.5（WCAG AA）；
+  浮层卡片比面板更不透明、内陷槽比卡片底更亮、列表悬停比常态亮、滚动条轨道按溢出分档；
+  等级灰阶单调且越界钳制；关系三态两两不同、未知/空/null 回退中立；`alphaBlend` 保 RGB 只改 alpha；
+  `tag`/`section` 标签格式。改色违反契约时 `build -PrunTests` 直接红。
+- **顺手清理（零引用死代码 + 一处潜在 NPE）**：删除从未被引用的几何常量 `RpTheme.PAD`（`HEAD` 中同样无引用）；
+  `RpTheme.statusColor(null)` 此前会抛 NPE（`switch` 直接作用在可空字符串上），改为按文档语义回退「观察态」弱灰。
+- **边界（不变的部分）**：只改视觉层——布局 / 几何 / 行为 / 配置 / 网络 / 存档 / 运行时逻辑均未改动；
+  唯一保留的彩色仍是红色警戒与关系语义蓝（友好），其余全程黑白灰（docs/14 §6）。
+- 构建：`spotlessApply` / `build` / `test -PrunTests` 全绿（195 用例 0 失败）；版本号 **2.24.1**。
+- 文档：docs/14 新增 §2.1 令牌全表、§5.4 整备清单、§6 边界与可读性约束/颜色守护更新、§7 验收清单追加 2.24.1 条目；
+  docs/01 新增 §10.1 GUI 视觉约束（禁止裸色值 + 自检命令 + 亮底深字）；README 同步。
+
 ## 2.24.0（issue 收口：#1 死亡背包清理 + #2 玩家属性编辑器（含 FirstAid 解耦适配）+ #3 特殊按钮落到拓展设定）
 
 - **死亡背包清理（issue #1 修复）**：新增 `DeathInventoryPolicy`（纯逻辑）+ `DeathDrops`（薄适配）。

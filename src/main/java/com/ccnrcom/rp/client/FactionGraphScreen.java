@@ -176,7 +176,7 @@ public final class FactionGraphScreen extends Screen {
     @Override
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         // 深色全屏底
-        g.fill(0, 0, width, height, 0xEE161616);
+        g.fill(0, 0, width, height, RpTheme.SURFACE_SCREEN);
         RpTheme.scanlines(g, 0, 0, width, height);
 
         var font = Minecraft.getInstance().font;
@@ -208,7 +208,7 @@ public final class FactionGraphScreen extends Screen {
                     && !e[1].equals(str(hover.faction(), "id"));
             int color = edgeColor(e[2]);
             if (dim) {
-                color = (color & 0x00FFFFFF) | 0x32000000; // 低透明度 → 变暗
+                color = RpTheme.alphaBlend(color, 0x32); // 低透明度 → 变暗
             }
             int x1 = cx + (int) Math.round(offsetX + na.x() * scale);
             int y1 = cy + (int) Math.round(offsetY + na.y() * scale);
@@ -225,20 +225,21 @@ public final class FactionGraphScreen extends Screen {
             boolean dim = hover != null && !keep.contains(str(n.faction(), "id"));
             RpIcons.factionBadge(g, x, y, r, n.faction(), false);
             if (dim) {
-                RpIcons.circle(g, x, y, r + 1, 0xA80E1014);
+                RpIcons.circle(g, x, y, r + 1, RpTheme.SURFACE_DISC);
             }
             String name = str(n.faction(), "name");
             if (name.isBlank()) {
                 name = str(n.faction(), "id");
             }
-            g.drawCenteredString(font, Component.literal(name), x, y + r + 3, dim ? 0xFF666666 : RpTheme.TEXT_PRIMARY);
+            g.drawCenteredString(
+                    font, Component.literal(name), x, y + r + 3, dim ? RpTheme.TEXT_DIM : RpTheme.TEXT_PRIMARY);
         }
 
         // 图例 + 操作提示（左上角）
         int ly = 30;
         g.drawString(font, Component.translatable("ccnr_rp.gui.admin.graph.legend"), 10, ly, RpTheme.TEXT_SECONDARY);
         ly += 12;
-        legendLine(g, 10, ly, 0xFFFFFFFF, "ccnr_rp.gui.admin.graph.neutral");
+        legendLine(g, 10, ly, RpTheme.NEUTRAL, "ccnr_rp.gui.admin.graph.neutral");
         ly += 12;
         legendLine(g, 10, ly, RpTheme.RED, "ccnr_rp.gui.admin.graph.hostile");
         ly += 12;
@@ -250,7 +251,14 @@ public final class FactionGraphScreen extends Screen {
         g.drawCenteredString(
                 font, Component.translatable("ccnr_rp.gui.admin.graph.title"), width / 2, 12, RpTheme.CYAN);
         RpRoundRect.outlined(
-                g, CLOSE_X, CLOSE_Y, CLOSE_X + CLOSE_SIZE, CLOSE_Y + CLOSE_SIZE, 2, RpTheme.PANEL_BORDER, 0x00);
+                g,
+                CLOSE_X,
+                CLOSE_Y,
+                CLOSE_X + CLOSE_SIZE,
+                CLOSE_Y + CLOSE_SIZE,
+                2,
+                RpTheme.PANEL_BORDER,
+                RpTheme.TRANSPARENT);
         g.drawCenteredString(font, Component.literal("✕"), CLOSE_X + CLOSE_SIZE / 2, CLOSE_Y + 4, RpTheme.TEXT_PRIMARY);
     }
 
@@ -267,7 +275,7 @@ public final class FactionGraphScreen extends Screen {
         if (t == RelationType.FRIENDLY) {
             return RpTheme.FRIENDLY;
         }
-        return 0xFFFFFFFF; // 中立 = 白
+        return RpTheme.NEUTRAL; // 中立 = 白
     }
 
     /** 屏幕空间直线（逐点填充，1px）。 */

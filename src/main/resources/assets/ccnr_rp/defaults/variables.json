@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "variables": [
+    {
+      "id": "sample_enabled",
+      "type": "bool",
+      "name": "样板开关",
+      "desc": "布尔变量样板：取值范围 true/false（也接受 on/off、yes/no、1/0，落盘统一成 true/false）",
+      "value": "false",
+      "presets": [
+        {
+          "id": "on",
+          "name": "开启",
+          "value": "true"
+        },
+        {
+          "id": "off",
+          "name": "关闭",
+          "value": "false"
+        }
+      ]
+    },
+    {
+      "id": "sample_amount",
+      "type": "number",
+      "name": "样板数值",
+      "desc": "数值变量样板：必须是有限数字，整数会写成不带小数的形式",
+      "value": "1",
+      "presets": [
+        {
+          "id": "low",
+          "name": "低档",
+          "value": "1"
+        },
+        {
+          "id": "high",
+          "name": "高档",
+          "value": "10"
+        }
+      ]
+    },
+    {
+      "id": "sample_text",
+      "type": "text",
+      "name": "样本文本",
+      "desc": "文本变量样板：首尾空白会被去掉，最长 256 字符",
+      "value": "",
+      "presets": []
+    }
+  ],
+  "schemes": [
+    {
+      "id": "sample_default",
+      "name": "样板方案",
+      "values": {
+        "sample_enabled": "false",
+        "sample_amount": "1",
+        "sample_text": ""
+      }
+    }
+  ]
+}

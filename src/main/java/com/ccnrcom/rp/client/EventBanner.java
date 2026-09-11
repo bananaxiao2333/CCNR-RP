@@ -59,8 +59,8 @@ public final class EventBanner {
         var font = Minecraft.getInstance().font;
         g.enableScissor(8, y - 2, w - 8, y + bh + 4);
         for (String id : ids) {
-            // 4:3 横向长方形（红色警戒边框 + 半透明深底）
-            RpRoundRect.outlined(g, x, y, x + bw, y + bh, 4f, RpTheme.RED_LINE, 0xC02E2E2E);
+            // 4:3 横向长方形（红色警戒边框 + 警示卡片底）
+            RpRoundRect.outlined(g, x, y, x + bw, y + bh, 4f, RpTheme.RED_LINE, RpTheme.SURFACE_ALERT);
             g.fill(x, y + 3, x + 4, y + bh - 3, RpTheme.RED);
             g.drawCenteredString(font, Component.literal(id).getString(), x + bw / 2 + 2, y + 12, RpTheme.RED_LINE);
             g.drawCenteredString(
@@ -75,9 +75,9 @@ public final class EventBanner {
         }
         g.disableScissor();
         if (lastOverflow > 0) {
-            g.drawCenteredString(font, "‹", 10, y + bh / 2 - 4, offsetPx > 0 ? RpTheme.CYAN : 0x00000000);
+            g.drawCenteredString(font, "‹", 10, y + bh / 2 - 4, offsetPx > 0 ? RpTheme.CYAN : RpTheme.TRANSPARENT);
             g.drawCenteredString(
-                    font, "›", w - 10, y + bh / 2 - 4, offsetPx < lastOverflow ? RpTheme.CYAN : 0x00000000);
+                    font, "›", w - 10, y + bh / 2 - 4, offsetPx < lastOverflow ? RpTheme.CYAN : RpTheme.TRANSPARENT);
             g.drawCenteredString(
                     font,
                     Component.translatable("ccnr_rp.event.banner.scroll").getString(),

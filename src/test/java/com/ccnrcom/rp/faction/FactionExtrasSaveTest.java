@@ -16,7 +16,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
- * 拓展设定字段的落盘语义（issue #2 阵营属性 / issue #3 弹头许可）：
+ * 阵营属性字段的落盘语义（issue #2，docs/16）：
  * 单字段接管必须"只替换自己的字段"，不得吞掉阵营的其它配置（docs/01 §11.1）。
  */
 class FactionExtrasSaveTest {
@@ -108,7 +108,8 @@ class FactionExtrasSaveTest {
         assertEquals("QDF司令部", f.get("name").getAsString());
         assertEquals("shield", f.get("icon").getAsString());
         assertEquals("intro_qdf", f.get("cmdcamScene").getAsString());
-        assertTrue(f.get("warheadEnabled").getAsBoolean(), "弹头许可字段应保留");
+        // 老配置文件里的历史遗留键（原弹头许可）也必须原样保留：非本功能的字段一律不碰
+        assertTrue(f.get("warheadEnabled").getAsBoolean(), "历史遗留字段应原样保留");
         assertEquals("reactor", f.get("warheadArea").getAsString());
         // 别的阵营不受影响
         assertFalse(faction(mgr, "qsa").has("attributes"));
@@ -126,32 +127,5 @@ class FactionExtrasSaveTest {
         assertFalse(errors.isEmpty(), "非法运算必须拒绝");
         // 拒绝时不得留下半份改动
         assertFalse(faction(mgr, "qdf").has("attributes"));
-    }
-
-    @Test
-    @SuppressWarnings("unchecked")
-    void setFactionWarheadWritesAndClearsBothFields() throws Exception {
-        Object mgr = allocManager(factionRoot());
-        var set = mgr.getClass().getMethod("setFactionWarhead", String.class, boolean.class, String.class);
-        List<String> errors = (List<String>) set.invoke(mgr, "qdf", true, "vault");
-        assertTrue(errors.isEmpty(), () -> errors.toString());
-        JsonObject f = faction(mgr, "qdf");
-        assertTrue(f.get("warheadEnabled").getAsBoolean());
-        assertEquals("vault", f.get("warheadArea").getAsString());
-        assertEquals("QDF司令部", f.get("name").getAsString(), "其它字段应保留");
-
-        // 关闭：字段移除（盘上只保留"开"的事实），目标区域清空
-        List<String> errors2 = (List<String>) set.invoke(mgr, "qdf", false, "");
-        assertTrue(errors2.isEmpty(), () -> errors2.toString());
-        JsonObject f2 = faction(mgr, "qdf");
-        assertFalse(f2.has("warheadEnabled"));
-        assertFalse(f2.has("warheadArea"));
-
-        // 读取端语义：缺字段 = false / 空串
-        var enabled = mgr.getClass().getMethod("warheadEnabled", String.class);
-        var area = mgr.getClass().getMethod("warheadArea", String.class);
-        assertFalse((Boolean) enabled.invoke(mgr, "qdf"));
-        assertEquals("", area.invoke(mgr, "qdf"));
-        assertEquals("", area.invoke(mgr, "missing"));
     }
 }

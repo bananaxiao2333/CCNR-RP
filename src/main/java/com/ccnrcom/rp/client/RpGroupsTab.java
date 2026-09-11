@@ -186,7 +186,11 @@ public final class RpGroupsTab {
         for (int i = 0; i < groups.size(); i++) {
             int ry = listY1 + HDR + (i - scroll) * ROW_H;
             if (ry >= listY1 - ROW_H && ry <= listY2 && mx >= listX1 && mx <= listX2 && my >= ry && my <= ry + ROW_H) {
-                loadEditor(i);
+                if (button == 1) {
+                    askRemoveGroup(str(groups.get(i), "id", "")); // 右键条目 = 删除该组（先确认）
+                } else {
+                    loadEditor(i);
+                }
                 return true;
             }
         }
@@ -348,11 +352,24 @@ public final class RpGroupsTab {
             notice("ccnr_rp.gui.admin.group.select_first");
             return;
         }
-        JsonObject p = new JsonObject();
-        p.addProperty("id", str(groups().get(selIndex), "id", ""));
-        screen.requestCrud("group", "delete", p);
-        clearEditor();
-        refresh();
+        askRemoveGroup(str(groups().get(selIndex), "id", ""));
+    }
+
+    /** 删除阵营组：一律先二次确认（右键条目与「删除」按钮共用，docs/01 §10.2）。 */
+    private void askRemoveGroup(String id) {
+        if (id.isBlank()) {
+            return;
+        }
+        screen.confirmDelete(
+                Component.translatable("ccnr_rp.gui.admin.confirm.del_msg", tr("ccnr_rp.gui.admin.tab.groups"), id)
+                        .getString(),
+                () -> {
+                    JsonObject p = new JsonObject();
+                    p.addProperty("id", id);
+                    screen.requestCrud("group", "delete", p);
+                    clearEditor();
+                    refresh();
+                });
     }
 
     /** 请求重新同步角色列表（服务端编辑已落盘，刷新展示新组）。 */
@@ -365,8 +382,7 @@ public final class RpGroupsTab {
     public void render(GuiGraphics g, int mx, int my) {
         var font = Minecraft.getInstance().font;
         List<JsonObject> groups = groups();
-        RpRoundRect.outlined(
-                g, listX1 - 2, listY1 - 4, listX2 + 2, listY2 + 2, 4f, RpTheme.PANEL_BORDER, RpTheme.PANEL_BG_EVEN);
+        RpTheme.listPanel(g, listX1 - 2, listY1 - 4, listX2 + 2, listY2 + 2);
         g.drawString(
                 font,
                 tr("ccnr_rp.gui.admin.group.list") + " (" + groups.size() + ")",
@@ -385,8 +401,8 @@ public final class RpGroupsTab {
             boolean sel = i == selIndex;
             if (sel) {
                 RpTheme.selectedBar(g, listX1, ry, listX2, ry + ROW_H, 3f);
-            } else if (i % 2 == 0) {
-                g.fill(listX1, ry, listX2, ry + ROW_H, 0x1FFFFFFF);
+            } else {
+                RpTheme.listRow(g, listX1, ry, listX2, ry + ROW_H, i, mx, my);
             }
             String id = str(grp, "id", "");
             String name = str(grp, "name", id);
@@ -432,9 +448,9 @@ public final class RpGroupsTab {
             g.drawCenteredString(font, Component.literal(notice), (px1 + px2) / 2, py2 - 24, RpTheme.TEXT_SECONDARY);
         }
         g.drawString(font, tr("ccnr_rp.gui.admin.group.members_hint"), ex, py2 - 40, RpTheme.TEXT_DIM);
-        g.fill(ex - 1, listY1 + 25, ex + (px2 - ex - 12) + 1, listY1 + 45, 0x99383838);
-        g.fill(ex - 1, listY1 + 71, ex + (px2 - ex - 12) + 1, listY1 + 91, 0x99383838);
-        g.fill(ex - 1, listY1 + 121, ex + (px2 - ex - 12) + 1, listY1 + 141, 0x99383838);
+        g.fill(ex - 1, listY1 + 25, ex + (px2 - ex - 12) + 1, listY1 + 45, RpTheme.SURFACE_INSET);
+        g.fill(ex - 1, listY1 + 71, ex + (px2 - ex - 12) + 1, listY1 + 91, RpTheme.SURFACE_INSET);
+        g.fill(ex - 1, listY1 + 121, ex + (px2 - ex - 12) + 1, listY1 + 141, RpTheme.SURFACE_INSET);
     }
 
     public void renderOverlay(GuiGraphics g, int mx, int my) {
@@ -448,15 +464,7 @@ public final class RpGroupsTab {
         int ex = editorX();
         int y = ddY();
         boolean hov = mx >= ex && mx <= ex + ddW && my >= y && my <= y + DD_H;
-        RpRoundRect.outlined(
-                g,
-                ex,
-                y,
-                ex + ddW,
-                y + DD_H,
-                3f,
-                ddOpen || hov ? RpTheme.PANEL_BORDER_BRIGHT : RpTheme.PANEL_BORDER,
-                ddOpen ? 0xA83A3A3A : RpTheme.PANEL_BG_ALT);
+        RpTheme.controlBox(g, ex, y, ex + ddW, y + DD_H, ddOpen || hov);
         List<JsonObject> facs = ClientCharacterState.factions();
         String label = facs.isEmpty() || ddIdx < 0 || ddIdx >= facs.size()
                 ? tr("ccnr_rp.gui.admin.group.pick_faction")
@@ -489,21 +497,20 @@ public final class RpGroupsTab {
         List<JsonObject> facs = ClientCharacterState.factions();
         int top = ddPopupTop();
         int h = ddPopupH();
-        RpRoundRect.outlined(g, ex, top, ex + ddW, top + h, 4f, RpTheme.PANEL_BORDER_BRIGHT, 0xF01B1E23);
+        RpTheme.popupPanel(g, ex, top, ex + ddW, top + h);
         g.enableScissor(ex, top, ex + ddW, top + h);
         for (int i = ddScroll; i < facs.size() && i < ddScroll + DD_MAX_VISIBLE; i++) {
             int y1 = ddPopupItemY(i);
             int y2 = y1 + DD_ITEM_H;
             boolean hov = mx >= ex && mx <= ex + ddW && my >= y1 && my <= y2;
-            if (hov) {
-                g.fill(ex + 1, y1, ex + ddW - 1, y2, RpTheme.PANEL_BG_ALT);
-            }
+            boolean cur = i == ddIdx;
+            RpTheme.popupRow(g, ex + 1, y1, ex + ddW - 1, y2, cur, hov);
             g.drawString(
                     font,
                     Component.literal(clip(font, facLabel(facs.get(i)), ddW - 10)),
                     ex + 5,
                     y1 + 3,
-                    i == ddIdx ? RpTheme.CYAN : (hov ? 0xFFFFFFFF : RpTheme.TEXT_PRIMARY));
+                    RpTheme.popupRowText(cur, hov));
         }
         g.disableScissor();
     }

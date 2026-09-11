@@ -26,7 +26,7 @@ public final class RadioPlayer {
 
     private static List<Line> queue = List.of();
     private static String speaker = "指挥官";
-    private static int speakerColor = 0xFFFFFFFF;
+    private static int speakerColor = RpTheme.TEXT_PRIMARY;
     private static int idx = 0;
     private static long lineStartedAt = 0;
     private static long waitUntil = 0;
@@ -47,7 +47,7 @@ public final class RadioPlayer {
                 : "指挥官";
         speakerColor = radio != null && radio.has("color") && radio.get("color").isJsonPrimitive()
                 ? parseColor(radio.get("color").getAsString())
-                : 0xFFFFFFFF;
+                : RpTheme.TEXT_PRIMARY;
         idx = 0;
         lineStartedAt = System.currentTimeMillis();
         waitUntil = 0;
@@ -90,12 +90,12 @@ public final class RadioPlayer {
 
     private static int parseColor(String hex) {
         if (hex == null || !hex.startsWith("#") || hex.length() != 7) {
-            return 0xFFFFFFFF;
+            return RpTheme.TEXT_PRIMARY;
         }
         try {
             return 0xFF000000 | Integer.parseInt(hex.substring(1), 16);
         } catch (NumberFormatException e) {
-            return 0xFFFFFFFF;
+            return RpTheme.TEXT_PRIMARY;
         }
     }
 
@@ -132,8 +132,8 @@ public final class RadioPlayer {
         String shown = line.text().substring(0, typed);
         Component msg = Component.literal(speaker)
                 .withStyle(s -> s.withColor(speakerColor))
-                .append(Component.literal("：" + shown).withStyle(s -> s.withColor(0xFFFFFFFF)));
+                .append(Component.literal("：" + shown).withStyle(s -> s.withColor(RpTheme.TEXT_PRIMARY)));
         int y = h - ACTIONBAR_Y_OFFSET;
-        g.drawCenteredString(Minecraft.getInstance().font, msg, w / 2, y, 0xFFFFFFFF);
+        g.drawCenteredString(Minecraft.getInstance().font, msg, w / 2, y, RpTheme.TEXT_PRIMARY);
     }
 }

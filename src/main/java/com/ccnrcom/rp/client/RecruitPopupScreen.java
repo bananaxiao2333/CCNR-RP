@@ -70,14 +70,14 @@ public class RecruitPopupScreen extends Screen {
     @Override
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         renderBackground(g);
-        RpRoundRect.outlined(g, px1, py1, px2, py2, 14f, RpTheme.PANEL_BORDER, RpTheme.OVERLAY);
+        RpTheme.terminalPanel(g, px1, py1, px2, py2, RpTheme.RADIUS_LARGE);
         g.drawString(font, title, px1 + 12, py1 + 10, RpTheme.TEXT_PRIMARY);
         int y = py1 + 34;
         for (RecruitOverlayHud.OfferEntry o : entries()) {
             int cardH = 68;
             int kc = kindColor(o.kind());
-            RpRoundRect.fill(g, px1 + 8, y, px2 - 8, y + cardH, 8f, RpTheme.PANEL_BG_ALT);
-            RpRoundRect.fill(g, px1 + 8, y, px1 + 11, y + cardH, 8f, kc); // 左侧类型色条
+            RpTheme.card(g, px1 + 8, y, px2 - 8, y + cardH, RpTheme.RADIUS_MEDIUM, RpTheme.PANEL_BG_ALT);
+            RpTheme.accentBar(g, px1 + 8, y, px1 + 11, y + cardH, kc); // 左侧类型色条
             // 人物立绘（战术装备预览同款：XYZ 锁定正面视角，带职位装备）。
             // 临时征召的 charId 不在角色列表，直接按邀请的 professionId 取职业装备渲染
             CharacterPreview.renderPortrait(

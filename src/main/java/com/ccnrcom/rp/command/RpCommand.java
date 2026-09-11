@@ -34,7 +34,7 @@ public final class RpCommand {
         SpawnCommand.register(rp);
         DbCommand.register(rp);
         AttributeCommand.register(rp);
-        AreaCommand.register(rp);
+        VarCommand.register(rp);
         rpNode = rp;
     }
 
@@ -61,7 +61,7 @@ public final class RpCommand {
             "ccnr_rp.command.usage.spawn",
             "ccnr_rp.command.usage.db",
             "ccnr_rp.command.usage.attribute",
-            "ccnr_rp.command.usage.area",
+            "ccnr_rp.command.usage.var",
             "ccnr_rp.command.usage.admin"
         };
         for (String k : keys) {

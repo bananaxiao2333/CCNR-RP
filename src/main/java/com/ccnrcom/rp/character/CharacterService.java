@@ -479,14 +479,14 @@ public final class CharacterService {
     }
 
     /**
-     * 管理 CRUD 的权限节点按 kind 选择：属性/区域各有独立节点（可分别授权），其余沿用阵营管理节点。
+     * 管理 CRUD 的权限节点按 kind 选择：属性/自定义设定各有独立节点（可分别授权），其余沿用阵营管理节点。
      * 服务端权威：客户端只是发起意图，节点判定一律在服务端完成。
      */
     private static net.minecraftforge.server.permission.nodes.PermissionNode<Boolean> crudNode(String kind) {
         String k = kind == null ? "" : kind;
         return switch (k) {
             case "attribute" -> com.ccnrcom.rp.util.Permissions.ADMIN_ATTRIBUTE;
-            case "area" -> com.ccnrcom.rp.util.Permissions.ADMIN_AREA;
+            case "var", "scheme" -> com.ccnrcom.rp.util.Permissions.ADMIN_VAR;
             default -> com.ccnrcom.rp.util.Permissions.ADMIN_FACTION;
         };
     }
@@ -703,40 +703,77 @@ public final class CharacterService {
                     }
                 }
             }
-            case "area" -> {
+            case "var" -> {
+                // 自定义设定变量：create/update 整条覆盖（含预设值列表），其余是轻量单点写入。
+                // **每个 action 都必须显式列出**：未知 action 一律报错，绝不做"整条覆盖"兜底——
+                // 否则漏写一个 case 就会把 {id,presetId} 这种单点载荷当成完整变量写下去（清空类型/取值/全部预设）。
                 String id = str(p, "id", "");
-                if (CCNRRPMod.areas == null) {
-                    errors = List.of("区域服务未就绪");
-                } else if ("delete".equals(action)) {
-                    errors = CCNRRPMod.areas.delete(id);
-                    if (errors.isEmpty()) {
-                        // 引用完整性：清掉指向该区域的阵营目标（防悬挂引用让外部功能拿到无效目标）
-                        for (String fid : CCNRRPMod.factions.graph().factions().keySet()) {
-                            if (id.equals(CCNRRPMod.factions.warheadArea(fid))) {
-                                CCNRRPMod.factions.setFactionWarhead(fid, CCNRRPMod.factions.warheadEnabled(fid), "");
+                if (CCNRRPMod.variables == null) {
+                    errors = List.of("自定义设定服务未就绪");
+                } else {
+                    switch (action) {
+                        case "create", "update" -> {
+                            com.ccnrcom.rp.variable.VariableType type =
+                                    com.ccnrcom.rp.variable.VariableType.parse(str(p, "type", "text"));
+                            if (type == null) {
+                                errors = List.of("变量类型非法: " + str(p, "type", ""));
+                            } else if ("create".equals(action)
+                                    && CCNRRPMod.variables.find(id).isPresent()) {
+                                errors = List.of("变量已存在: " + id); // create 防误覆盖（与阵营/职业语义一致）
+                            } else {
+                                errors = CCNRRPMod.variables.upsert(new com.ccnrcom.rp.variable.Variable(
+                                        id,
+                                        type,
+                                        str(p, "name", id),
+                                        str(p, "desc", ""),
+                                        str(p, "value", ""),
+                                        parsePresets(p)));
                             }
                         }
+                        case "delete" -> errors = CCNRRPMod.variables.delete(id);
+                        case "set" -> errors = CCNRRPMod.variables.setValue(id, str(p, "value", ""));
+                        case "presetApply" -> errors = CCNRRPMod.variables.applyPreset(id, str(p, "presetId", ""));
+                        case "presetSave" -> errors = CCNRRPMod.variables.upsertPreset(
+                                id,
+                                new com.ccnrcom.rp.variable.Variable.Preset(
+                                        str(p, "presetId", ""), str(p, "presetName", ""), str(p, "value", "")));
+                        case "presetRemove" -> errors = removePresets(id, p);
+                        default -> errors = List.of("未知操作: " + action);
                     }
-                } else if ("create".equals(action) && CCNRRPMod.areas.find(id).isPresent()) {
-                    errors = List.of("区域已存在: " + id); // create 防误覆盖（与职业/阵营 create 语义一致）
-                } else {
-                    double[] c = new double[6];
-                    String[] keys = {"x1", "y1", "z1", "x2", "y2", "z2"};
-                    for (int i = 0; i < keys.length; i++) {
-                        try {
-                            c[i] = p.has(keys[i]) ? p.get(keys[i]).getAsDouble() : Double.NaN;
-                        } catch (Exception e) {
-                            c[i] = Double.NaN;
-                        }
-                    }
-                    errors = CCNRRPMod.areas.upsert(new com.ccnrcom.rp.area.Area(
-                            id, str(p, "name", id), str(p, "dim", ""), c[0], c[1], c[2], c[3], c[4], c[5]));
                 }
             }
-            case "warhead" -> {
-                // 弹头许可 + 目标区域：一对配置一起写（避免"有目标但无权限"的中间态）
-                String fid = str(p, "factionId", str(p, "id", ""));
-                errors = CCNRRPMod.factions.setFactionWarhead(fid, bool(p, "enabled", false), str(p, "areaId", ""));
+            case "scheme" -> {
+                // 预设方案：整套变量值的命名快照；create/update 整条覆盖，apply 一键套用。
+                // 与 var 同样显式列出全部 action，未知 action 报错而不兜底覆盖。
+                String id = str(p, "id", "");
+                if (CCNRRPMod.variables == null) {
+                    errors = List.of("自定义设定服务未就绪");
+                } else {
+                    switch (action) {
+                        case "create", "update" -> {
+                            if ("create".equals(action)
+                                    && CCNRRPMod.variables.findScheme(id).isPresent()) {
+                                errors = List.of("预设方案已存在: " + id);
+                            } else {
+                                java.util.Map<String, String> values = new java.util.LinkedHashMap<>();
+                                if (p.has("values") && p.get("values").isJsonObject()) {
+                                    for (var e : p.getAsJsonObject("values").entrySet()) {
+                                        values.put(
+                                                e.getKey(),
+                                                e.getValue().isJsonNull()
+                                                        ? ""
+                                                        : e.getValue().getAsString());
+                                    }
+                                }
+                                errors = CCNRRPMod.variables.upsertScheme(
+                                        new com.ccnrcom.rp.variable.VariableScheme(id, str(p, "name", id), values));
+                            }
+                        }
+                        case "apply" -> errors = CCNRRPMod.variables.applyScheme(id);
+                        case "delete" -> errors = removeSchemes(id, p);
+                        default -> errors = List.of("未知操作: " + action);
+                    }
+                }
             }
             default -> errors = List.of("未知类型: " + kind);
         }
@@ -783,8 +820,6 @@ public final class CharacterService {
         List<String> profs = new ArrayList<>();
         List<String> events = new ArrayList<>();
         List<String> phases = new ArrayList<>();
-        /** 区域引用方（阵营 id，拓展设定用）。 */
-        List<String> refs = new ArrayList<>();
         boolean rename = "update".equals(action);
         if ("profession".equals(kind)) {
             if (updateInvolvesIdChange("profession", id, p)) {
@@ -827,15 +862,6 @@ public final class CharacterService {
             stepsReferencing("event", id, events, phases, waves);
         } else if ("phase".equals(kind)) {
             stepsReferencing("phase", id, events, phases, waves);
-        } else if ("area".equals(kind)) {
-            // 区域影响面：哪些阵营把它当作弹头目标（删除/改坐标会直接影响这些引用）
-            if (CCNRRPMod.factions != null) {
-                for (String fid : CCNRRPMod.factions.graph().factions().keySet()) {
-                    if (id.equals(CCNRRPMod.factions.warheadArea(fid))) {
-                        refs.add(fid);
-                    }
-                }
-            }
         } else if ("attribute".equals(kind)) {
             // 属性影响面：该阵营当前在场的成员（保存后立即重套属性）
             String fid = str(p, "factionId", id);
@@ -865,9 +891,6 @@ public final class CharacterService {
             lines.add("阶段(" + phases.size() + "): " + String.join(", ", phases.subList(0, Math.min(6, phases.size())))
                     + (phases.size() > 6 ? "…" : ""));
         }
-        if (!refs.isEmpty()) {
-            lines.add("弹头目标引用(" + refs.size() + "): " + String.join(", ", refs));
-        }
         if (rename && id.length() > 0) {
             // 重命名提示
         }
@@ -881,6 +904,62 @@ public final class CharacterService {
         }
         resp.add("lines", arr);
         RpChannels.sendTo(player, new RpPackets.ManagerImpactS2C(resp.toString()));
+    }
+
+    /**
+     * 删除预设值：载荷带 {@code presetIds} 数组则批量删（面板勾选后一次提交，只落盘一次），
+     * 否则按单个 {@code presetId} 删（命令行与右键快捷键）。
+     */
+    private static List<String> removePresets(String varId, JsonObject p) {
+        if (CCNRRPMod.variables == null) {
+            return List.of("自定义设定服务未就绪");
+        }
+        if (p.has("presetIds") && p.get("presetIds").isJsonArray()) {
+            List<String> ids = new ArrayList<>();
+            for (var el : p.getAsJsonArray("presetIds")) {
+                if (el.isJsonPrimitive()) {
+                    ids.add(el.getAsString());
+                }
+            }
+            return CCNRRPMod.variables.deletePresets(varId, ids);
+        }
+        return CCNRRPMod.variables.deletePreset(varId, str(p, "presetId", ""));
+    }
+
+    /** 删除预设方案：载荷带 {@code ids} 数组则批量删，否则按单个 {@code id} 删。 */
+    private static List<String> removeSchemes(String id, JsonObject p) {
+        if (CCNRRPMod.variables == null) {
+            return List.of("自定义设定服务未就绪");
+        }
+        if (p.has("ids") && p.get("ids").isJsonArray()) {
+            List<String> ids = new ArrayList<>();
+            for (var el : p.getAsJsonArray("ids")) {
+                if (el.isJsonPrimitive()) {
+                    ids.add(el.getAsString());
+                }
+            }
+            return CCNRRPMod.variables.deleteSchemes(ids);
+        }
+        return CCNRRPMod.variables.deleteScheme(id);
+    }
+
+    /** 解析管理面板提交的预设值数组（非法项丢弃；规范化在 VariableService 里统一做）。 */
+    private static List<com.ccnrcom.rp.variable.Variable.Preset> parsePresets(JsonObject p) {
+        List<com.ccnrcom.rp.variable.Variable.Preset> out = new ArrayList<>();
+        if (p.has("presets") && p.get("presets").isJsonArray()) {
+            for (var el : p.getAsJsonArray("presets")) {
+                if (!el.isJsonObject()) {
+                    continue;
+                }
+                JsonObject o = el.getAsJsonObject();
+                String pid = str(o, "id", "");
+                if (pid.isBlank()) {
+                    continue;
+                }
+                out.add(new com.ccnrcom.rp.variable.Variable.Preset(pid, str(o, "name", pid), str(o, "value", "")));
+            }
+        }
+        return out;
     }
 
     private static boolean updateInvolvesIdChange(String kind, String id, JsonObject p) {
@@ -1329,10 +1408,8 @@ public final class CharacterService {
                 if (spawn != null) {
                     o.add("spawn", spawn);
                 }
-                // 拓展设定：阵营属性（部署时套用）+ 弹头启动许可与目标区域（本 mod 只发布事实，执行在外部功能）
+                // 阵营属性（docs/16）：部署时套用；本 mod 只发布事实，执行在外部功能
                 o.add("attributes", CCNRRPMod.factions.factionAttributes(f.id()).deepCopy());
-                o.addProperty("warheadEnabled", CCNRRPMod.factions.warheadEnabled(f.id()));
-                o.addProperty("warheadArea", CCNRRPMod.factions.warheadArea(f.id()));
                 fa.add(o);
             });
         }
@@ -1352,14 +1429,15 @@ public final class CharacterService {
             }
         }
         root.add("groups", grps);
-        // 区域注册表（拓展设定/管理面板编辑器枚举用）：{id,name,dim,角点坐标}；服务端顶层数组，客户端只读列举
-        JsonArray areas = new JsonArray();
-        if (CCNRRPMod.areas != null) {
-            for (com.ccnrcom.rp.area.Area a : CCNRRPMod.areas.areas()) {
-                areas.add(com.ccnrcom.rp.area.AreaRegistry.toJson(a));
-            }
+        // 自定义设定（管理面板/命令枚举用）：{id,type,name,desc,value,presets[]} 与整套方案 {id,name,values{}}
+        // 服务端顶层数组，客户端只读列举；写入只经 ManagerCrudC2S（同一份校验）
+        if (CCNRRPMod.variables != null) {
+            root.add(
+                    "variables", com.ccnrcom.rp.variable.VariableRegistry.toJsonArray(CCNRRPMod.variables.variables()));
+            root.add(
+                    "schemes",
+                    com.ccnrcom.rp.variable.VariableRegistry.schemesToJsonArray(CCNRRPMod.variables.schemes()));
         }
-        root.add("areas", areas);
         // 关系测定图数据：已解析的阵营对边（a<b 去重，含生效类型；白=中立/红=敌对/绿=友好）
         JsonArray rela = new JsonArray();
         if (CCNRRPMod.factions != null) {
