@@ -17,7 +17,7 @@ CCNR 服务器 RolePlay 模组：围绕 **量子科学设施（CCNR 机构）** 
 
 ## 功能模块
 
-当前版本（`2.26.10`）已实现 **P0–P9 全流程闭环**：事件 → 刷新波/招募 → 部署 → 判死 → 冷却 → 复活 → 结算。
+当前版本（`2.26.11`）已实现 **P0–P9 全流程闭环**：事件 → 刷新波/招募 → 部署 → 判死 → 冷却 → 复活 → 结算。
 
 | 系统 | 说明 | 设计文档 |
 | --- | --- | --- |
@@ -52,7 +52,7 @@ CCNR 服务器 RolePlay 模组：围绕 **量子科学设施（CCNR 机构）** 
 
 ## 安装（客户端 + 服务端）
 
-1. 使用 Forge `47.2.0+`（Minecraft **1.20.1**）启动器（如 HMCL / 官方启动器），把 `ccnr_rp-2.26.10.jar` 放入 `mods` 目录。
+1. 使用 Forge `47.2.0+`（Minecraft **1.20.1**）启动器（如 HMCL / 官方启动器），把 `ccnr_rp-2.26.11.jar` 放入 `mods` 目录。
 2. 首次启动自动生成默认配置：`config/ccnr_rp/` 下的 `factions.json` / `phases.json` / `events.json` / `animations.json` / `spawn_waves.json` / `variables.json`（含精简样板：3 个样例阵营、4 个样例职业、3 个样例变量）。
 3. 按 `K`（可在按键设置里改键，类别 **CCNR-RP → 角色管理界面**）打开角色管理终端。
 4. 连远程服务器时，**服务器与客户端都要装同一版本**，阵营/职业/阶段/事件等以**服务器**配置为准。
@@ -101,7 +101,7 @@ export GRADLE_USER_HOME=/Users/bananaxiao/Documents/MirageV/mod/CCNR-Com/.gradle
 ./gradlew runServer / runClient
 ```
 
-产物：`build/libs/ccnr_rp-2.26.10.jar`。工程规范见 [docs/01](docs/01-工程规范.md)，开发注意见 [AGENTS.md](AGENTS.md)。
+产物：`build/libs/ccnr_rp-2.26.11.jar`。工程规范见 [docs/01](docs/01-工程规范.md)，开发注意见 [AGENTS.md](AGENTS.md)。
 
 ## 持续集成
 

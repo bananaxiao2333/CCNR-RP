@@ -1,5 +1,36 @@
 # Changelog
 
+## 2.26.11（修复头顶标签阵营徽章隐形：世界空间绘制丢了 alpha）
+
+- **实机现象**（用户反馈"观察者状态下别人头上的悬浮标签图标变透明了看不见"）：观察者视角下看别人头顶的
+  悬浮标签，**文字与血量都正常，唯独阵营图标看不见**——你的 10 个阵营里 9 个用 `img:<名字>` 图片图标，
+  全部中招。
+- **根因（2.25.1「界面主题迁移至黑白灰军用终端」引入的回归）**：`PlayerNametagRenderer` 的 7 个颜色常量在
+  迁移到 `RpTheme` 时被写成 `RpTheme.XXX & 0xFFFFFF`，**把 alpha 抹成了 0**（迁移前它们是 `0xFF2E2E2E`
+  这样完整的 ARGB）。这个错误的可见性是**分裂的**，所以极难判断：
+  - **文字**走 `Font.drawInBatch`，原版 `Font` 有兜底——颜色 alpha 为 0 时被强制或上 `0xFF000000`
+    （`Font.m_92719_`，字节码 `(color & 0xFC000000) == 0 → color | 0xFF000000`），所以**文字照常显示**；
+  - **几何图形**（`RenderType.gui()` 的矩形/圆盘/扫描线多边形）与**纹理**
+    （`RenderType.entityTranslucent` 的图片徽章 quad）**不走 Font**，alpha=0 原样生效 → **整块全透明**。
+  于是现象是"标签都在、只有图标不见了"，非常容易误判成"素材没下发 / 图片没加载"。
+- **具体表现**：徽章底盘（`COLOR_BADGE_DISC`）与挖空细节（`COLOR_BADGE_PUNCH`）隐形；
+  `img:` 图片徽章的纹理 quad 用 `COLOR_NAME` 当顶点色，alpha=0 → **整个图标消失**，只剩外面那圈不透明的
+  等级环色，看起来就是一个纯色圆点。
+- **修复**：`PlayerNametagRenderer` 去掉全部 `& 0xFFFFFF`；`factionColor()` 解析 `#RRGGBB` 后主动补
+  `0xFF000000`（防止该值以后被用到几何/纹理绘制上时重蹈覆辙）。唯一保留 alpha≠0xFF 的是
+  `COLOR_LINE_BG`（`RpTheme.SHADOW`，刻意半透明的文字底衬）。
+- **影响面已全量排查**：`grep -rn "0xFFFFFF" src/main/java/com/ccnrcom/rp/client` 的命中全部集中在
+  `PlayerNametagRenderer`；其余客户端绘制（`GuiGraphics.fill` / `RpIcons` / `RpTheme.alphaBlend`）走 GUI 混合
+  状态、本来就依赖 alpha，**不受影响也不应反向"补 alpha"**。
+- **回归防线（新增）**：`PlayerNametagRendererTest` 用反射遍历该类的 `COLOR_*` 常量并断言 `alpha == 0xFF`
+  （`COLOR_LINE_BG` 只要求可见）。该用例在修复前**实测失败**并点名 `COLOR_NAME 的 alpha=0`，
+  修复后通过——即它确实能挡住这一类回归，而不是写完就算。它只反射静态 int 常量、不触碰任何 MC 渲染类型，
+  可脱机运行。
+- **文档**：docs/14 新增 §5.10（契约、为什么只有一半绘制路径出问题、影响面、如何失效、以及
+  "本条只管世界空间、GUI 侧不要反向补 alpha"的边界）。
+- **测试**：`test -PrunTests` 全绿（**267 例 0 失败**，较 2.26.10 的 266 例新增 1 例守卫）。
+- 构建：`spotlessApply` / `build` / `test -PrunTests` 全绿；版本号 **2.26.11**。
+
 ## 2.26.10（死亡掉落改由世界规则 keepInventory 决定）
 
 - **修正一处"补丁推翻世界规则"的反向缺陷**（用户要求"死亡掉了那里要获取游戏规则，

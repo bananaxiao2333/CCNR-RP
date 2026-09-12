@@ -48,20 +48,26 @@ public final class PlayerNametagRenderer {
     private static final float TAG_SCALE = -0.025F;
 
     // ---- 颜色（复用 RpTheme；避免散落魔法数字）----
+    // 【不要在这里 `& 0xFFFFFF` 抹掉 alpha】2.25.1 主题迁移时加了这层掩码，结果徽章底盘/挖空与
+    // `img:` 图片徽章全部变成隐形，而文字照常显示，很容易误判成"素材没加载"。原因：原版 Font 有兜底 ——
+    // 颜色 alpha 为 0 时会被强制或上 0xFF000000（Font.m_92719_，字节码 `(color & 0xFC000000) == 0 →
+    // color | 0xFF000000`），所以**文字**即使 alpha=0 也看得见；但**几何图形**（RenderType.gui()）
+    // 与**纹理**（RenderType.entityTranslucent）不走 Font，alpha=0 原样生效 → 整块全透明。
+    // 世界空间绘制一律用完整 ARGB；不变量由 PlayerNametagRendererTest 钉住。
     /** 玩家名（白）。 */
-    private static final int COLOR_NAME = RpTheme.TEXT_PRIMARY & 0xFFFFFF;
-    /** 血量心形（红；与 HUD 血量同色，世界渲染按 RGB 使用，高位 alpha 被忽略）。 */
-    private static final int COLOR_HEART = RpTheme.RED & 0xFFFFFF;
+    private static final int COLOR_NAME = RpTheme.TEXT_PRIMARY;
+    /** 血量心形（红；与 HUD 血量同色）。 */
+    private static final int COLOR_HEART = RpTheme.RED;
     /** 血量分隔符（次灰）。 */
-    private static final int COLOR_HP_DIVIDER = RpTheme.TEXT_SECONDARY & 0xFFFFFF;
+    private static final int COLOR_HP_DIVIDER = RpTheme.TEXT_SECONDARY;
     /** 徽章盘底色（与 RpIcons 徽章一致）。 */
-    private static final int COLOR_BADGE_DISC = RpTheme.BADGE_DISC & 0xFFFFFF;
+    private static final int COLOR_BADGE_DISC = RpTheme.BADGE_DISC;
     /** 徽章图形挖空色（与 RpIcons 徽章一致）。 */
-    private static final int COLOR_BADGE_PUNCH = RpTheme.BADGE_PUNCH & 0xFFFFFF;
-    /** 文字行半透明底衬（统一条底阴影）。 */
+    private static final int COLOR_BADGE_PUNCH = RpTheme.BADGE_PUNCH;
+    /** 文字行半透明底衬（统一条底阴影；**刻意半透明**，是唯一允许 alpha≠0xFF 的常量）。 */
     private static final int COLOR_LINE_BG = RpTheme.SHADOW;
     /** 默认阵营色（青，与 RpTheme.CYAN 一致）。 */
-    private static final int COLOR_FACTION_DEFAULT = RpTheme.CYAN & 0xFFFFFF;
+    private static final int COLOR_FACTION_DEFAULT = RpTheme.CYAN;
 
     // ---- 徽章默认值（与 RpIcons 一致）----
     /** 徽章默认等级（tier）。 */
@@ -416,7 +422,8 @@ public final class PlayerNametagRenderer {
         String c =
                 f.has("color") && !f.get("color").isJsonNull() ? f.get("color").getAsString() : "";
         try {
-            return 0xFFFFFF & Integer.parseInt(c.replace("#", ""), 16);
+            // 配置里是 #RRGGBB：补上不透明 alpha，避免这个值以后被用到几何/纹理绘制上时又变成全透明
+            return 0xFF000000 | (0xFFFFFF & Integer.parseInt(c.replace("#", ""), 16));
         } catch (Exception ignored) {
             return COLOR_FACTION_DEFAULT;
         }
