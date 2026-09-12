@@ -1,5 +1,57 @@
 # Changelog
 
+## 2.26.5（进入观察者统一清理 + 疏散结算能力 + 修两处 docs/实现偏差）
+
+- **新增：进入观察者时统一清背包 + 卸下阵营属性（七条路径全覆盖）**。此前切观察者一共有七条路径，
+  但只有 `retire` 卸了阵营属性、**没有任何一条路径清背包**，于是观察者身上会残留上一局的加成
+  （血量/护甲）与装备（docs/01 §9.4 对称清理）。现在全部收口到唯一入口
+  `StatusManager.purgeOnObserving(player, dropInventory)`：
+  1. **只有死亡把物品爆到地上**——自然死亡（`reason=death`）与掉线判死（`RetireFlag.OFFLINE`）：
+     物品留在世界里（原版掉落 / 遗体模组收纳 / `DeathInventoryPolicy` 补位），玩家能找回。
+  2. **其余一切路径直接删除**，不在脚下掉一地：`/rp kill`、`/rp retire`（reason 是 `command`/`retire`，
+     语义是"退场"而非"死在场上"）、疏散结算、旁观者兜底轮询、DEAD 归一化轮询、登录归一化。
+  3. **判定纯逻辑化**：由 `DeathInventoryPolicy.disposalOnObserving(naturalDeath, offlineDeath)`
+     返回 `DROP`/`DELETE`（无 MC import，可脱机单测），把"哪些算死亡路径"钉死成可测规则。
+  4. **背包删除只有一份实现**：新增 `DeathDrops.clearAll`（静默删除，与 `dropAll` 的"爆一地"相对），
+     `SpawnFramework` 部署前那份重复的 `clearInventory` 转为转调它。
+  5. **只清自己的**：属性按 `ccnr_rp:attr:` 前缀清该玩家自己的修饰，不触碰其他玩家（docs/16 §2.2）。
+  6. **幂等 + 不误伤部署**：旁观者轮询只在**模式真的被改**的那一刻清理；部署在同一 tick 内同步跑完
+     （`applyDeployCore` → `setStatus(ALIVE)` 之间无 tick 边界），轮询不会插进中间态清掉刚发放的装备。
+- **新增「疏散结算」能力（`EVACUATE` 序列步骤 + `/rp evac` 命令）**：剧本"到时收工"的收尾动作——
+  把**当前在场（ALIVE）**的人集体结算并转回观察者，可由序列按秒数自动调起，也可管理端手动触发。
+  1. **作用范围 = 当前 `status == ALIVE` 的用户**：观察者/已死亡用户不在范围内（他们本回合的分数已在死亡当时
+     结算过，不应再拿一次疏散分）。
+  2. **其他分数照算**：疏散只往待结算列表**追加一条**，值班/击杀等既有条目原样保留，最终按整份列表求和。
+  3. **不扣死亡分**：走**非死亡路径**——不广播 `character_death`、不落遗体，故 `death_penalty` 这类阵亡规则
+     不会被触发；已经阵亡过的人，其扣分在死亡当时就已入账，疏散不追溯、不回冲。
+  4. **转观察者**：结算后状态置 `OBSERVING`，并走上面的统一清理（清背包 + 卸属性 + 刷新档案）。
+  5. **参数**：`{"type":"EVACUATE","xp":200,"title":"疏散"}`——`xp` 缺省 0（只疏散不加分），
+     `title` **必填**（同时是合并键与结算动画里显示在数值后的文案）；缺 title / 经验服务未就绪 → 跳过该步 + WARN，
+     **不中断整条序列**。命令入口 `/rp evac <分值> <标题>`（权限 `ccnrrp.admin.settle`，同一实现）。
+  6. **纯逻辑外提**：条目语义收在 `EvacSettlement`（无 MC import，可脱机单测）——其他分数照算、不引入负分条目、
+     同标题按 `evac:` 前缀合并（与规则 id、`manual:` 手动记分互不串台）。
+  7. 单个用户异常隔离（`settleAll` 同款纪律），不阻塞整批。
+- **修复：`hooks.notify.titleKey` 写了不生效**（docs/07 §3 有、实现无——通报静默丢失）。
+  `EventModels.parseEvent` 现在按 **顶层 `notifyTitleKey` → `hooks.notify.titleKey`** 的优先级解析
+  （与 `startAnimation`/`spawnWave` 的"顶层优先"一致）；两种写法都生效，旧配置零影响。
+- **修复：`/rp wave spawn <id>` 不存在**（docs/15 §5 已记载但未实现）。新增该命令，
+  从**波次库**显式召一波，供剧本/管理端手动调兵；权限节点独立为 `ccnrrp.admin.wave`
+  （与 `ccnrrp.admin.spawn` 分开授权），并登记进 `Permissions.onGatherNodes`。
+  与 `/rp spawn trigger` 同源（都进 `SpawnFramework.triggerWave`），语义分工见 docs/15 §4.4。
+- **文档同步（docs 与实现一致，docs/01 §9.6）**：docs/05 新增 §2.1（进入观察者的统一清理契约表 +
+  为什么收成一个入口 + 边界）并修正 `/rp kill`/`/rp retire` 的掉落描述；docs/16 §2.2 套用时机表补"统一入口 +
+  同时清背包"；docs/07 §3 补 hooks 解析优先级；docs/15 新增 §4.8（EVACUATE 契约/边界）、
+  §2 与 §7 的步骤清单补齐（含 `RULECHANGE`/`SWITCHPHASE`）、§5 补 `/rp evac`；
+  docs/06 新增 §7.6（疏散结算与 `/rp settle`/死亡结算的区别表）并说明 `/rp evac` 与 v2 同名命令**语义完全不同**；
+  docs/09 §5、docs/10 补 `/rp wave spawn` 与新的 `/rp evac`（顺手删掉 docs/10 里早已失效的
+  `/rp evac <SAFE_RESCUE|DIED|…>` 那行）；docs/01 §7 补 `wave` 权限节点；
+  README 版本与产物名同步（并修掉"产物 ccnr_rp-2.25.2.jar"与正文版本不符的陈旧描述）。
+- **测试**：新增 `EvacSettlementTest`（6 例：既有条目保留、不注入负分、重复疏散合并、不同标题独立、
+  null/0 分边界、前缀隔离）、`EventModelsTest`（5 例：hooks.notify 读取、顶层优先、
+  startAnimation/spawnWave 兼容、缺失/非对象/空对象边界），`DeathInventoryPolicyTest` 补 4 例
+  （自然死亡/掉线判死爆一地、其余路径直接删、死亡路径判定反向断言）。`test -PrunTests` 全绿。
+- 构建：`spotlessApply` / `build` / `test -PrunTests` 全绿；版本号 **2.26.5**。
+
 ## 2.26.4（本 mod 音乐音量条"拖到 0 也不静音"：按 MC 原版音量模型重写）
 
 - **修复：本 mod 音乐音量条"拖到 0 也不静音"——按 MC 原版音量模型重写**（实机反馈）：

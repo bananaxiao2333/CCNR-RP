@@ -27,8 +27,12 @@
   ]
 }
 ```
-- 可选 sequence 数组：事件触发时的行为序列（步骤 WAIT/WAVE/COMMAND/FORCE_PICK，字段见
-  docs/09-spawn.md / SequenceEngine；阶段 phase 与刷新波 wave 同样支持）。
+- 可选 sequence 数组：事件触发时的行为序列（步骤 WAIT/WAVE/COMMAND/FORCE_PICK/RULECHANGE/SWITCHPHASE/EVACUATE，
+  字段见 docs/09-spawn.md / SequenceEngine；阶段 phase 与刷新波 wave 同样支持）。
+- **hooks 段的解析优先级**（v2.26.5 起代码与本节示例对齐）：
+  `startAnimation` / `spawnWave` 可写在顶层或 `hooks` 段（**顶层优先**）；
+  通报键别名有两种写法——顶层 `notifyTitleKey`，或 `hooks.notify.titleKey`（**顶层优先**）。
+  此前 `hooks.notify.titleKey` 不被读取（docs 有、实现无），现已补上；两种写法都生效。
 - 管理面板可编辑（2.15.3 起）：事件/阶段/刷新波表单的「编辑行为序列…」按钮打开流程编辑器弹窗
   （仿出生点编辑器：步骤列表点选/上移/下移/删除 + 类型切换 + 按类型参数输入框），保存走主表单 CRUD。
 

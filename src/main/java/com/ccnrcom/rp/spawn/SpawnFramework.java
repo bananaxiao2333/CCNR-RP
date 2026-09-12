@@ -606,12 +606,12 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
         }
     }
 
-    /** 清空玩家背包/护甲/副手（部署前防遗留物品）。 */
+    /**
+     * 清空玩家背包/护甲/副手（部署前防遗留物品）。转调 {@link com.ccnrcom.rp.status.DeathDrops#clearAll}——
+     * "直接删除背包"这件事只有一份实现（部署前清理与"非死亡退场清理"共用同一语义，docs/01 §9.4 对称清理）。
+     */
     private static void clearInventory(ServerPlayer p) {
-        net.minecraft.world.entity.player.Inventory inv = p.getInventory();
-        for (int i = 0; i < 41; i++) { // 0-35 背包 + 36-39 护甲 + 40 副手
-            inv.setItem(i, net.minecraft.world.item.ItemStack.EMPTY);
-        }
+        com.ccnrcom.rp.status.DeathDrops.clearAll(p);
     }
 
     /**
