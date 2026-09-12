@@ -453,6 +453,16 @@ public final class StatusManager {
         // 死亡退场（reason=death）对观察者/残留 DEAD 同样要记账：冷却与死亡地点不能因为
         // "死之前就不是在场身份"而整段跳过（否则重生退回出生点、不进观察流程）。
         boolean deathRetire = "death".equals(reason);
+        boolean deathPath = deathRetire || offline;
+        // 世界规则 keepInventory（"死亡不掉落"）：一次读取，供背包处置与遗体抑制共用（同一个判据，不重复读）
+        boolean keepInventory =
+                playerOrNull != null && playerOrNull.level().getGameRules().getBoolean(GameRules.RULE_KEEPINVENTORY);
+        // 死亡路径的背包/遗体处置：一次判定（纯逻辑 DeathInventoryPolicy.forDeath），下面三处共用它
+        DeathInventoryPolicy.DeathHandling handling = DeathInventoryPolicy.forDeath(
+                CorpseBridge.available(), offline, playerOrNull != null && playerOrNull.isSpectator(), keepInventory);
+        // 遗体抑制只作用于**真正的死亡**（自然死亡 / 掉线判死）：/rp kill 与 /rp retire 是管理端强制退场，
+        // 不是"死亡"，其 SPAWN_CORPSE 行为不因世界规则而改变（保留原行为，不在本次需求范围内）。
+        boolean corpseSuppressed = deathPath && handling.suppressCorpse();
         // 状态迁移（幂等）：仅 ALIVE 判死生效；观察者退役只加冷却；其余（DEAD 残留由轮询兜底）跳过
         if (!alive && !observingRetire && !deathRetire) {
             return;
@@ -466,7 +476,8 @@ public final class StatusManager {
             CCNRRPMod.users.save();
             // 自然死亡（reason=death）：Corpse 模组会自动生成遗体。在 LivingDeathEvent 阶段标记该死亡，
             // 供 CorpseBridge 的 PlayerDeathEvent 钩子改写遗体身份：玩家真实 UUID（皮肤）+ 「职位 + 玩家名」。
-            if (playerOrNull != null && "death".equals(reason) && CorpseBridge.available()) {
+            // keepInventory 死亡不生成遗体，故也不必打这个标记。
+            if (playerOrNull != null && "death".equals(reason) && !corpseSuppressed && CorpseBridge.available()) {
                 CorpseBridge.captureDeath(playerOrNull.getUUID());
             }
         } else {
@@ -476,12 +487,14 @@ public final class StatusManager {
         }
         if (playerOrNull != null && alive) {
             // 退场即卸下阵营属性（docs/16）：观察者不带上一局的加成，重新部署时按当前阵营重套。
-            // 背包处置按"是否死亡路径"分流（纯策略见 DeathInventoryPolicy.disposalOnObserving）：
-            //   死亡（自然死亡 / 掉线判死）→ 物品留在世界里，由下方 DeathInventoryPolicy 分支与遗体模组负责，
-            //     这里只卸属性、不插手，否则会把遗体该收纳的东西提前销毁；
-            //   其余退场（/rp kill、/rp retire）→ 走统一入口直接删除，不在脚下掉一地。
-            if (DeathInventoryPolicy.disposalOnObserving(deathRetire, offline)
-                    == DeathInventoryPolicy.Disposal.DELETE) {
+            // 背包处置一律取自同一次判定：死亡路径用上面算好的 handling；非死亡的退场（/rp kill、/rp retire）
+            // 按契约直接删除（disposalOnObserving(false,false) === DELETE），不在脚下掉一地。
+            //   DROP   → 只卸属性，背包交给原版/遗体模组/下方"死亡背包处置"块，本方法不插手
+            //            （否则会把遗体该收纳的东西提前销毁）；
+            //   DELETE → 走统一入口 purgeOnObserving（清背包 + 卸属性）。
+            DeathInventoryPolicy.Disposal disposal =
+                    deathPath ? handling.disposal() : DeathInventoryPolicy.disposalOnObserving(false, false);
+            if (disposal == DeathInventoryPolicy.Disposal.DELETE) {
                 purgeOnObserving(playerOrNull, false);
             } else {
                 com.ccnrcom.rp.attribute.AttributeService.clear(playerOrNull);
@@ -501,16 +514,15 @@ public final class StatusManager {
                             playerOrNull.getYRot(),
                             playerOrNull.getXRot()));
         }
-        // 死亡背包处置（issue #1）：原版在 keepInventory=true 或"死亡瞬间处于旁观者模式"时**不会**爆出背包
+        // 死亡背包处置（issue #1）：原版在"死亡瞬间处于旁观者模式"时**不会**爆出背包
         // （ServerPlayer.die 的 if (!isSpectator()) dropAllDeathLoot 直接跳过），离线判死更是没有原版掉落流程；
         // 而本 mod 恰恰会把未部署玩家强制切成旁观者，且"死亡即清空背包"过去只是遗体 mod 的副作用，遗体 mod 一移除就失效。
-        // 时机：LivingDeathEvent 内、原版掉落之前 → 先清空，原版随后找不到物品（不会重复掉落）。
-        // 范围：只处理真正的死亡（自然死亡 / 离线判死）；管理员 /rp kill、/rp retire 仍走原有行为。
-        if (playerOrNull != null && (deathRetire || offline)) {
-            boolean keepInventory = playerOrNull.level().getGameRules().getBoolean(GameRules.RULE_KEEPINVENTORY);
-            boolean explicit = DeathInventoryPolicy.dropExplicitly(
-                    CorpseBridge.available(), offline, playerOrNull.isSpectator(), keepInventory);
-            if (explicit) {
+        // 时机：LivingDeathEvent 内、原版掉落之前（本处理器默认优先级 NORMAL，Corpse 在 LOWEST 之后跑）
+        //       → 先清空，原版与遗体模组随后都找不到物品（不会重复掉落、也不会造出装着东西的遗体）。
+        // 范围：只处理真正的死亡路径；管理员 /rp kill、/rp retire 仍走原有行为。
+        // 世界规则 keepInventory=true 时既不爆出也不留遗体，直接删除（见 DeathInventoryPolicy.forDeath）。
+        if (playerOrNull != null && deathPath) {
+            if (handling.dropExplicitly()) {
                 int stacks = DeathDrops.dropAll(playerOrNull);
                 LOGGER.info(
                         "[CCNR-RP] 无遗体模组：死亡背包显式爆出（{} 组，keepInventory={}，旁观者={}，离线={}）→ {}",
@@ -519,9 +531,23 @@ public final class StatusManager {
                         playerOrNull.isSpectator(),
                         offline,
                         charName);
+            } else if (corpseSuppressed) {
+                // 世界规则"死亡不掉落"：把背包直接删除，并抑制遗体生成。
+                // 这里的删除对 ALIVE 死亡是幂等的兜底（上方 purgeOnObserving 已清过一次）；
+                // 对"死亡时本就不是 ALIVE"的残留状态，它是唯一一次清理。
+                int cleared = DeathDrops.clearAll(playerOrNull);
+                // 只有装了遗体模组才需要抑制标记（它才会自行造遗体）；未安装时不留无用的状态
+                if (CorpseBridge.available()) {
+                    CorpseBridge.suppressCorpse(playerOrNull.getUUID());
+                }
+                LOGGER.info(
+                        "[CCNR-RP] 世界规则 keepInventory=true（死亡不掉落）：不爆出、不生成遗体，已直接清空背包（{} 组，离线={}）→ {}",
+                        cleared,
+                        offline,
+                        charName);
             }
         }
-        if (spawnCorpse && playerOrNull != null) {
+        if (spawnCorpse && playerOrNull != null && !corpseSuppressed) {
             if (CorpseBridge.available()) {
                 pendingCorpsePlayers.put(
                         playerOrNull.getUUID(),

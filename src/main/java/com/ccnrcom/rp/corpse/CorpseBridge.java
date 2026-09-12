@@ -4,6 +4,7 @@
  */
 package com.ccnrcom.rp.corpse;
 
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -42,6 +43,25 @@ public final class CorpseBridge {
     /** 死亡时暂存的玩家 UUID（标记本桥管理的自然死亡，供 PlayerDeathEvent 注入遗体身份）。 */
     private static final Set<UUID> DEATH_MARKERS = ConcurrentHashMap.newKeySet();
 
+    /**
+     * 待抑制遗体的玩家（UUID → 过期时刻）。用于世界规则 {@code keepInventory=true}（"死亡不掉落"）：
+     * 该规则下本 mod 要求"一点装备都不留"，**连遗体也不生成**。
+     *
+     * <p><b>为什么只能在实体加入世界时拦</b>：Corpse 的 {@code PlayerDeathEvent} 虽继承 Forge 的
+     * {@code Event}，但**没有 {@code @Cancelable}**（只有单向的 {@code storeDeath()}/{@code removeDrops()}，
+     * 读它们的 getter 还是包私有），{@code ServerConfig} 里也没有"是否生成遗体"的开关，而
+     * {@code de.maxhenkel.corpse.events.DeathEvents#playerDeath} 是**无条件**创建
+     * {@code CorpseEntity} 并 {@code addFreshEntity} 的。唯一可拦的地方就是遗体加入世界的那一刻
+     * （{@code EntityJoinLevelEvent} 可取消）。
+     *
+     * <p>带过期时间是为了不误杀后续的正常遗体：标记只在"该玩家这次 keepInventory 死亡"后的
+     * {@link #SUPPRESS_TTL_MS} 内有效，且命中一次即消费掉。
+     */
+    private static final Map<UUID, Long> SUPPRESSED_CORPSES = new ConcurrentHashMap<>();
+
+    /** 抑制标记的有效期：远大于"死亡→遗体入世界"的间隔（同 tick ~ 2 tick），又短到不会影响下一次死亡。 */
+    private static final long SUPPRESS_TTL_MS = 10_000L;
+
     private static boolean hookRegistered = false;
 
     public static boolean available() {
@@ -68,6 +88,35 @@ public final class CorpseBridge {
         }
     }
 
+    /**
+     * 请求抑制该玩家接下来的遗体生成（世界规则 {@code keepInventory=true} 的死亡）。
+     * 由 {@code StatusManager} 在死亡事件内调用，随后 {@code EntityJoinLevelEvent} 会拦下那具遗体。
+     */
+    public static void suppressCorpse(UUID playerUuid) {
+        if (playerUuid != null) {
+            SUPPRESSED_CORPSES.put(playerUuid, System.currentTimeMillis() + SUPPRESS_TTL_MS);
+        }
+    }
+
+    /**
+     * 该遗体是否应当被拦下（命中即消费标记）。过期标记一律不抑制。
+     * 任何异常都返回 false —— 宁可留下遗体，也不能误删玩家的正常遗体。
+     */
+    private static boolean consumeSuppressed(de.maxhenkel.corpse.entities.CorpseEntity corpse) {
+        try {
+            var death = corpse.getDeath();
+            UUID owner = death == null ? null : death.getPlayerUUID();
+            if (owner == null) {
+                return false;
+            }
+            Long until = SUPPRESSED_CORPSES.remove(owner);
+            return until != null && System.currentTimeMillis() <= until;
+        } catch (Throwable t) {
+            LOGGER.debug("[CCNR-RP] 遗体抑制判定跳过", t);
+            return false;
+        }
+    }
+
     /** 注册 Corpse 联动钩子（仅 Corpse 模组存在时生效，幂等）：死亡身份注入 + 遗体名字牌。 */
     public static void registerHooks() {
         if (!available() || hookRegistered) {
@@ -82,9 +131,10 @@ public final class CorpseBridge {
         }
     }
 
-    /** 清空死亡身份暂存（服务端停止/世界切换时调用，防跨世界残留）。 */
+    /** 清空死亡身份暂存与遗体抑制标记（服务端停止/世界切换时调用，防跨世界残留）。 */
     public static void clearCaptured() {
         DEATH_MARKERS.clear();
+        SUPPRESSED_CORPSES.clear();
     }
 
     /** 尸体显示名：职位 + 玩家名（如「警察 小明」）；无职位/读取失败时仅玩家名。 */
@@ -208,9 +258,14 @@ public final class CorpseBridge {
     }
 
     /**
-     * 遗体名字牌钩子：遗体加入世界时，把 corpseName（职位 + 玩家名）移到 customName 并置可见。
-     * 1.20.1 名字牌仅当 customNameVisible=true 才渲染；corpseName 置空后 vanilla getDisplayName()
-     * 回落 customName，头顶名字与搜尸 GUI 标题一致显示「职位 + 玩家名」，不再出现 "Corpse of " 前缀。
+     * 遗体入世界钩子：
+     * <ol>
+     *   <li><b>抑制</b>：世界规则 {@code keepInventory=true} 的死亡不该留遗体 —— `EntityJoinLevelEvent`
+     *       是唯一可拦点，取消即"不生成"（见 {@link #SUPPRESSED_CORPSES} 的说明）；</li>
+     *   <li><b>名字牌</b>：把 corpseName（职位 + 玩家名）移到 customName 并置可见。1.20.1 名字牌仅当
+     *       customNameVisible=true 才渲染；corpseName 置空后 vanilla getDisplayName() 回落 customName，
+     *       头顶名字与搜尸 GUI 标题一致显示「职位 + 玩家名」，不再出现 "Corpse of " 前缀。</li>
+     * </ol>
      */
     private static final class JoinNameplateHook {
         static void register() {
@@ -223,6 +278,11 @@ public final class CorpseBridge {
                 if (!(event.getEntity() instanceof de.maxhenkel.corpse.entities.CorpseEntity corpse)) {
                     return;
                 }
+                if (consumeSuppressed(corpse)) {
+                    event.setCanceled(true); // keepInventory 死亡：不留遗体（其背包已被直接清空）
+                    LOGGER.info("[CCNR-RP] keepInventory=true：已抑制该次死亡的遗体生成");
+                    return;
+                }
                 String name = corpse.getCorpseName();
                 if (name == null || name.isBlank()) {
                     return;
@@ -231,7 +291,7 @@ public final class CorpseBridge {
                 corpse.setCustomName(Component.literal(name));
                 corpse.setCustomNameVisible(true);
             } catch (Throwable t) {
-                LOGGER.debug("[CCNR-RP] 遗体名字牌处理跳过", t);
+                LOGGER.debug("[CCNR-RP] 遗体入世界处理跳过", t);
             }
         }
     }

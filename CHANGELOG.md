@@ -1,5 +1,41 @@
 # Changelog
 
+## 2.26.10（死亡掉落改由世界规则 keepInventory 决定）
+
+- **修正一处"补丁推翻世界规则"的反向缺陷**（用户要求"死亡掉了那里要获取游戏规则，
+  如果游戏规则是开了死亡不掉落的就不会爆出任何装备"）。
+  - **原行为**：2.24.0 修 issue #1 时，把 `keepInventory=true` 也归进了"原版不会掉 → 所以本 mod 必须替它爆出来"，
+    于是规则写着"死亡不掉落"，死一次却满地装备。补位逻辑本身没错（要修的是"死亡后背包不被清理"），
+    错在把**世界规则**当成了需要被补丁覆盖的"原版缺陷"。**规则是玩家/管理员的显式意图，优先级高于本 mod 的补位。**
+  - **现行为**：`keepInventory=true` 时本 mod 对死亡路径**既不爆出背包、也不生成遗体**，背包**直接删除**。
+    补位只保留另外两种原版确实不会掉的情况：死亡瞬间是旁观者（本 mod 会把未部署玩家强制切成旁观者，
+    所以这在实战里很常见）、离线判死。
+- **为什么是"删除"而不是"留在身上"**：不爆出 ≠ 留着。本 mod 的观察者契约要求"切观察者必须空背包"
+  （docs/05 §2.1），且 `keepInventory` 在本 mod 的流程里不可能意味着"留着下一局接着用"——重新部署时
+  `SpawnFramework.clearInventory` 一定会清空背包并按岗位发装备。若只"不爆出"而把物品留在观察者身上，
+  结果是玩家死后仍抱着上一局的枪、到下次部署时才无声消失，比直接删除更难预期。
+- **连带抑制遗体**（用户定调"一点装备都不留"）：装了 Corpse 时它**无条件**为每次玩家死亡生成遗体——
+  其 `PlayerDeathEvent` 没有 `@Cancelable`（只有单向的 `storeDeath()`/`removeDrops()`，读的 getter 还是包私有），
+  `ServerConfig` 里也没有"是否生成遗体"的开关。唯一可拦点是遗体**加入世界**的那一刻：死亡时打一个带 TTL 的
+  抑制标记，`EntityJoinLevelEvent` 里 `setCanceled(true)` 即"不生成"。标记命中即消费、10 秒过期、
+  任何异常都返回 false（宁可留下遗体，也不误删正常遗体）。
+  - **双保险**：本 mod 的 `LivingDeathEvent` 处理器是默认优先级 `NORMAL`，Corpse 的两个处理器是 `LOWEST`（最后跑）；
+    我们在它读取背包与 `event.getDrops()` 之前就清空了背包，所以即使抑制漏掉，造出来的遗体也一定是**空的**。
+  - **抑制只作用于真正的死亡**（自然死亡 / 掉线判死）：`/rp kill`、`/rp retire` 是管理端强制退场而非"死亡"，
+    其 `SPAWN_CORPSE` 行为不因世界规则改变（保留原行为，不在本次需求范围）。
+- **判据同源、纯逻辑可单测**：三个决定（背包处置 / 是否显式爆出 / 是否抑制遗体）收敛为一次判定
+  `DeathInventoryPolicy.forDeath(corpseAvailable, offlineDeath, spectatorAtDeath, keepInventory)`，
+  返回 `DeathHandling(disposal, dropExplicitly, suppressCorpse)`；调用方（`StatusManager.retire`）不再各写一套判据。
+  原有的 `dropExplicitly(...)` 四参布尔方法被它取代（同一件事只留一个判据）。
+- **测试**：`DeathInventoryPolicyTest` 重写并扩充到 12 例 —— 新增"keepInventory=true 时**任意组合**都不得爆出"
+  （离线×旁观×遗体 三重循环的反向断言）、"keepInventory=true 时处置为 DELETE"、"keepInventory=true 时抑制遗体"、
+  以及"keepInventory=false 时三个决定与 2.26.9 之前逐字一致"（防止改动波及默认行为）。
+  `test -PrunTests` 全绿（**266 例 0 失败**，较 2.26.9 的 263 例新增 3 例）。
+- **文档**：docs/05 新增 §2.2（规则优先的完整说明、为什么删除而非保留、遗体抑制的实现与为什么只能在实体入世界时拦、
+  时序双保险、抑制范围、边界与如何失效）；§2.1 契约表新增 `keepInventory=true` 行；§3 更正原文把
+  `keepInventory` 列为"原版不会掉"的叙述。
+- 构建：`spotlessApply` / `build` / `test -PrunTests` 全绿；版本号 **2.26.10**。
+
 ## 2.26.9（语言包反查守卫：以代码为基准）
 
 - **事故**：2.26.5 / 2.26.6 的语言键在开发过程中被**一次性整体回退**（一次 `git checkout -- lang/*.json`
