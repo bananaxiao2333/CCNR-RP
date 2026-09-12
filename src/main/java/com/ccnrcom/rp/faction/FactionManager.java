@@ -738,6 +738,65 @@ public final class FactionManager {
         return List.of("未找到阵营: " + factionId);
     }
 
+    /**
+     * 职业属性配置原文（factions.json 的 {@code professions[].attributes} 数组；未配置返回空数组）。
+     *
+     * <p>职业层属性**覆盖**同 id 的阵营层属性（判定键 = 属性 id，含该 id 的全部运算），
+     * 合并规则见 {@link com.ccnrcom.rp.attribute.AttributeProfile#layer}。
+     */
+    public com.google.gson.JsonElement professionAttributes(String professionId) {
+        JsonObject p = professionObject(professionId);
+        return p != null && p.has("attributes") ? p.get("attributes") : new com.google.gson.JsonArray();
+    }
+
+    /** 单字段接管：只替换该职业的 attributes（deepCopy + 全量校验 + 落盘），不触碰职业其他字段。 */
+    public List<String> setProfessionAttributes(String professionId, com.google.gson.JsonElement attributes) {
+        if (FactionProfessions.find(root, professionId).isEmpty()) {
+            return List.of("未找到职业: " + professionId);
+        }
+        com.ccnrcom.rp.attribute.AttributeProfile.ParseResult parsed =
+                com.ccnrcom.rp.attribute.AttributeProfile.parse(attributes);
+        if (!parsed.success()) {
+            return new java.util.ArrayList<>(parsed.errors());
+        }
+        JsonObject candidate = root.deepCopy();
+        JsonArray pa = candidate.has("professions") ? candidate.getAsJsonArray("professions") : new JsonArray();
+        for (int i = 0; i < pa.size(); i++) {
+            JsonObject o = pa.get(i).getAsJsonObject();
+            if (!str(o, "id", "").equals(professionId)) {
+                continue;
+            }
+            o.add("attributes", com.ccnrcom.rp.attribute.AttributeProfile.toJson(parsed.entries()));
+            for (String w : parsed.warnings()) {
+                LOGGER.warn("[CCNR-RP] 职业 {} 属性：{}", professionId, w);
+            }
+            if (!ConfigStore.save("factions.json", candidate)) {
+                return List.of("配置文件写入失败");
+            }
+            this.root = candidate;
+            return List.of();
+        }
+        return List.of("未找到职业: " + professionId);
+    }
+
+    /** 取职业 JSON 对象（只读定位用；不存在返回 null）。 */
+    private JsonObject professionObject(String professionId) {
+        if (root == null || professionId == null || professionId.isBlank() || !root.has("professions")) {
+            return null;
+        }
+        JsonArray pa = root.getAsJsonArray("professions");
+        for (int i = 0; i < pa.size(); i++) {
+            if (!pa.get(i).isJsonObject()) {
+                continue;
+            }
+            JsonObject o = pa.get(i).getAsJsonObject();
+            if (str(o, "id", "").equals(professionId)) {
+                return o;
+            }
+        }
+        return null;
+    }
+
     /** 取阵营 JSON 对象（只读定位用；不存在返回 null）。 */
     private JsonObject factionObject(String factionId) {
         if (root == null || factionId == null || factionId.isBlank() || !root.has("factions")) {
