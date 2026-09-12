@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.26.13（README 应用家族图标 + 许可段统一）
+
+- **README 顶部应用家族图标**：与 CCNR-Com 的写法一致——居中区块里放
+  `<img src="src/main/resources/icon.png" width="128" height="128">`。
+  图标本体（`src/main/resources/icon.png`，由 `mods.toml` 的 `logoFile` 引用）本次未改动，
+  之前只是在 README 里没展示出来。
+- **许可段统一**：`## License` 由裸 `MIT` 改为 `MIT —— 见 [LICENSE](LICENSE)。`，
+  与 CCNR-PM 的写法一致（同一家族里两个仓库的 README 版式对齐）。
+- 无代码改动，无行为变更；`mods.toml` / 产物内容与 2.26.12 一致。
+- 构建：`spotlessApply` / `build` / `test -PrunTests` 全绿；版本号 **2.26.13**。
+
 ## 2.26.12（管理面板权限门：没有权限打不开）
 
 - **用户要求**：「确保没有权限无法打开 P 界面和 K 界面」（P 界面 = CCNR-PM 管理界面，K 界面 = 本模组管理面板）。
