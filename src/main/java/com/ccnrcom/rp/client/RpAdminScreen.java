@@ -278,7 +278,9 @@ public class RpAdminScreen extends Screen {
         PROFESSION,
         FACTION,
         WAVE,
-        DIMENSION
+        DIMENSION,
+        /** 已注册属性 id（原版 + 已装 mod）：「阵营属性档案」弹窗的属性 id 输入框。 */
+        ATTRIBUTE
     }
 
     private SugSource idSugSource = SugSource.NONE;
@@ -1871,7 +1873,10 @@ public class RpAdminScreen extends Screen {
         box.setMaxLength(maxLen);
         box.setValue(value == null ? "" : value);
         box.setTextColor(RpTheme.CYAN);
-        box.setSuggestion(hint); // 值空时显示已本地化的占位提示
+        // 占位提示必须用 setHint：原版只在 value.isEmpty() && !isFocused() 时画它。
+        // 早前用的 setSuggestion 是"补全串"API——它被追加在已输入文本后面，
+        // 于是聚焦后会出现「adadadad属性 id」这种糊在一起的现象（docs/14 §5.9）。
+        box.setHint(Component.literal(hint));
         addRenderableWidget(box);
         return box;
     }
@@ -2059,10 +2064,14 @@ public class RpAdminScreen extends Screen {
         atX2 = atX1 + w;
         atY2 = atY1 + h;
         RpTheme.terminalPanel(g, atX1, atY1, atX2, atY2, RpTheme.RADIUS_LARGE);
+        // 标题按像素裁剪：阵营 id/显示名可能很长，不能被画到面板外（docs/14 §2.1 长文本走 clip）
         g.drawString(
                 font,
-                Component.translatable("ccnr_rp.gui.admin.attribute.title", attributeModalTarget)
-                        .getString(),
+                RpTheme.clip(
+                        font,
+                        Component.translatable("ccnr_rp.gui.admin.attribute.title", attributeModalTarget)
+                                .getString(),
+                        (atX2 - 14) - (atX1 + 14)),
                 atX1 + 14,
                 atY1 + 10,
                 RpTheme.CYAN,
@@ -2125,9 +2134,21 @@ public class RpAdminScreen extends Screen {
                 RpTheme.TEXT_DIM);
         cy += 26;
 
-        g.drawString(
-                font, Component.translatable("ccnr_rp.gui.admin.attribute.hint").getString(), cx, cy, RpTheme.TEXT_DIM);
-        cy += 16;
+        // 提示行是一整句长文案：按像素断行（最多两行），仍放不下才在末行裁出省略号。
+        // 此前是单行裸 drawString，会一路画到弹窗外面、拖到屏幕右缘（docs/14 §5.9）。
+        int hintW = (atX2 - 14) - cx;
+        List<String> hintLines = RpTheme.wrapText(
+                font, Component.translatable("ccnr_rp.gui.admin.attribute.hint").getString(), hintW);
+        int hintShown = Math.min(2, hintLines.size());
+        for (int i = 0; i < hintShown; i++) {
+            String line = hintLines.get(i);
+            if (i == hintShown - 1 && hintLines.size() > hintShown) {
+                line = RpTheme.clip(font, line + "…", hintW); // 还有后续行：末行裁出省略号
+            }
+            g.drawString(font, line, cx, cy, RpTheme.TEXT_DIM);
+            cy += 10;
+        }
+        cy += 6;
 
         // 行列表（滚动）：列头 + 每行「属性 id 输入框 / 数值输入框 / 运算切换 / 删除」
         atListY1 = cy + 12;
@@ -2925,7 +2946,8 @@ public class RpAdminScreen extends Screen {
         box.setMaxLength(512);
         box.setValue(value == null ? "" : value);
         box.setTextColor(RpTheme.CYAN);
-        box.setSuggestion(hint); // 值空时显示描述文本（占位提示），输入后自动消失，不重叠
+        // 同 attrBox：占位提示走 setHint（值空且未聚焦才画），不要用 setSuggestion（补全串，会拼在输入内容后面）
+        box.setHint(Component.literal(hint));
         box.setEditable(true);
         addRenderableWidget(box);
         return box;
@@ -3708,8 +3730,21 @@ public class RpAdminScreen extends Screen {
             return dangerClick((int) mx, (int) my, button);
         }
         // 属性档案弹窗最优先接管：它盖住整个下层面板，且行输入框为手动渲染（不走 super 分发）。
-        // 放在补全提示之前，避免用上一帧残留的补全命中区吞掉弹窗内点击（docs/01 §10-1）。
+        // 但**属性 id 补全候选画在弹窗之上**，必须先给它命中机会（命中区每帧由 renderIdSuggestions
+        // 重算，弹层关闭时会清空，因此不存在"用上一帧残留命中区吞掉弹窗内点击"的问题）。
         if (attributeModalOpen) {
+            if (!idSugBounds.isEmpty()) {
+                for (int i = 0; i < idSugBounds.size(); i++) {
+                    int[] b = idSugBounds.get(i);
+                    if (mx >= b[0] && mx <= b[2] && my >= b[1] && my <= b[3]) {
+                        if (idSugBox != null && i < idSugItems.size()) {
+                            idSugBox.setValue(applyIdSug(idSugBox.getValue(), sugTargetId(idSugItems.get(i))));
+                        }
+                        idSugIdx = -1;
+                        return true;
+                    }
+                }
+            }
             attributeModalClick(mx, my, button);
             return true;
         }
@@ -4578,6 +4613,9 @@ public class RpAdminScreen extends Screen {
         }
         if (attributeModalOpen) {
             renderAttributeModal(g, mouseX, mouseY, partialTick);
+            // 属性 id 补全：必须在弹窗内容之后绘制才盖得住行输入框（docs/14 §2.1 置顶绘制）
+            resolveIdSugSource();
+            renderIdSuggestions(g, mouseX, mouseY);
         }
         // 危险操作确认框：最后绘制（盖住含弹窗在内的一切内容）
         if (dangerOpen()) {
@@ -4751,6 +4789,9 @@ public class RpAdminScreen extends Screen {
             out.add("minecraft:overworld");
             out.add("minecraft:the_nether");
             out.add("minecraft:the_end");
+        } else if (src == SugSource.ATTRIBUTE) {
+            // 属性 id 是注册名，直接整条候选（无「名字(id)」包装，故 sugTargetId 原样返回）
+            out.addAll(ClientCharacterState.attributeIds());
         }
         return out;
     }
@@ -4763,6 +4804,18 @@ public class RpAdminScreen extends Screen {
     private void resolveIdSugSource() {
         idSugSource = SugSource.NONE;
         idSugBox = null;
+        if (attributeModalOpen) {
+            // 属性档案弹窗：属性 id / 数值两列都是手动渲染的 EditBox，只给"属性 id"那一列补全
+            for (Object[] e : attrEdits) {
+                net.minecraft.client.gui.components.EditBox box = (net.minecraft.client.gui.components.EditBox) e[0];
+                if (box.isFocused()) {
+                    idSugSource = SugSource.ATTRIBUTE;
+                    idSugBox = box;
+                    return;
+                }
+            }
+            return;
+        }
         if (seqModalOpen) {
             for (java.util.Map.Entry<String, net.minecraft.client.gui.components.EditBox> e : seqBoxes.entrySet()) {
                 if (e.getValue().isFocused()) {

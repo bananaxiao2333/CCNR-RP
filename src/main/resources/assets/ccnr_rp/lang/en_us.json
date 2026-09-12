@@ -533,6 +533,7 @@
   "ccnr_rp.gui.admin.seq.readonly": "(read-only, trigger source {0})",
   "ccnr_rp.gui.admin.faction.attributes": "Attributes",
   "ccnr_rp.gui.admin.attribute.title": "Faction attribute profile: %s",
+  "ccnr_rp.gui.admin.attribute.hint": "Attribute ids are registry names (e.g. minecraft:generic.max_health); unregistered ones are kept and apply once that mod is installed",
   "ccnr_rp.gui.admin.attribute.id": "Attribute id",
   "ccnr_rp.gui.admin.attribute.amount": "Amount",
   "ccnr_rp.gui.admin.attribute.operation": "Operation",

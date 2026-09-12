@@ -54,4 +54,36 @@ class ClientCharacterStateTest {
         setProfessions("某简历");
         assertEquals("", ClientCharacterState.professionProfile("no_such_prof"));
     }
+    // ---------- 已注册属性 id 镜像（「阵营属性档案」属性 id 输入框补全数据源） ----------
+
+    private static void setManagerWithAttributeIds(String... ids) {
+        JsonObject root = new JsonObject();
+        root.addProperty("admin", true);
+        JsonArray arr = new JsonArray();
+        for (String id : ids) {
+            arr.add(id);
+        }
+        root.add("attributeIds", arr);
+        ClientCharacterState.setManager(JsonUtil.GSON.toJson(root));
+    }
+
+    /** 正常路径：服务端下发的已注册属性 id 按序镜像。 */
+    @Test
+    void attributeIdsMirroredInOrder() {
+        setManagerWithAttributeIds("minecraft:generic.max_health", "minecraft:generic.armor", "firstaid:part_head");
+        assertEquals(
+                java.util.List.of("minecraft:generic.max_health", "minecraft:generic.armor", "firstaid:part_head"),
+                ClientCharacterState.attributeIds());
+    }
+
+    /** 兼容边界：旧服务端载荷没有 attributeIds → 空列表（不抛异常、不残留上一次的值）。 */
+    @Test
+    void missingAttributeIdsClearsInsteadOfKeepingStaleValues() {
+        setManagerWithAttributeIds("minecraft:generic.max_health");
+        assertEquals(1, ClientCharacterState.attributeIds().size());
+        JsonObject root = new JsonObject();
+        root.addProperty("admin", true);
+        ClientCharacterState.setManager(JsonUtil.GSON.toJson(root));
+        assertEquals(java.util.List.of(), ClientCharacterState.attributeIds());
+    }
 }
