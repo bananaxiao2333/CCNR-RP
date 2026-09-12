@@ -44,6 +44,10 @@ public final class RpGroupsTab {
     private static final int DD_H = 16;
     private static final int DD_ITEM_H = 14;
     private static final int DD_MAX_VISIBLE = 8;
+
+    /** 下拉浮层滚动条 id（≥ RpAdminScreen.TAB_SB_BASE，拖拽按 dragId 路由回本页签）。 */
+    private static final int SB_DROPDOWN = 36;
+
     private static final int INJECT_W = 52;
 
     public RpGroupsTab(RpAdminScreen screen) {
@@ -249,9 +253,30 @@ public final class RpGroupsTab {
         int ex = editorX();
         List<JsonObject> facs = ClientCharacterState.factions();
         if (ddOpen) {
+            // 浮层滚动条（可拖动）：先于行命中，避免点滚动条被当成选行
+            if (facs.size() > DD_MAX_VISIBLE) {
+                int top = ddPopupTop();
+                int h = ddPopupH();
+                int ns = RpScrollbar.clickV(
+                        mx,
+                        my,
+                        ex + ddW - 5,
+                        ex + ddW - 1,
+                        top + 2,
+                        top + h - 2,
+                        facs.size(),
+                        DD_MAX_VISIBLE,
+                        ddScroll,
+                        SB_DROPDOWN);
+                if (ns >= 0) {
+                    ddScroll = (int) Math.max(0, Math.min(ns, Math.max(0, facs.size() - DD_MAX_VISIBLE)));
+                    return true;
+                }
+            }
+            int rowX2 = ex + ddW - (facs.size() > DD_MAX_VISIBLE ? 7 : 1);
             for (int i = ddScroll; i < facs.size() && i < ddScroll + DD_MAX_VISIBLE; i++) {
                 int y1 = ddPopupItemY(i);
-                if (mx >= ex && mx <= ex + ddW && my >= y1 && my <= y1 + DD_ITEM_H) {
+                if (mx >= ex && mx <= rowX2 && my >= y1 && my <= y1 + DD_ITEM_H) {
                     ddIdx = i;
                     ddOpen = false;
                     return true;
@@ -498,21 +523,41 @@ public final class RpGroupsTab {
         int top = ddPopupTop();
         int h = ddPopupH();
         RpTheme.popupPanel(g, ex, top, ex + ddW, top + h);
+        // 阵营多于可见行时右侧让出 6px 滚动条槽（浮层内同样「可滚 = 可拖」）
+        boolean overflow = facs.size() > DD_MAX_VISIBLE;
+        int rowX2 = ex + ddW - (overflow ? 7 : 1);
         g.enableScissor(ex, top, ex + ddW, top + h);
         for (int i = ddScroll; i < facs.size() && i < ddScroll + DD_MAX_VISIBLE; i++) {
             int y1 = ddPopupItemY(i);
             int y2 = y1 + DD_ITEM_H;
-            boolean hov = mx >= ex && mx <= ex + ddW && my >= y1 && my <= y2;
+            boolean hov = mx >= ex && mx <= rowX2 && my >= y1 && my <= y2;
             boolean cur = i == ddIdx;
-            RpTheme.popupRow(g, ex + 1, y1, ex + ddW - 1, y2, cur, hov);
+            RpTheme.popupRow(g, ex + 1, y1, rowX2, y2, cur, hov);
             g.drawString(
                     font,
-                    Component.literal(clip(font, facLabel(facs.get(i)), ddW - 10)),
+                    Component.literal(clip(font, facLabel(facs.get(i)), ddW - 14)),
                     ex + 5,
                     y1 + 3,
                     RpTheme.popupRowText(cur, hov));
         }
         g.disableScissor();
+        if (overflow) {
+            RpScrollbar.draw(g, ex + ddW - 5, top + 2, top + h - 2, facs.size(), DD_MAX_VISIBLE, ddScroll);
+        }
+    }
+
+    /** 下拉浮层滚动条拖拽（由 {@code RpAdminScreen.mouseDragged} 按 dragId 路由）。 */
+    public boolean mouseDragged(int mx, int my) {
+        if (RpScrollbar.dragId() != SB_DROPDOWN) {
+            return false;
+        }
+        int ns = RpScrollbar.dragV(my);
+        if (ns < 0) {
+            return false;
+        }
+        int maxScroll = Math.max(0, ClientCharacterState.factions().size() - DD_MAX_VISIBLE);
+        ddScroll = (int) Math.max(0, Math.min(ns, maxScroll));
+        return true;
     }
 
     /** 按像素宽度裁剪文本（共享入口，算法见 RpTheme.clip）。 */

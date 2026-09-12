@@ -45,7 +45,7 @@ class LangFileTest {
             "ccnr_rp.gui.admin.var.preset_value",
             "ccnr_rp.gui.admin.var.scheme_id");
 
-    /** 已删除功能（区域 / 弹头许可，docs/16 §5）的键必须清理干净，不得留死键。 */
+    /** 已删除功能（区域 / 弹头许可，docs/16 §5；入场电影版式切换开关，docs/14 §6）的键必须清理干净，不得留死键。 */
     private static final Set<String> REMOVED_KEYS = Set.of(
             "ccnr_rp.command.usage.area",
             "ccnr_rp.command.area.list_header",
@@ -54,7 +54,14 @@ class LangFileTest {
             "ccnr_rp.gui.admin.area.list",
             "ccnr_rp.gui.admin.warhead.list",
             "ccnr_rp.gui.admin.faction.warhead",
-            "ccnr_rp.gui.admin.tab.extension");
+            "ccnr_rp.gui.admin.tab.extension",
+            "ccnr_rp.gui.admin.faction.cinematic_compact",
+            // K 面板三栏结构重设计（docs/14 §5.6）：旧三栏列头与外部参考界面的窗体名不再存在，
+            // 对应键必须随结构一起清掉，避免"删结构留死键"。
+            "ccnr_rp.gui.character.nav",
+            "ccnr_rp.gui.character.position_list",
+            "ccnr_rp.gui.character.db_header",
+            "ccnr_rp.gui.character.net_header");
 
     private Map<String, String> load(String path) {
         try (InputStream in = LangFileTest.class.getResourceAsStream(path)) {

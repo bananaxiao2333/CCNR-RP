@@ -110,10 +110,8 @@ public class RpAdminScreen extends Screen {
     private int factionIdx = 0;
     private int iconIdx = 0;
     private int tierIdx = 1;
-    /** 阵营入场电影开关（per-faction 编辑态：cinematicBlackScreen / cinematicCompact）。 */
+    /** 阵营入场电影开关（per-faction 编辑态：cinematicBlackScreen）。 */
     private boolean facCinBlack = true;
-
-    private boolean facCinCompact = false;
 
     private EditBox unlockLevelBox;
     /** serverconfig 程序化设定：key → 数值输入框（设定标签）。 */
@@ -187,6 +185,11 @@ public class RpAdminScreen extends Screen {
     private static final int ICON_SCROLL_ID = 9;
     private static final int ICON_COLS = 6;
     private static final int ICON_CELL = 46;
+    /**
+     * 页签内滚动条 id 起始值：>= 本值的 dragId 一律视为"页签自己的滚动条"，
+     * 由 {@link #mouseDragged} 路由回发起拖拽的页签（31+ 已分配给各页签，见各页签常量）。
+     */
+    private static final int TAB_SB_BASE = 30;
 
     // 无线电编辑器（阵营/职业共用弹窗）：speaker + 多句 text/wait 列表（入场动画播完 action bar 打字机播放）
     private boolean radioModalOpen = false;
@@ -1313,13 +1316,12 @@ public class RpAdminScreen extends Screen {
         camSceneBox =
                 mkBox(x, y, w, "ccnr_rp.gui.admin.field.cam_scene", fac == null ? "" : str(fac, "cmdcamScene"), false);
         y += 30;
-        // 入场电影 per-faction 开关：全屏黑（cinematicBlackScreen）/ 简洁模式（cinematicCompact）。
-        // 两者并排一行——新增独立纵向行会在最小面板高度下压到提示行。
-        int bw2 = (w - 4) / 2;
+        // 入场电影 per-faction 开关：全屏黑（cinematicBlackScreen）。
+        // 版式恒为左下方简洁版式（2.25.3 起唯一版式），故不再有「简洁电影」切换按钮，该行只占一个整行开关。
         addRenderableWidget(RpButton.secondary(
                 x,
                 y,
-                bw2,
+                w,
                 18,
                 Component.literal(Component.translatable("ccnr_rp.gui.admin.faction.cinematic_black")
                                 .getString()
@@ -1327,19 +1329,6 @@ public class RpAdminScreen extends Screen {
                         + onOff(facCinBlack)),
                 b -> {
                     facCinBlack = !facCinBlack;
-                    rebuild();
-                }));
-        addRenderableWidget(RpButton.secondary(
-                x + bw2 + 4,
-                y,
-                bw2,
-                18,
-                Component.literal(Component.translatable("ccnr_rp.gui.admin.faction.cinematic_compact")
-                                .getString()
-                        + ": "
-                        + onOff(facCinCompact)),
-                b -> {
-                    facCinCompact = !facCinCompact;
                     rebuild();
                 }));
         y += 30;
@@ -1382,7 +1371,6 @@ public class RpAdminScreen extends Screen {
                     iconIdx = 0;
                     tierIdx = 1;
                     facCinBlack = true;
-                    facCinCompact = false;
                     rebuild();
                 }));
         // 关系管理与关系测定图已并入独立页签（TAB_RELATION），不再放在阵营表单内
@@ -3329,7 +3317,6 @@ public class RpAdminScreen extends Screen {
         p.addProperty("music", musicBox.getValue());
         p.addProperty("cmdcamScene", camSceneBox == null ? "" : camSceneBox.getValue());
         p.addProperty("cinematicBlackScreen", facCinBlack);
-        p.addProperty("cinematicCompact", facCinCompact);
         requestCrud("faction", edit ? "update" : "create", p);
     }
 
@@ -4026,6 +4013,24 @@ public class RpAdminScreen extends Screen {
             }
             return super.mouseDragged(mx, my, button, dx, dy);
         }
+        // 页签内滚动条拖拽（各页签自己的列表/面板）：按 dragId 路由回发起拖拽的页签，
+        // 否则会落到下面的通用 fallback，把拖拽误记到面板自身的 scroll 上。
+        int dragId = RpScrollbar.dragId();
+        if (dragId >= TAB_SB_BASE) {
+            boolean consumed = false;
+            if (tab == TAB_XP) {
+                consumed = rulesTab().mouseDragged((int) mx, (int) my);
+            } else if (tab == TAB_VARIABLES) {
+                consumed = variablesTab().mouseDragged((int) mx, (int) my);
+            } else if (tab == TAB_RELATION) {
+                consumed = relationTab().mouseDragged((int) mx, (int) my);
+            } else if (tab == TAB_GROUPS) {
+                consumed = groupsTab().mouseDragged((int) mx, (int) my);
+            }
+            if (consumed) {
+                return true;
+            }
+        }
         int ns = RpScrollbar.dragV((int) my);
         if (ns >= 0) {
             scroll = ns;
@@ -4123,9 +4128,8 @@ public class RpAdminScreen extends Screen {
         selFactionId = str(f, "id");
         syncFactionIconTier(f);
         // 入场电影开关仅在切换选中阵营时同步一次；不能在 rebuild()/sync 里每次覆盖，
-        // 否则点击「入场全屏黑 / 简洁电影」触发 rebuild() 时会被服务端快照回退，开关看似点不动。
+        // 否则点击「入场全屏黑」触发 rebuild() 时会被服务端快照回退，开关看似点不动。
         facCinBlack = boolOf(f, "cinematicBlackScreen", true);
-        facCinCompact = boolOf(f, "cinematicCompact", false);
         rebuild();
     }
 

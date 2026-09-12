@@ -18,6 +18,13 @@ public final class EventBanner {
     private static int offsetPx = 0;
     private static int lastX1, lastY1, lastX2, lastY2;
     private static int lastOverflow = 0;
+    /** 上一次绘制出的滚动条几何 + 滚动域（命中/拖拽用；未溢出时 lastOverflow=0）。 */
+    private static int barX1, barX2, barY;
+
+    private static int lastTotal = 0;
+    private static int lastVisible = 0;
+    /** 滚动条拖拽 id（与各界面的 id 互不冲突；横幅只在背包界面之上交互）。 */
+    private static final int SCROLL_ID = 41;
 
     private EventBanner() {}
 
@@ -33,6 +40,39 @@ public final class EventBanner {
     /** 滚轮横向滚动（delta>0 向左看）。 */
     public static void scroll(double delta) {
         offsetPx = (int) Math.max(0, Math.min(lastOverflow, offsetPx + (int) (delta * -24)));
+    }
+
+    /**
+     * 左键按下：命中滚动条游标/轨道则进入拖拽并消费事件（返回 true）；
+     * 未溢出或未命中返回 false，让背包界面照常处理本次点击。
+     */
+    public static boolean mousePressed(int mx, int my) {
+        if (lastOverflow <= 0 || lastTotal <= lastVisible) {
+            return false;
+        }
+        int ns = RpScrollbar.clickH(mx, my, barX1, barX2, barY, barY + 5, lastTotal, lastVisible, offsetPx, SCROLL_ID);
+        if (ns < 0) {
+            return false;
+        }
+        offsetPx = (int) Math.max(0, Math.min(ns, lastOverflow));
+        return true;
+    }
+
+    /** 拖拽中：按鼠标横向位移换算偏移（未在拖拽返回 false）。 */
+    public static boolean mouseDragged(int mx) {
+        int ns = RpScrollbar.dragH(mx);
+        if (ns < 0) {
+            return false;
+        }
+        offsetPx = (int) Math.max(0, Math.min(ns, lastOverflow));
+        return true;
+    }
+
+    /** 左键抬起：结束滚动条拖拽；返回抬起前是否处于拖拽中（上层据此决定是否消费事件）。 */
+    public static boolean mouseReleased() {
+        boolean was = RpScrollbar.isDragging();
+        RpScrollbar.endDrag();
+        return was;
     }
 
     public static void render(GuiGraphics g, int w, int h) {
@@ -84,7 +124,16 @@ public final class EventBanner {
                     w / 2,
                     y + bh + 2,
                     RpTheme.TEXT_DIM);
-            RpScrollbar.drawH(g, 40, w - 40, y + bh + 9, total, areaW, offsetPx);
+            // 横向滚动条：滚轮之外**还可以直接拖游标**（几何记下来供命中/拖拽复用）
+            barX1 = 40;
+            barX2 = w - 40;
+            barY = y + bh + 9;
+            lastTotal = total;
+            lastVisible = areaW;
+            RpScrollbar.drawH(g, barX1, barX2, barY, total, areaW, offsetPx);
+        } else {
+            lastTotal = 0;
+            lastVisible = 0;
         }
     }
 }

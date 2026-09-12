@@ -462,7 +462,6 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
                     en.addProperty("tier", f.tier());
                     en.addProperty("factionMusic", f.music());
                     en.addProperty("cinematicBlackScreen", f.cinematicBlackScreen());
-                    en.addProperty("cinematicCompact", f.cinematicCompact());
                     // 阵营关系行：按「阵营组 + 关系」合并可合并项（纯逻辑见 CinematicRelations）
                     for (com.google.gson.JsonObject o :
                             com.ccnrcom.rp.faction.CinematicRelations.collapse(graph, factionId)) {

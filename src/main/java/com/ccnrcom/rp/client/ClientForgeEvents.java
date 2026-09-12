@@ -190,6 +190,41 @@ public final class ClientForgeEvents {
         }
     }
 
+    /**
+     * 事件横幅滚动条拖拽（背包界面之上的自绘浮层）：按下游标/轨道 → 拖动 → 抬起结束。
+     * 只有被横幅消费的事件才取消，其余点击照常落到背包界面（不抢原生交互）。
+     */
+    @SubscribeEvent
+    public static void onScreenMousePressed(net.minecraftforge.client.event.ScreenEvent.MouseButtonPressed.Pre event) {
+        if (!(event.getScreen() instanceof net.minecraft.client.gui.screens.inventory.InventoryScreen)) {
+            return;
+        }
+        if (EventBanner.mousePressed((int) event.getMouseX(), (int) event.getMouseY())) {
+            event.setCanceled(true);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onScreenMouseDragged(net.minecraftforge.client.event.ScreenEvent.MouseDragged.Pre event) {
+        if (!(event.getScreen() instanceof net.minecraft.client.gui.screens.inventory.InventoryScreen)) {
+            return;
+        }
+        if (EventBanner.mouseDragged((int) event.getMouseX())) {
+            event.setCanceled(true);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onScreenMouseReleased(
+            net.minecraftforge.client.event.ScreenEvent.MouseButtonReleased.Pre event) {
+        if (!(event.getScreen() instanceof net.minecraft.client.gui.screens.inventory.InventoryScreen)) {
+            return;
+        }
+        if (EventBanner.mouseReleased()) {
+            event.setCanceled(true);
+        }
+    }
+
     private static int cursorX() {
         return (int) Minecraft.getInstance().mouseHandler.xpos();
     }

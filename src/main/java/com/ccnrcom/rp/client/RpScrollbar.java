@@ -46,7 +46,7 @@ public final class RpScrollbar {
         return new int[] {tx, y, tx + (int) thumbW, y + 5};
     }
 
-    /** 由拖拽位置换算出列表 offset（调用方再 clamp）。 */
+    /** 由竖直拖拽位置换算出列表 offset（调用方再 clamp）。 */
     public static int offsetFromDrag(double mouseY, int trackY1, int trackY2, int total, int visible, int current) {
         int h = trackY2 - trackY1;
         if (h <= 0 || total <= visible) {
@@ -59,16 +59,74 @@ public final class RpScrollbar {
         return (int) Math.round(frac * maxOff);
     }
 
+    /** 由水平拖拽位置换算出 offset（与 {@link #offsetFromDrag} 对称）。 */
+    public static int offsetFromDragH(double mouseX, int trackX1, int trackX2, int total, int visible, int current) {
+        int w = trackX2 - trackX1;
+        if (w <= 0 || total <= visible) {
+            return current;
+        }
+        double thumbW = Math.max(20.0, w * (double) visible / total);
+        double maxOff = total - visible;
+        double frac = (mouseX - trackX1 - thumbW / 2.0) / (w - thumbW);
+        frac = Math.min(1.0, Math.max(0.0, frac));
+        return (int) Math.round(frac * maxOff);
+    }
+
+    /**
+     * 处理横向滚动条点击（与 {@link #clickV} 同一套拖拽状态，靠 {@link #dragHorizontal} 区分轴向）。
+     * 返回新滚动值；未命中返回 -1。
+     */
+    public static int clickH(
+            int mx, int my, int x1, int x2, int y1, int y2, int total, int visible, int offset, int id) {
+        if (mx < x1 || mx > x2 || my < y1 || my > y2 || total <= visible || total <= 0) {
+            return -1;
+        }
+        int w = x2 - x1;
+        double thumbW = Math.max(20.0, w * (double) visible / total);
+        double maxOff = total - visible;
+        double frac = maxOff <= 0 ? 0 : Math.min(1.0, (double) offset / maxOff);
+        int tx = (int) (x1 + frac * (w - thumbW));
+        if (mx >= tx && mx <= tx + thumbW) {
+            dragging = true;
+            dragHorizontal = true;
+            dragId = id;
+            dragTrackX1 = x1;
+            dragTrackX2 = x2;
+            dragTotal = total;
+            dragVisible = visible;
+            dragStartScroll = offset;
+            dragStartMouseX = mx;
+            return offset;
+        }
+        return offsetFromDragH(mx, x1, x2, total, visible, offset);
+    }
+
+    /** 横向拖拽中：返回新滚动值；未在横向拖拽返回 -1。 */
+    public static int dragH(int mx) {
+        if (!dragging || !dragHorizontal) {
+            return -1;
+        }
+        int w = dragTrackX2 - dragTrackX1;
+        double thumbW = Math.max(20.0, w * (double) dragVisible / dragTotal);
+        double maxOff = dragTotal - dragVisible;
+        double perPx = maxOff / Math.max(1.0, w - thumbW);
+        return (int) Math.round(Math.max(0.0, Math.min(maxOff, dragStartScroll + (mx - dragStartMouseX) * perPx)));
+    }
+
     // ---------- 拖拽状态（同一时刻只拖一个滚动条） ----------
 
     private static boolean dragging = false;
+    private static boolean dragHorizontal = false;
     private static int dragId = 0;
     private static int dragTrackY1 = 0;
     private static int dragTrackY2 = 0;
+    private static int dragTrackX1 = 0;
+    private static int dragTrackX2 = 0;
     private static int dragTotal = 0;
     private static int dragVisible = 0;
     private static int dragStartScroll = 0;
     private static int dragStartMouse = 0;
+    private static int dragStartMouseX = 0;
 
     /**
      * 处理竖直滚动条点击：按住游标 → 开始拖拽；点击轨道空白 → 跳到该位置。
@@ -88,6 +146,7 @@ public final class RpScrollbar {
         if (my >= ty && my <= ty + thumbH) {
             // 命中游标：开始拖拽
             dragging = true;
+            dragHorizontal = false;
             dragId = id;
             dragTrackY1 = y1;
             dragTrackY2 = y2;
@@ -106,9 +165,9 @@ public final class RpScrollbar {
         return dragId;
     }
 
-    /** 拖拽中：返回新滚动值；未在拖拽返回 -1。 */
+    /** 竖直拖拽中：返回新滚动值；未在竖直拖拽（含横向拖拽、未拖拽）返回 -1。 */
     public static int dragV(int my) {
-        if (!dragging) {
+        if (!dragging || dragHorizontal) {
             return -1;
         }
         int h = dragTrackY2 - dragTrackY1;
