@@ -17,6 +17,11 @@ import net.minecraft.network.chat.Component;
  * 部署入场电影（客户端）：
  * 全屏黑 0.5s → 突然阵营徽章图标，停留 3s → 主标题打字显示职业 → 副标题逐行打字（成员姓名/所属阵营/阵营关系/职业画像）
  * → 打字完成后不额外停留，直接黑屏渐退 1.6s → 文字与图标在 2s 后开始缓慢淡出（打完即进入淡出，无 3s 停顿）。
+ *
+ * <p>版式只有一种（2.25.3 起）：信息缩小放在左下方、靠左对齐（标题 2.0x / 副标题 0.9x），图标居左、文字右移避免重叠。
+ * 旧的「完整版式」（屏幕中央居中、标题 3.4x / 副标题 1.4x）与其 per-faction 开关（阵营配置 {@code cinematicCompact}）
+ * 已整体删除——存量配置里的该键成为孤儿键（不读、不写、结构保留，见 docs/14 §6），入场恒为下方版式。
+ * 阵营配置 {@code cinematicBlackScreen} 仍可关闭全屏黑（只保留文字/图标）。
  */
 public final class CinematicController {
 
@@ -55,11 +60,6 @@ public final class CinematicController {
     /** 是否播放入场全屏黑（阵营配置 cinematicBlackScreen；缺省 true）。 */
     private static boolean blackScreen() {
         return bool("cinematicBlackScreen", true);
-    }
-
-    /** 是否用入场电影「简洁模式」（阵营配置 cinematicCompact；缺省 false）。 */
-    private static boolean compact() {
-        return bool("cinematicCompact", false);
     }
 
     private static boolean bool(String key, boolean def) {
@@ -298,48 +298,31 @@ public final class CinematicController {
         int cy = RpTheme.alphaBlend(RpTheme.CYAN, ta);
         int cs = RpTheme.alphaBlend(RpTheme.TEXT_SECONDARY, ta);
 
-        boolean compact = compact();
-
-        // 阵营图标（突然出现）
-        int iconRight = 0; // 简洁模式：图标占左缘，文本右移避免重叠；完整模式不偏移
+        // 阵营图标（突然出现）：图标缩小置于左下方，与左对齐文字锚点对齐
+        int iconRight = 0;
         if (now >= T_BLACK_HOLD) {
-            if (compact) {
-                // 简洁模式：图标缩小、移到左下方，与左对齐文字锚点对齐（不再居于顶端）
-                int r2 = Math.max(20, Math.min(w, h) / 26);
-                int iconX = (int) (w * 0.05) + r2 + 2;
-                int iconY = (int) (h * 0.64); // 与主标题同一行
-                RpIcons.bigBadge(g, iconX, iconY, r2, str(data, "icon"), tier(), ta);
-                iconRight = iconX + r2 + 12;
-                if (textA > 0f) {
-                    String fn = str(data, "factionName");
-                    g.drawString(Minecraft.getInstance().font, fn, iconRight, iconY - 6, cs);
-                }
-            } else {
-                // 完整模式：图标居中，位于屏幕中上部
-                int r = Math.max(40, Math.min(w, h) / 10);
-                int iconY = (int) (h * 0.30);
-                RpIcons.bigBadge(g, w / 2, iconY, r, str(data, "icon"), tier(), ta);
-                if (textA > 0f) {
-                    String fn = str(data, "factionName");
-                    g.drawCenteredString(Minecraft.getInstance().font, fn, w / 2, iconY + r + 14, cs);
-                }
+            int r = Math.max(20, Math.min(w, h) / 26);
+            int iconX = (int) (w * 0.05) + r + 2;
+            int iconY = (int) (h * 0.64); // 与主标题同一行
+            RpIcons.bigBadge(g, iconX, iconY, r, str(data, "icon"), tier(), ta);
+            iconRight = iconX + r + 12;
+            if (textA > 0f) {
+                g.drawString(Minecraft.getInstance().font, str(data, "factionName"), iconRight, iconY - 6, cs);
             }
         }
 
-        // 文字布局：完整模式 → 屏幕中部居中（标题 3.4x / 副标题 1.4x）；
-        // 简洁模式 → 信息缩小并移到左下方、靠左对齐（标题 2.0x / 副标题 0.9x），图标居左、文字右移避免重叠。
+        // 文字布局（唯一版式）：信息缩小并移到左下方、靠左对齐（标题 2.0x / 副标题 0.9x），图标居左、文字右移避免重叠。
         long titleStart = T_BLACK_HOLD + T_ICON_HOLD;
-        boolean centered = !compact;
-        int anchorX = compact ? iconRight : w / 2;
-        float lineScale = compact ? 0.9f : 1.4f;
-        int rowH = compact ? 16 : ROW_H;
+        int anchorX = iconRight;
+        float lineScale = 0.9f;
+        int rowH = 16;
         int maxW = Math.max(80, (int) ((w - anchorX - 40) / lineScale));
         int[] rowCounts = new int[texts.size()];
         for (int i = 0; i < texts.size(); i++) {
             rowCounts[i] = wrapRanges(texts.get(i), maxW).size();
         }
         long lineStart = titleStart + (long) title.length() * T_TYPE_MS + T_LINE_GAP;
-        int ly = compact ? (int) (h * 0.74) : (int) (h * 0.57);
+        int ly = (int) (h * 0.74);
         int[] segColors = {
             cs,
             RpTheme.alphaBlend(RpTheme.RED, ta),
@@ -353,8 +336,7 @@ public final class CinematicController {
                 String typed = text.substring(0, c);
                 int ry = ly;
                 for (int[] range : wrapRanges(typed, maxW)) {
-                    renderRow(
-                            g, anchorX, ry, typed, range[0], range[1], segLines.get(i), segColors, lineScale, centered);
+                    renderRow(g, anchorX, ry, typed, range[0], range[1], segLines.get(i), segColors, lineScale);
                     ry += rowH;
                 }
             }
@@ -362,30 +344,23 @@ public final class CinematicController {
             lineStart += (long) text.length() * T_TYPE_MS + T_LINE_GAP;
         }
 
-        // 主标题：职业（打字）。完整模式屏幕正中央；简洁模式左下方（对齐信息第一行上方），靠左对齐。绘于最上层。
+        // 主标题：职业（打字）。左下方（对齐信息第一行上方），靠左对齐。绘于最上层。
         int tc = typedCount(title, titleStart, now);
         if (tc > 0) {
             String typed = title.substring(0, tc);
-            float scale = compact ? 2.0f : 3.4f;
-            float ty = compact ? (float) (h * 0.64) : h * 0.50f;
+            float scale = 2.0f;
+            float ty = (float) (h * 0.64);
             g.pose().pushPose();
             g.pose().translate(anchorX, ty, 0f);
             g.pose().scale(scale, scale, 1f);
-            if (centered) {
-                g.drawCenteredString(Minecraft.getInstance().font, typed, 0, 0, cy);
-            } else {
-                g.drawString(Minecraft.getInstance().font, typed, 0, 0, cy);
-            }
+            g.drawString(Minecraft.getInstance().font, typed, 0, 0, cy);
             g.pose().popPose();
         }
     }
 
-    /** 副标题每行（视觉行）间距（未缩放坐标）。 */
-    private static final int ROW_H = 21;
-
     /**
      * 绘制副标题一行：按片段着色。range 为 [start,end) 字符区间（相对整行文本，只取已打字前缀内的部分）。
-     * centered=true 以 anchorX 为中线整行居中；false 以 anchorX 为左端靠左对齐（简洁模式）。
+     * 以 anchorX 为左端靠左对齐（唯一版式）。
      */
     private static void renderRow(
             GuiGraphics g,
@@ -396,15 +371,13 @@ public final class CinematicController {
             int e,
             List<Seg> segs,
             int[] segColors,
-            float scale,
-            boolean centered) {
+            float scale) {
         var font = Minecraft.getInstance().font;
         String row = typed.substring(s, e);
-        int rowW = font.width(row);
         g.pose().pushPose();
         g.pose().translate(anchorX, y + 6f, 0f);
         g.pose().scale(scale, scale, 1f);
-        int x = centered ? -rowW / 2 : 0;
+        int x = 0;
         int off = 0;
         for (Seg seg : segs) {
             int segStart = off;

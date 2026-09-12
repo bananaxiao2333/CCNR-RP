@@ -34,6 +34,11 @@ public final class RpVariablesTab {
     private static final int ROW_H = 20;
     private static final int HDR = 13;
 
+    /** 胶囊带横向滚动条 id（≥ RpAdminScreen.TAB_SB_BASE，拖拽按 dragId 路由回本页签）。 */
+    private static final int SB_CHIPS = 33;
+    /** 「‹ n/N ›」读数固定占位宽度（滚动条右界不随读数变宽而跳动）。 */
+    private static final int CHIP_CNT_W = 64;
+
     /** 子页签：0=变量 1=预设值 2=方案。 */
     private int sub = 0;
 
@@ -279,6 +284,19 @@ public final class RpVariablesTab {
                 return true;
             }
         }
+        // 胶囊带横向滚动条（可拖动）；先于胶囊命中判定，避免点滚动条被当成点胶囊
+        if (button == 0 && ((sub == 2) || (sub == 1 && !varId().isBlank()))) {
+            List<JsonObject> chips = sub == 2 ? ClientCharacterState.schemes() : presets();
+            if (chips.size() > 2) {
+                int[] bar = chipBarRect(contentY() + 16);
+                int cns = RpScrollbar.clickH(
+                        mx, my, bar[0], bar[2], bar[1], bar[3], chips.size(), 2, chipScroll, SB_CHIPS);
+                if (cns >= 0) {
+                    chipScroll = (int) Math.max(0, Math.min(cns, chips.size() - 2));
+                    return true;
+                }
+            }
+        }
         // 预设值胶囊：勾选框=标记待删；单击主体=切换取值；右键=直接删除该条
         if (sub == 1 && !varId().isBlank()) {
             ChipHit hit = chipAt(mx, my, presets(), contentY() + 16);
@@ -406,6 +424,20 @@ public final class RpVariablesTab {
 
     private static int size(JsonObject o, String key) {
         return o.has(key) && o.get(key).isJsonObject() ? o.getAsJsonObject(key).size() : 0;
+    }
+
+    /** 胶囊带滚动条拖拽（由 {@code RpAdminScreen.mouseDragged} 按 dragId 路由）。 */
+    public boolean mouseDragged(int mx, int my) {
+        if (RpScrollbar.dragId() != SB_CHIPS) {
+            return false;
+        }
+        int ns = RpScrollbar.dragH(mx);
+        if (ns < 0) {
+            return false;
+        }
+        List<JsonObject> chips = sub == 2 ? ClientCharacterState.schemes() : presets();
+        chipScroll = (int) Math.max(0, Math.min(ns, Math.max(0, chips.size() - 2)));
+        return true;
     }
 
     public void mouseScrolled(int mouseX, int mouseY, double delta) {
@@ -887,13 +919,24 @@ public final class RpVariablesTab {
             cx += w + 4;
         }
         if (chips.size() > 2) {
-            g.drawString(
-                    font,
-                    "‹ " + (chipScroll + 1) + "/" + chips.size() + " ›",
-                    x + width - font.width("‹ " + (chipScroll + 1) + "/" + chips.size() + " ›"),
-                    top + 46,
-                    RpTheme.TEXT_DIM);
+            // 胶囊带溢出：右侧保留「n/N」读数，左侧画横向可拖动滚动条（滚轮 + 拖拽双通道）
+            String cnt = "‹ " + (chipScroll + 1) + "/" + chips.size() + " ›";
+            g.drawString(font, cnt, x + width - font.width(cnt), top + 44, RpTheme.TEXT_DIM);
+            int[] bar = chipBarRect(top);
+            if (bar[2] - bar[0] > 24) {
+                RpScrollbar.drawH(g, bar[0], bar[2], bar[1], chips.size(), 2, chipScroll);
+            }
         }
+    }
+
+    /**
+     * 胶囊带横向滚动条的矩形（渲染与命中判定共用同一套几何）：
+     * 左段为滚动条，右段固定 64px 留给「‹ n/N ›」读数，避免读数变宽时滚动条跟着跳。
+     */
+    private int[] chipBarRect(int top) {
+        int x = editorX();
+        int barX2 = Math.max(x + 24, x + editorW() - CHIP_CNT_W - 8);
+        return new int[] {x, top + 44, barX2, top + 49};
     }
 
     /** 胶囊左侧的勾选框（11×11）：勾选=标记待删，点它不触发套用。 */

@@ -54,6 +54,11 @@ public final class RpRelationTab {
     private static final int DD_MAX_VISIBLE = 8;
     private static final int INJECT_W = 52;
 
+    /** 下拉浮层滚动条 id（≥ RpAdminScreen.TAB_SB_BASE，拖拽按 dragId 路由回本页签）。 */
+    private static final int SB_DD_FROM = 34;
+
+    private static final int SB_DD_TO = 35;
+
     public RpRelationTab(RpAdminScreen screen) {
         this.screen = screen;
     }
@@ -303,9 +308,30 @@ public final class RpRelationTab {
         List<JsonObject> facs = ClientCharacterState.factions();
         // 弹层项（展开时优先，弹层盖住下方控件）
         if (fromDdOpen) {
+            // 浮层滚动条（可拖动）：先于行命中，避免点滚动条被当成选行
+            if (facs.size() > DD_MAX_VISIBLE) {
+                int top = ddPopupTop(true);
+                int h = ddPopupH(true);
+                int ns = RpScrollbar.clickV(
+                        mx,
+                        my,
+                        ex + ddW - 5,
+                        ex + ddW - 1,
+                        top + 2,
+                        top + h - 2,
+                        facs.size(),
+                        DD_MAX_VISIBLE,
+                        fromDdScroll,
+                        SB_DD_FROM);
+                if (ns >= 0) {
+                    fromDdScroll = (int) Math.max(0, Math.min(ns, Math.max(0, facs.size() - DD_MAX_VISIBLE)));
+                    return true;
+                }
+            }
+            int rowX2 = ex + ddW - (facs.size() > DD_MAX_VISIBLE ? 7 : 1);
             for (int i = fromDdScroll; i < facs.size() && i < fromDdScroll + DD_MAX_VISIBLE; i++) {
                 int y1 = ddPopupItemY(true, i);
-                if (mx >= ex && mx <= ex + ddW && my >= y1 && my <= y1 + DD_ITEM_H) {
+                if (mx >= ex && mx <= rowX2 && my >= y1 && my <= y1 + DD_ITEM_H) {
                     fromDdIdx = i;
                     fromDdOpen = false;
                     return true;
@@ -313,9 +339,29 @@ public final class RpRelationTab {
             }
         }
         if (toDdOpen) {
+            if (facs.size() > DD_MAX_VISIBLE) {
+                int top = ddPopupTop(false);
+                int h = ddPopupH(false);
+                int ns = RpScrollbar.clickV(
+                        mx,
+                        my,
+                        ex + ddW - 5,
+                        ex + ddW - 1,
+                        top + 2,
+                        top + h - 2,
+                        facs.size(),
+                        DD_MAX_VISIBLE,
+                        toDdScroll,
+                        SB_DD_TO);
+                if (ns >= 0) {
+                    toDdScroll = (int) Math.max(0, Math.min(ns, Math.max(0, facs.size() - DD_MAX_VISIBLE)));
+                    return true;
+                }
+            }
+            int rowX2 = ex + ddW - (facs.size() > DD_MAX_VISIBLE ? 7 : 1);
             for (int i = toDdScroll; i < facs.size() && i < toDdScroll + DD_MAX_VISIBLE; i++) {
                 int y1 = ddPopupItemY(false, i);
-                if (mx >= ex && mx <= ex + ddW && my >= y1 && my <= y1 + DD_ITEM_H) {
+                if (mx >= ex && mx <= rowX2 && my >= y1 && my <= y1 + DD_ITEM_H) {
                     toDdIdx = i;
                     toDdOpen = false;
                     return true;
@@ -710,21 +756,47 @@ public final class RpRelationTab {
         int scroll = isFrom ? fromDdScroll : toDdScroll;
         int cur = isFrom ? fromDdIdx : toDdIdx;
         RpTheme.popupPanel(g, ex, top, ex + ddW, top + h);
+        // 阵营多于可见行时右侧让出 6px 滚动条槽（浮层内同样「可滚 = 可拖」）
+        boolean overflow = facs.size() > DD_MAX_VISIBLE;
+        int rowX2 = ex + ddW - (overflow ? 7 : 1);
         g.enableScissor(ex, top, ex + ddW, top + h);
         for (int i = scroll; i < facs.size() && i < scroll + DD_MAX_VISIBLE; i++) {
             int y1 = ddPopupItemY(isFrom, i);
             int y2 = y1 + DD_ITEM_H;
-            boolean hov = mx >= ex && mx <= ex + ddW && my >= y1 && my <= y2;
+            boolean hov = mx >= ex && mx <= rowX2 && my >= y1 && my <= y2;
             boolean cur2 = i == cur;
-            RpTheme.popupRow(g, ex + 1, y1, ex + ddW - 1, y2, cur2, hov);
+            RpTheme.popupRow(g, ex + 1, y1, rowX2, y2, cur2, hov);
             g.drawString(
                     font,
-                    Component.literal(clip(font, facLabel(facs.get(i)), ddW - 10)),
+                    Component.literal(clip(font, facLabel(facs.get(i)), ddW - 14)),
                     ex + 5,
                     y1 + 3,
                     RpTheme.popupRowText(cur2, hov));
         }
         g.disableScissor();
+        if (overflow) {
+            RpScrollbar.draw(g, ex + ddW - 5, top + 2, top + h - 2, facs.size(), DD_MAX_VISIBLE, scroll);
+        }
+    }
+
+    /** 下拉浮层滚动条拖拽（由 {@code RpAdminScreen.mouseDragged} 按 dragId 路由）。 */
+    public boolean mouseDragged(int mx, int my) {
+        int id = RpScrollbar.dragId();
+        if (id != SB_DD_FROM && id != SB_DD_TO) {
+            return false;
+        }
+        int ns = RpScrollbar.dragV(my);
+        if (ns < 0) {
+            return false;
+        }
+        int maxScroll = Math.max(0, ClientCharacterState.factions().size() - DD_MAX_VISIBLE);
+        int v = (int) Math.max(0, Math.min(ns, maxScroll));
+        if (id == SB_DD_FROM) {
+            fromDdScroll = v;
+        } else {
+            toDdScroll = v;
+        }
+        return true;
     }
 
     private static String tr(String key) {

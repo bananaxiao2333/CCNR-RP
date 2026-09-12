@@ -6,6 +6,7 @@ package com.ccnrcom.rp.faction;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.google.gson.JsonArray;
@@ -111,6 +112,8 @@ class FactionExtrasSaveTest {
         // 老配置文件里的历史遗留键（原弹头许可）也必须原样保留：非本功能的字段一律不碰
         assertTrue(f.get("warheadEnabled").getAsBoolean(), "历史遗留字段应原样保留");
         assertEquals("reactor", f.get("warheadArea").getAsString());
+        // 已删除的入场电影版式开关（cinematicCompact，2.25.3）同样是孤儿键：不读、不清
+        assertTrue(f.get("cinematicCompact").getAsBoolean(), "已删除功能的孤儿键应原样保留");
         // 别的阵营不受影响
         assertFalse(faction(mgr, "qsa").has("attributes"));
     }
@@ -127,5 +130,46 @@ class FactionExtrasSaveTest {
         assertFalse(errors.isEmpty(), "非法运算必须拒绝");
         // 拒绝时不得留下半份改动
         assertFalse(faction(mgr, "qdf").has("attributes"));
+    }
+
+    /**
+     * 入场电影版式切换删除后的兼容契约（docs/14 §6）：老 factions.json 里的 {@code cinematicCompact}
+     * （旧「标准版式」写法，值为 false）必须照常加载——字段不再被读取（入场恒为简洁版式），但也不能被
+     * 表单保存/单字段写清除（无害孤儿键，同 warheadEnabled 的处理方式）。
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void legacyCinematicCompactKeyIsAcceptedButNeverReadNorCleared() throws Exception {
+        JsonObject root = factionRoot();
+        root.getAsJsonArray("factions").get(0).getAsJsonObject().addProperty("cinematicCompact", false);
+
+        FactionModels.ParseResult parsed = FactionManager.parse(root);
+        assertTrue(parsed.success(), () -> parsed.errors().toString());
+        assertFalse(parsed.graph().factions().get("qdf").cinematicBlackScreen(), "同阵营的「入场全屏黑」开关仍按配置解析");
+        assertThrows(
+                NoSuchMethodException.class,
+                () -> FactionModels.Faction.class.getMethod("cinematicCompact"),
+                "版式开关字段已删除（2.25.3），不得回归");
+
+        // 表单保存（updateFaction）只写表单字段：老键原样保留，不会被清除
+        Object mgr = allocManager(root);
+        var update = mgr.getClass()
+                .getMethod(
+                        "updateFaction",
+                        String.class,
+                        String.class,
+                        String.class,
+                        String.class,
+                        String.class,
+                        int.class,
+                        String.class,
+                        String.class,
+                        boolean.class);
+        List<String> errors = (List<String>)
+                update.invoke(mgr, "qdf", "QDF司令部", "#4CAF50", "设施保全", "shield", 1, "audio/qdf.wav", "intro_qdf", true);
+        assertTrue(errors.isEmpty(), () -> errors.toString());
+        JsonObject f = faction(mgr, "qdf");
+        assertTrue(f.get("cinematicBlackScreen").getAsBoolean(), "表单里的「入场全屏黑」仍可写");
+        assertFalse(f.get("cinematicCompact").getAsBoolean(), "已废弃的版式开关键应原样保留");
     }
 }

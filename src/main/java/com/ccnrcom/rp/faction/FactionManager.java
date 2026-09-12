@@ -85,8 +85,7 @@ public final class FactionManager {
                     Math.max(1, Math.min(3, intOf(o, "tier", 2))),
                     str(o, "music", ""),
                     str(o, "cmdcamScene", ""),
-                    boolOf(o, "cinematicBlackScreen", true),
-                    boolOf(o, "cinematicCompact", false)));
+                    boolOf(o, "cinematicBlackScreen", true)));
         }
         List<FactionGroup> groups = new ArrayList<>();
         JsonArray ga = root.has("groups") ? root.getAsJsonArray("groups") : new JsonArray();
@@ -774,7 +773,10 @@ public final class FactionManager {
 
     private static final java.util.regex.Pattern ID_PATTERN = java.util.regex.Pattern.compile("[a-z0-9_]{1,32}");
 
-    /** 创建阵营。music 为空串时不写入（不设阵营音乐）；cmdcamScene 空串不写入。 */
+    /**
+     * 创建阵营。music 为空串时不写入（不设阵营音乐）；cmdcamScene 空串不写入。
+     * 入场电影版式无 per-faction 开关（2.25.3 起唯一简洁版式），故不再写 {@code cinematicCompact}。
+     */
     public List<String> createFaction(
             String id,
             String name,
@@ -784,8 +786,7 @@ public final class FactionManager {
             int tier,
             String music,
             String cmdcamScene,
-            boolean cinematicBlackScreen,
-            boolean cinematicCompact) {
+            boolean cinematicBlackScreen) {
         if (id == null || !ID_PATTERN.matcher(id).matches()) {
             return List.of("阵营 id 仅允许小写字母/数字/下划线，1-32 字符");
         }
@@ -805,12 +806,14 @@ public final class FactionManager {
         putMusic(o, music);
         putCamScene(o, cmdcamScene);
         o.addProperty("cinematicBlackScreen", cinematicBlackScreen);
-        o.addProperty("cinematicCompact", cinematicCompact);
         fa.add(o);
         return commit(candidate);
     }
 
-    /** 更新阵营。music 为空串时移除阵营音乐字段；cmdcamScene 空串移除该字段。 */
+    /**
+     * 更新阵营。music 为空串时移除阵营音乐字段；cmdcamScene 空串移除该字段。
+     * 只覆盖表单字段：存量配置里的历史遗留键（如已废弃的 {@code cinematicCompact}）原样保留，不清除。
+     */
     public List<String> updateFaction(
             String id,
             String name,
@@ -820,8 +823,7 @@ public final class FactionManager {
             int tier,
             String music,
             String cmdcamScene,
-            boolean cinematicBlackScreen,
-            boolean cinematicCompact) {
+            boolean cinematicBlackScreen) {
         if (!graph.factions().containsKey(id)) {
             return List.of("未找到阵营: " + id);
         }
@@ -838,7 +840,6 @@ public final class FactionManager {
                 putMusic(o, music);
                 putCamScene(o, cmdcamScene);
                 o.addProperty("cinematicBlackScreen", cinematicBlackScreen);
-                o.addProperty("cinematicCompact", cinematicCompact);
                 return commit(candidate);
             }
         }

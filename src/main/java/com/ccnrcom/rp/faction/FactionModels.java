@@ -10,7 +10,15 @@ import java.util.Map;
 /** P1 阵营关系领域模型（无 MC 依赖的纯数据/纯逻辑，可直接 JUnit 测）。 */
 public final class FactionModels {
 
-    /** 阵营。icon 为客户端徽章图形(shield/claw/storm/hex/eye/target...)，tier 1..3 对应金/蓝/青徽章等级；music 为阵营出场音乐；cmdcamScene 为 CMDCam 出场摄像机场景（可选，空=不用）；cinematicBlackScreen 是否播放入场全屏黑；cinematicCompact 是否用入场电影「简洁模式」（信息缩小移到左下方、靠左对齐，图标仍在顶端）。 */
+    /**
+     * 阵营。icon 为客户端徽章图形(shield/claw/storm/hex/eye/target...)，tier 1..3 对应金/蓝/青徽章等级；
+     * music 为阵营出场音乐；cmdcamScene 为 CMDCam 出场摄像机场景（可选，空=不用）；
+     * cinematicBlackScreen 是否播放入场全屏黑。
+     *
+     * <p>入场电影版式自 2.25.3 起唯一（左下方简洁版式），原 per-faction 开关字段 {@code cinematicCompact}
+     * 已删除：存量 factions.json 里的该键不再被读取，也不会被写路径清除（无害孤儿键，同 docs/16 §5 的
+     * warheadEnabled 处理方式）。
+     */
     public record Faction(
             String id,
             String name,
@@ -20,10 +28,9 @@ public final class FactionModels {
             int tier,
             String music,
             String cmdcamScene,
-            boolean cinematicBlackScreen,
-            boolean cinematicCompact) {
+            boolean cinematicBlackScreen) {
         public Faction(String id, String name, String color, String description) {
-            this(id, name, color, description, "hex", 2, "", "", true, false);
+            this(id, name, color, description, "hex", 2, "", "", true);
         }
     }
 

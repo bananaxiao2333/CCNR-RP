@@ -39,6 +39,10 @@ public final class RpRulesTab {
     private static final int BTN_SAVE = 4;
     private static final int BTN_TEST = 5;
 
+    // 滚动条 id（全局唯一；RpAdminScreen.mouseDragged 按 dragId 把拖拽路由回本页签）
+    private static final int SB_RULES = 31;
+    private static final int SB_PARAMS = 32;
+
     private final RpAdminScreen screen;
     private int px1, py1, px2, py2;
     private int listX1, listX2, listY1, listY2;
@@ -172,6 +176,8 @@ public final class RpRulesTab {
         RpTheme.listHeaderRule(g, listX1, listX2, listY1 + HDR - 1);
         int maxVisible = Math.max(1, (listY2 - listY1 - HDR) / ROW_H);
         int off = Math.min(rulesScroll, Math.max(0, rules.size() - maxVisible));
+        // 行右缘让出 8px 滚动条槽（列表溢出时右侧是可拖动的滚动条，不再只靠滚轮）
+        int rowX2 = listX2 - 8;
         for (int i = 0; i < rules.size() && i < maxVisible; i++) {
             JsonObject r = rules.get(off + i);
             int y1 = listY1 + HDR + i * ROW_H;
@@ -179,16 +185,18 @@ public final class RpRulesTab {
             boolean s = off + i == sel;
             boolean hov = mx >= listX1 && mx <= listX2 && my >= y1 && my <= y2;
             if (s) {
-                RpTheme.selectedBar(g, listX1, y1, listX2, y2, 3f);
+                RpTheme.selectedBar(g, listX1, y1, rowX2, y2, 3f);
             } else {
-                RpTheme.listRow(g, listX1, y1, listX2, y2 + 1, i, hov);
+                RpTheme.listRow(g, listX1, y1, rowX2, y2 + 1, i, hov);
             }
             boolean en = !r.has("enabled") || r.get("enabled").getAsBoolean();
             g.drawString(font, en ? "●" : "○", listX1 + 6, y1 + 6, en ? RpTheme.GREEN : RpTheme.TEXT_DIM, true);
             g.drawString(font, str(r, "id"), listX1 + 18, y1 + 6, s ? RpTheme.ACCENT_TEXT : RpTheme.TEXT_PRIMARY);
             String ev = str(r, "eventId");
-            g.drawString(font, ev, listX2 - font.width(ev) - 6, y1 + 6, RpTheme.TEXT_DIM);
+            g.drawString(font, ev, rowX2 - font.width(ev) - 4, y1 + 6, RpTheme.TEXT_DIM);
         }
+        // 规则列表滚动条（可拖动；溢出时才出现）
+        RpScrollbar.draw(g, listX2 - 6, listY1 + HDR, listY2, rules.size(), maxVisible, off);
         // 列表下方按钮：新增 / 删除 / 启停
         btnBounds.clear();
         int by = py2 - 32;
@@ -242,22 +250,27 @@ public final class RpRulesTab {
             int maxP = Math.max(1, (paH - 18) / 16);
             int off2 = Math.min(paramScroll, Math.max(0, def.params().size() - maxP));
             int hintW = font.width("⇧ " + tr("ccnr_rp.xp.rules.insert"));
+            // 溢出时右侧让出 8px 滚动条槽（参数面板同样是"可滚但不可拖"的高发区）
+            boolean paramOverflow = def.params().size() > maxP;
+            int paramX2 = rightX - (paramOverflow ? 8 : 0);
+            int hintX = paramX2 - 4 - hintW;
             for (int i = 0; i < def.params().size() && i < maxP; i++) {
                 Param p = def.params().get(off2 + i);
                 int py = paY + 20 + i * 16;
                 boolean hov = mx >= ex1 && mx <= rightX && my >= py && my <= py + 15;
                 if (hov) {
-                    g.fill(ex1 + 2, py, rightX - 2, py + 15, RpTheme.PANEL_BG_ALT);
+                    g.fill(ex1 + 2, py, paramX2 - 2, py + 15, RpTheme.PANEL_BG_ALT);
                 }
                 String type = p.type() == ExperienceEventRegistry.ParamType.LONG ? "LONG" : "STRING";
                 // 名字按可用宽度裁剪，避免与右侧插入提示重叠
-                int nameMax = rightX - 44 - (ex1 + 8) - 8 - font.width("(" + type + ")");
-                String name = clip(font, p.name(), Math.max(30, nameMax));
+                int nameMax = hintX - 12 - (ex1 + 8) - 8 - font.width("(" + type + ")");
+                String name = clip(font, p.name(), Math.max(24, nameMax));
                 g.drawString(font, name, ex1 + 8, py + 3, hov ? RpTheme.CYAN : RpTheme.TEXT_PRIMARY);
                 g.drawString(font, "(" + type + ")", ex1 + 8 + font.width(name) + 8, py + 3, RpTheme.TEXT_DIM);
-                g.drawString(font, "⇧ " + tr("ccnr_rp.xp.rules.insert"), rightX - hintW, py + 3, RpTheme.CYAN);
-                paramBounds.add(new int[] {ex1, py, rightX, py + 15});
+                g.drawString(font, "⇧ " + tr("ccnr_rp.xp.rules.insert"), hintX, py + 3, RpTheme.CYAN);
+                paramBounds.add(new int[] {ex1, py, paramX2 - 2, py + 15});
             }
+            RpScrollbar.draw(g, rightX - 6, paY + 18, paY + paH, def.params().size(), maxP, off2);
         }
 
         // 验证器 + 试算 + 保存
@@ -473,6 +486,37 @@ public final class RpRulesTab {
         // 规则列表行
         int maxVisible = Math.max(1, (listY2 - listY1 - HDR) / ROW_H);
         int off = Math.min(rulesScroll, Math.max(0, rules.size() - maxVisible));
+        // 规则列表滚动条（可拖动；id 在本页签内唯一，拖拽经 RpAdminScreen 按 dragId 路由回这里）
+        int rns = RpScrollbar.clickV(
+                mx, my, listX2 - 6, listX2 - 1, listY1 + HDR, listY2, rules.size(), maxVisible, off, SB_RULES);
+        if (rns >= 0) {
+            rulesScroll = (int) Math.max(0, Math.min(rns, Math.max(0, rules.size() - maxVisible)));
+            return true;
+        }
+        // 参数面板滚动条（同样可拖动）
+        EventDef activeDef = ExperienceEventRegistry.byId(activeEventId()).orElse(null);
+        if (activeDef != null) {
+            int paY = ey1 + 176;
+            int paH = Math.min(110, py2 - 70 - paY);
+            int maxP = Math.max(1, (paH - 18) / 16);
+            int off2 = Math.min(paramScroll, Math.max(0, activeDef.params().size() - maxP));
+            int pns = RpScrollbar.clickV(
+                    mx,
+                    my,
+                    ex2 - 6,
+                    ex2 - 1,
+                    paY + 18,
+                    paY + paH,
+                    activeDef.params().size(),
+                    maxP,
+                    off2,
+                    SB_PARAMS);
+            if (pns >= 0) {
+                paramScroll = (int)
+                        Math.max(0, Math.min(pns, Math.max(0, activeDef.params().size() - maxP)));
+                return true;
+            }
+        }
         for (int i = 0; i < rules.size() && i < maxVisible; i++) {
             int y1 = listY1 + HDR + i * ROW_H;
             if (mx >= listX1 && mx <= listX2 && my >= y1 && my <= y1 + ROW_H - 1) {
@@ -661,6 +705,34 @@ public final class RpRulesTab {
         } catch (Exception e) {
             flashRaw(e.getMessage() == null ? tr("ccnr_rp.xp.rules.save_fail") : e.getMessage());
         }
+    }
+
+    /**
+     * 滚动条拖拽（由 {@code RpAdminScreen.mouseDragged} 按 dragId 路由）：规则列表 / 参数面板两条都可拖。
+     * 返回是否消费本次拖拽。
+     */
+    public boolean mouseDragged(int mx, int my) {
+        int ns = RpScrollbar.dragV(my);
+        if (ns < 0) {
+            return false;
+        }
+        if (RpScrollbar.dragId() == SB_RULES) {
+            int max = Math.max(0, rules.size() - Math.max(1, (listY2 - listY1 - HDR) / ROW_H));
+            rulesScroll = (int) Math.max(0, Math.min(ns, max));
+            return true;
+        }
+        if (RpScrollbar.dragId() == SB_PARAMS) {
+            EventDef def = ExperienceEventRegistry.byId(activeEventId()).orElse(null);
+            if (def != null) {
+                int paY = ey1 + 176;
+                int paH = Math.min(110, py2 - 70 - paY);
+                int maxP = Math.max(1, (paH - 18) / 16);
+                paramScroll =
+                        (int) Math.max(0, Math.min(ns, Math.max(0, def.params().size() - maxP)));
+                return true;
+            }
+        }
+        return false;
     }
 
     public void mouseScrolled(int mouseX, int mouseY, double delta) {

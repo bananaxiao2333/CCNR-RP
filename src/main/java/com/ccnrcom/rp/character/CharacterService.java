@@ -542,7 +542,7 @@ public final class CharacterService {
                 String name = str(p, "name", id);
                 int tier = p.has("tier") ? p.get("tier").getAsInt() : 2;
                 boolean black = bool(p, "cinematicBlackScreen", true);
-                boolean compact = bool(p, "cinematicCompact", false);
+                // 入场电影版式无 per-faction 开关（2.25.3 起唯一简洁版式）：荷载里的旧 cinematicCompact 一律忽略
                 switch (action) {
                     case "create" -> errors = CCNRRPMod.factions.createFaction(
                             id,
@@ -553,8 +553,7 @@ public final class CharacterService {
                             tier,
                             str(p, "music", ""),
                             str(p, "cmdcamScene", ""),
-                            black,
-                            compact);
+                            black);
                     case "update" -> errors = CCNRRPMod.factions.updateFaction(
                             id,
                             name,
@@ -564,8 +563,7 @@ public final class CharacterService {
                             tier,
                             str(p, "music", ""),
                             str(p, "cmdcamScene", ""),
-                            black,
-                            compact);
+                            black);
                     case "delete" -> errors = CCNRRPMod.factions.deleteFaction(id);
                     default -> errors = List.of("未知操作: " + action);
                 }
@@ -1399,7 +1397,6 @@ public final class CharacterService {
                 o.addProperty("music", f.music());
                 o.addProperty("cmdcamScene", f.cmdcamScene() == null ? "" : f.cmdcamScene());
                 o.addProperty("cinematicBlackScreen", f.cinematicBlackScreen());
-                o.addProperty("cinematicCompact", f.cinematicCompact());
                 com.google.gson.JsonObject facRadio = CCNRRPMod.factions.factionRadio(f.id());
                 if (com.ccnrcom.rp.faction.FactionProfessions.hasRadioLines(facRadio)) {
                     o.add("radio", facRadio.deepCopy());
