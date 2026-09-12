@@ -533,6 +533,7 @@
   "ccnr_rp.gui.admin.seq.readonly": "（只读，触发来源 {0}）",
   "ccnr_rp.gui.admin.faction.attributes": "属性",
   "ccnr_rp.gui.admin.attribute.title": "阵营属性档案：%s",
+  "ccnr_rp.gui.admin.attribute.hint": "属性 id 用注册名（如 minecraft:generic.max_health）；未注册的会保留，装对应 mod 后自动生效",
   "ccnr_rp.gui.admin.attribute.id": "属性 id",
   "ccnr_rp.gui.admin.attribute.amount": "数值",
   "ccnr_rp.gui.admin.attribute.operation": "运算",

@@ -47,6 +47,8 @@ public final class ClientCharacterState {
     private static final List<String> musicList = new ArrayList<>();
     /** CMDCam 已保存场景名（管理面板 CMDCam 场景输入项补全提示；未装/读取失败=空）。 */
     private static final List<String> camScenes = new ArrayList<>();
+    /** 已注册属性 id（原版 + 已装 mod；「阵营属性档案」属性 id 输入框补全；未同步=空）。 */
+    private static final List<String> attributeIds = new ArrayList<>();
 
     private static final List<JsonObject> managerSequences = new ArrayList<>();
     private static final List<String> activeEvents = new ArrayList<>();
@@ -545,6 +547,14 @@ public final class ClientCharacterState {
                 }
             }
         }
+        attributeIds.clear();
+        if (root.has("attributeIds") && root.get("attributeIds").isJsonArray()) {
+            for (JsonElement e : root.getAsJsonArray("attributeIds")) {
+                if (e.isJsonPrimitive() && e.getAsJsonPrimitive().isString()) {
+                    attributeIds.add(e.getAsString());
+                }
+            }
+        }
         CharacterManagementScreen.refreshIfOpen();
         RpAdminScreen.refreshIfOpen();
     }
@@ -693,6 +703,11 @@ public final class ClientCharacterState {
     /** CMDCam 已保存场景名列表（管理面板补全提示数据源）。 */
     public static synchronized List<String> camScenes() {
         return List.copyOf(camScenes);
+    }
+
+    /** 已注册属性 id 列表（「阵营属性档案」属性 id 输入框补全数据源；未同步时为空）。 */
+    public static synchronized List<String> attributeIds() {
+        return List.copyOf(attributeIds);
     }
 
     /** 激活事件横幅（EventStateS2C）。 */

@@ -1,5 +1,28 @@
 # Changelog
 
+## 2.26.7（阵营属性档案弹窗修复：占位符糊字 / 提示出框 / 属性 id 补全）
+
+- **修复：属性行占位符不消失、与输入内容糊在一起**（实机截图反馈：出现 `adadadad属性 id`）。
+  根因是两处输入框把 **`setSuggestion` 当成占位符**在用 —— 它是"补全剩余串"API，原版会把它
+  **追加在已输入文本之后**绘制；真正的占位符 API 是 `setHint`（原版仅在 `value.isEmpty() && !isFocused()`
+  时绘制，判据来自 `EditBox.renderWidget` 字节码）。`attrBox`（属性档案弹窗）与 `seqBox`（流程编辑器参数）
+  统一改用 `setHint`，并加自检纪律：`grep -rn "\.setSuggestion(" src/main/java/com/ccnrcom/rp/client/` 应为 0 处。
+- **修复：属性弹窗提示行"出框"**（实测拖到屏幕右缘）。该行是整句长文案，此前直接单行 `drawString`，
+  没有裁剪也没有断行。现改为 `RpTheme.wrapText` 最多两行、仍放不下时末行用 `RpTheme.clip` 裁出省略号；
+  弹窗标题同样走 `clip`（阵营 id/显示名可能很长）。提示文案也精简到两行内可读完（zh/en 同步）。
+- **新增：属性 id 输入框的补全提示**（此前完全没有）。新增 `SugSource.ATTRIBUTE`，候选是**已注册属性 id**
+  （原版 + 已装 mod 的全部注册名，直接抄进配置即可用）：
+  1. 数据源：`ManagerStateS2C` 新增 `attributeIds` 数组（服务端 `AttributeService.registeredIds()`）；
+     **主线程只扫一次注册表**，再按玩家复制（不在逐玩家的字段函数里重复扫，docs/01 §9.6）。
+  2. 聚焦识别：`resolveIdSugSource()` 新增 `attributeModalOpen` 分支，只给"属性 id"那一列补全（数值列不补）。
+  3. 顺序约束（写错就点不到）：补全浮层**绘制在弹窗内容之后**（置顶），**命中在 `attributeModalOpen`
+     吞点击之前**（该分支原本无条件 `return true`，会把候选项点击一并吞掉）。
+  4. 键盘上下/回车沿用既有通用处理（已在 `keyPressed` 里按 `idSugBox`/`idSugItems` 工作）。
+- **文档**：docs/14 新增 §5.9（三条缺陷的根因、`setHint` vs `setSuggestion` 契约表、两个顺序约束、如何失效）。
+- **测试**：`ClientCharacterStateTest` 补 2 例（已注册属性 id 按序镜像；旧服务端载荷缺 `attributeIds` 时
+  清空而不是残留上一次的值）。`test -PrunTests` 全绿（256 例 0 失败）。
+- 构建：`spotlessApply` / `build` / `test -PrunTests` 全绿；版本号 **2.26.7**。
+
 ## 2.26.6（背包左侧「对局状态」面板 + 模式/阶段/事件的展示三件套）
 
 - **新增：背包界面左侧「对局状态」面板**（`MatchStatusPanel`）。打开背包（E）即可看到这一局进行到哪了：

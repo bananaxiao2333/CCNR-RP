@@ -352,6 +352,9 @@ public final class CharacterService {
         }
         JsonObject occupancy = occupancyJson();
         List<String> camScenes = com.ccnrcom.rp.cmdcam.CamSceneBridge.savedSceneNames(server.overworld());
+        // 已注册属性 id（原版 + 已装 mod）：属性档案弹窗的属性 id 输入框补全候选。
+        // 主线程只取一次（注册表扫描），再按玩家复制——不放进逐玩家的 applyManagerUserFields 里重复扫。
+        List<String> attributeIds = com.ccnrcom.rp.attribute.AttributeService.registeredIds();
         String tagsPayload = playerTagsJson().toString();
         BROADCASTER.execute(() -> {
             try {
@@ -363,7 +366,7 @@ public final class CharacterService {
                     JsonObject list = sharedList.deepCopy();
                     applyUserListFields(list, s);
                     JsonObject mgr = sharedMgr.deepCopy();
-                    applyManagerUserFields(mgr, s, camScenes);
+                    applyManagerUserFields(mgr, s, camScenes, attributeIds);
                     pending.add(new PendingPush(s.uuid(), list.toString(), mgr.toString(), music, tagsPayload));
                 }
                 pendingBroadcast = pending;
@@ -440,7 +443,10 @@ public final class CharacterService {
         }
         JsonObject pay = buildSharedManagerRoot();
         applyManagerUserFields(
-                pay, snapshot(player), com.ccnrcom.rp.cmdcam.CamSceneBridge.savedSceneNames(player.level()));
+                pay,
+                snapshot(player),
+                com.ccnrcom.rp.cmdcam.CamSceneBridge.savedSceneNames(player.level()),
+                com.ccnrcom.rp.attribute.AttributeService.registeredIds());
         RpChannels.sendTo(player, new RpPackets.ManagerStateS2C(pay.toString()));
         RpChannels.sendTo(player, new RpPackets.MusicListS2C(musicListJson()));
     }
@@ -468,14 +474,20 @@ public final class CharacterService {
         return pay;
     }
 
-    /** 管理器状态逐玩家字段：admin + CMDCam 场景名补全列表。 */
-    private static void applyManagerUserFields(JsonObject pay, UserSnapshot s, List<String> camScenes) {
+    /** 管理器状态逐玩家字段：admin + CMDCam 场景名补全列表 + 已注册属性 id 补全列表。 */
+    private static void applyManagerUserFields(
+            JsonObject pay, UserSnapshot s, List<String> camScenes, List<String> attributeIds) {
         pay.addProperty("admin", s.admin());
         JsonArray cams = new JsonArray();
         for (String c : camScenes) {
             cams.add(c);
         }
         pay.add("camScenes", cams);
+        JsonArray attrs = new JsonArray();
+        for (String a : attributeIds) {
+            attrs.add(a);
+        }
+        pay.add("attributeIds", attrs);
     }
 
     /**
