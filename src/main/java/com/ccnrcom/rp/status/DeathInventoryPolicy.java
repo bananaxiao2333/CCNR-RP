@@ -7,9 +7,8 @@ package com.ccnrcom.rp.status;
 /**
  * 死亡背包处置策略（纯逻辑，无 MC import，可脱机 JUnit 测）。
  *
- * <p>存在意义（issue #1 根因）：本 mod 从不处理死亡时的背包，一切依赖"原版会爆出"——而原版在三种情况下**不会**爆出：
+ * <p>存在意义（issue #1 根因）：本 mod 从不处理死亡时的背包，一切依赖"原版会爆出"——而原版在两种情况下**不会**爆出：
  * <ul>
- *   <li>{@code keepInventory=true}（整合包常见：装了遗体 mod 时常开，用来兜底）；</li>
  *   <li>死亡瞬间处于旁观者模式——{@code ServerPlayer.die} 里 {@code if (!isSpectator()) dropAllDeathLoot(...)}
  *       直接跳过；而本 mod 恰恰会把"未部署玩家"强制切成旁观者（观察者轮询 + 登录规则）；</li>
  *   <li>离线判死（掉线判死）——玩家没死在世界里，原版掉落流程根本不执行。</li>
@@ -17,28 +16,49 @@ package com.ccnrcom.rp.status;
  * 装了遗体 mod（Corpse）时由它 {@code removeDrops()} 把物品收进遗体，所以"死亡即清空背包"过去是遗体 mod 的副作用；
  * 遗体 mod 被移除后这个副作用消失，于是出现"死亡后不会清理背包"。
  *
- * <p>本策略决定：什么时候必须由本 mod **显式爆出**背包（补位原版不掉的路径），什么时候交给原版/遗体 mod（不重复处理）。
+ * <p><b>世界规则 {@code keepInventory} 反转了这件事（2.26.10）</b>：当初把 {@code keepInventory=true} 也算作
+ * "原版不会掉、所以本 mod 必须补爆"，等于用一个补丁**推翻玩家/管理员显式设置的世界规则**——规则写着"死亡不掉落"，
+ * 结果死一次满地装备。现在规则优先：{@code keepInventory=true} 时本 mod 既不爆出、也不留遗体，背包直接删除
+ * （详见 {@link #forDeath}）。这一条与"观察者必须空背包"的既有契约也一致。
+ *
+ * <p>本策略决定两件事，且判据只在这里写一次：死亡路径由 {@link #forDeath} 一次给出背包处置 / 是否显式爆出 /
+ * 是否抑制遗体；非死亡的一切退场由 {@link #disposalOnObserving} 判定为直接删除。
  */
 public final class DeathInventoryPolicy {
 
     private DeathInventoryPolicy() {}
 
     /**
-     * 是否必须由本 mod 显式爆出并清空背包。
+     * 判定一次**死亡路径**（自然死亡 / 掉线判死）的背包与遗体处置。
+     *
+     * <p><b>世界规则优先于一切</b>：{@code keepInventory=true}（"死亡不掉落"）时本 mod **既不爆出背包、
+     * 也不生成遗体**，而是把背包**直接删除**。为什么是删除而不是"留在身上"：本 mod 的观察者契约要求
+     * "切观察者必须空背包"，且 keepInventory 在本 mod 的流程里不可能意味着"留着下一局接着用"
+     * （重新部署时 {@code SpawnFramework} 一定会清空背包并按岗位发装备）。若只"不爆出"而把物品留在
+     * 观察者身上，结果是玩家死后仍抱着上一局的枪、到下次部署时才无声消失——比直接删除更难预期。
+     *
+     * <p>否则：由遗体 mod 收纳（{@code dropExplicitly=false}，它会 {@code removeDrops()} 收进遗体）；
+     * 未装遗体 mod 时补位原版不会掉的两种情况——离线判死（没有原版掉落流程）与死亡瞬间是旁观者
+     * （{@code ServerPlayer.die} 里 {@code if (!isSpectator()) dropAllDeathLoot} 直接跳过）。
+     * 后一种在本 mod 里很常见（未部署玩家被强制切成旁观者），不补位就会静默丢失整包装备。
      *
      * @param corpseAvailable  遗体 mod 是否可用（可用时由它收纳物品，本 mod 不插手）
      * @param offlineDeath     是否为离线判死（玩家不在世界里，原版掉落流程不会跑）
      * @param spectatorAtDeath 死亡瞬间是否旁观者（原版 die() 会跳过死亡掉落）
-     * @param keepInventory    世界规则是否保留背包
-     * @return true=本 mod 必须显式爆出（原版路径不会处理）；false=交给原版/遗体 mod
+     * @param keepInventory    世界规则 {@code keepInventory}（"死亡不掉落"）
      */
-    public static boolean dropExplicitly(
+    public static DeathHandling forDeath(
             boolean corpseAvailable, boolean offlineDeath, boolean spectatorAtDeath, boolean keepInventory) {
-        if (corpseAvailable) {
-            return false; // 遗体 mod 负责收纳（它会 removeDrops 并把物品放进遗体）
+        if (keepInventory) {
+            // 世界规则说了算：不爆出、不留遗体，背包直接删除（观察者必须空背包）
+            return new DeathHandling(Disposal.DELETE, false, true);
         }
-        return offlineDeath || spectatorAtDeath || keepInventory;
+        boolean explicit = !corpseAvailable && (offlineDeath || spectatorAtDeath);
+        return new DeathHandling(Disposal.DROP, explicit, false);
     }
+
+    /** 一次死亡的背包与遗体处置决定（三个决定同源判据，避免调用方各写一套）。 */
+    public record DeathHandling(Disposal disposal, boolean dropExplicitly, boolean suppressCorpse) {}
 
     /** 进入观察者时的背包处置方式。 */
     public enum Disposal {
