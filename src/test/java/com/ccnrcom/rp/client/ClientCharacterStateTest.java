@@ -86,4 +86,36 @@ class ClientCharacterStateTest {
         ClientCharacterState.setManager(JsonUtil.GSON.toJson(root));
         assertEquals(java.util.List.of(), ClientCharacterState.attributeIds());
     }
+
+    // ---------- 管理权限镜像（K 面板 → 管理面板那道门） ----------
+
+    /** 服务端列表载荷里的 admin 字段即管理权限来源。 */
+    private static void setListWithAdmin(boolean admin) {
+        JsonObject root = new JsonObject();
+        root.addProperty("admin", admin);
+        ClientCharacterState.setList(JsonUtil.GSON.toJson(root));
+    }
+
+    /** 服务端说是管理员 → 镜像为真。 */
+    @Test
+    void adminMirroredFromListPayload() {
+        setListWithAdmin(true);
+        org.junit.jupiter.api.Assertions.assertTrue(ClientCharacterState.isAdmin());
+    }
+
+    /**
+     * **换服/重连必须清掉管理权限**（默认拒绝）。
+     *
+     * <p>回归点：不这么做的话，在 A 服是管理员、切到 B 服后（或重连后尚未收到列表前）会沿用上一个服的
+     * {@code isAdmin=true}，管理面板就能被没有权限的人打开。服务端随后会用列表包重新下发真值，
+     * 所以清成 false 不会误伤真管理员。
+     */
+    @Test
+    void resetForJoinDropsAdminPermission() {
+        setListWithAdmin(true);
+        org.junit.jupiter.api.Assertions.assertTrue(ClientCharacterState.isAdmin());
+        ClientCharacterState.resetForJoin();
+        org.junit.jupiter.api.Assertions.assertFalse(
+                ClientCharacterState.isAdmin(), "resetForJoin() 必须把管理权限清成 false（跨服不得沿用）");
+    }
 }

@@ -243,7 +243,7 @@ public final class ClientCharacterState {
         }
     }
 
-    /** 登出重置：下次连接可再次武装自动开面板；清除征召身份。 */
+    /** 登出重置：下次连接可再次武装自动开面板；清除征召身份与**管理权限**。 */
     public static synchronized void resetForJoin() {
         autoOpenArmed = false;
         autoOpenPending = false;
@@ -252,6 +252,10 @@ public final class ClientCharacterState {
         seqDeadlineMs = -1;
         phaseTicksLeft = -1;
         phaseTicksBase = -1;
+        // 管理权限默认拒绝：否则在 A 服是管理员、切到 B 服（或重连后尚未收到列表）时会**沿用上一个服的
+        // isAdmin=true**，管理面板就能被打开。服务端随后会用 CharacterListS2C 的 admin 字段重下发真值
+        // （applyUserListFields → Permissions.canAdmin），所以清成 false 不会误伤真管理员。
+        isAdmin = false;
     }
 
     /** 征召兵在场身份（JSON：professionId/factionId）；null=未以征召兵身份在场。 */
