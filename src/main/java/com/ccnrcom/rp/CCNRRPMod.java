@@ -163,7 +163,8 @@ public class CCNRRPMod {
             }
             // 阵营属性（docs/16）：在场玩家重连后按当前配置重套一次（永久修饰随存档保留，这里保证与配置一致）
             if (CCNRRPMod.users != null && CCNRRPMod.users.isAlive(uuid)) {
-                com.ccnrcom.rp.attribute.AttributeService.applyTo(player, CCNRRPMod.users.factionId(uuid));
+                com.ccnrcom.rp.attribute.AttributeService.applyTo(
+                        player, CCNRRPMod.users.factionId(uuid), CCNRRPMod.users.professionId(uuid));
             }
         }
         // 补发离线期间的结算通知（死亡/断联结算结果）+ 经验规则集（管理面板展示）

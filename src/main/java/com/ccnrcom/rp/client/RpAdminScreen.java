@@ -151,6 +151,8 @@ public class RpAdminScreen extends Screen {
     private boolean attributeModalOpen = false;
     /** 属性档案弹窗目标阵营 id（保存时作为 payload.factionId）。 */
     private String attributeModalTarget = "";
+    /** 属性弹窗的对象类型：{@code "faction"}（阵营层）或 {@code "profession"}（角色/职业层，同 id 覆盖阵营层）。 */
+    private String attributeModalKind = "faction";
     /** 属性行工作副本：每行 {id, amount 文本, operation}。 */
     private final List<String[]> attrRows = new ArrayList<>();
     /** 每行输入框 {idBox, amountBox}，与 attrRows 同索引；弹窗打开/增删行时重建，关闭统一移除（docs/01 §10-3）。 */
@@ -1220,7 +1222,13 @@ public class RpAdminScreen extends Screen {
                                 Component.translatable("ccnr_rp.gui.admin.field.profession_spawn")
                                         .getString(),
                                 1,
-                                () -> openSpawnModal("profession"))));
+                                () -> openSpawnModal("profession")),
+                        // 角色（职业）层属性：同 id 整体覆盖阵营层（按钮行随按钮数变窄，标签由 RpButton 统一裁剪）
+                        new ActButton(
+                                Component.translatable("ccnr_rp.gui.admin.faction.attributes")
+                                        .getString(),
+                                1,
+                                () -> openProfessionAttributeModal())));
         y += 26;
         int bw3 = Math.max(60, w / 4);
         addRenderableWidget(RpButton.primary(
@@ -1240,6 +1248,11 @@ public class RpAdminScreen extends Screen {
                     tierIdx = 1;
                     rebuild();
                 }));
+    }
+
+    /** 当前选中的职业镜像（属性弹窗的覆盖标记要读它所在阵营的属性，故独立成方法）。 */
+    private JsonObject selProfession() {
+        return selProf();
     }
 
     private JsonObject selProf() {
@@ -1811,9 +1824,11 @@ public class RpAdminScreen extends Screen {
         return false;
     }
 
-    // ---------- 阵营属性档案弹窗（kind="attribute", action="set"） ----------
+    // ---------- 属性档案弹窗（kind="attribute", action="set"；阵营层 / 角色（职业）层共用） ----------
 
-    /** 打开阵营属性档案弹窗：把选中阵营的 attributes 数组载入可编辑工作副本（无则空表）。 */
+    /**
+     * 打开**阵营层**属性弹窗：把选中阵营的 attributes 数组载入可编辑工作副本（无则空表）。
+     */
     private void openAttributeModal() {
         JsonObject fac = selFaction();
         if (fac == null || str(fac, "id").isBlank()) {
@@ -1821,10 +1836,38 @@ public class RpAdminScreen extends Screen {
                     .getString();
             return;
         }
-        attributeModalTarget = str(fac, "id");
+        openAttributeModal("faction", str(fac, "id"), fac);
+    }
+
+    /**
+     * 打开**角色（职业）层**属性弹窗：编辑该职业的 attributes。
+     *
+     * <p>职业层的属性**同 id 整体覆盖**阵营层（{@code AttributeProfile.layer}）；弹窗里对"正在覆盖
+     * 阵营层"的行标「覆盖」，让管理员一眼看出哪几条压住了继承来的值。
+     */
+    private void openProfessionAttributeModal() {
+        JsonObject prof = selProfession();
+        if (prof == null || str(prof, "id").isBlank()) {
+            notice = Component.translatable("ccnr_rp.gui.admin.notice.select_left_profession")
+                    .getString();
+            return;
+        }
+        openAttributeModal("profession", str(prof, "id"), prof);
+    }
+
+    /**
+     * 打开属性弹窗（两层共用）。
+     *
+     * @param kind   "faction" 或 "profession"
+     * @param id     目标 id
+     * @param source 该目标的客户端镜像对象（读 attributes 回显）
+     */
+    private void openAttributeModal(String kind, String id, JsonObject source) {
+        attributeModalKind = kind;
+        attributeModalTarget = id;
         attrRows.clear();
-        if (fac.has("attributes") && fac.get("attributes").isJsonArray()) {
-            for (JsonElement e : fac.getAsJsonArray("attributes")) {
+        if (source.has("attributes") && source.get("attributes").isJsonArray()) {
+            for (JsonElement e : source.getAsJsonArray("attributes")) {
                 if (!e.isJsonObject() || attrRows.size() >= ATTR_MAX_ROWS) {
                     continue;
                 }
@@ -1836,6 +1879,50 @@ public class RpAdminScreen extends Screen {
         rebuildAttrEdits();
         notice = "";
         attributeModalOpen = true;
+    }
+
+    /**
+     * 被覆盖的阵营层属性 id（仅职业层弹窗用）：本职业声明的 id ∩ 其所属阵营声明的 id。
+     * 判定与生效逻辑同源（都是 {@code AttributeProfile.layer} 的交集），不在客户端另写一套判据。
+     */
+    private java.util.Set<String> overriddenFactionAttrIds() {
+        if (!"profession".equals(attributeModalKind)) {
+            return java.util.Set.of();
+        }
+        java.util.Set<String> profIds = new java.util.LinkedHashSet<>();
+        for (String[] row : attrRows) {
+            if (!row[0].isBlank()) {
+                profIds.add(row[0]);
+            }
+        }
+        java.util.Set<String> out = new java.util.LinkedHashSet<>();
+        for (JsonObject fac : ClientCharacterState.factions()) {
+            if (!str(fac, "id").equals(factionIdOfProfession(attributeModalTarget))) {
+                continue;
+            }
+            if (fac.has("attributes") && fac.get("attributes").isJsonArray()) {
+                for (JsonElement e : fac.getAsJsonArray("attributes")) {
+                    if (!e.isJsonObject()) {
+                        continue;
+                    }
+                    String fid = str(e.getAsJsonObject(), "id", "");
+                    if (profIds.contains(fid)) {
+                        out.add(fid);
+                    }
+                }
+            }
+        }
+        return out;
+    }
+
+    /** 职业所属阵营 id（客户端镜像；找不到返回空串）。 */
+    private static String factionIdOfProfession(String professionId) {
+        for (JsonObject p : ClientCharacterState.professions()) {
+            if (str(p, "id").equals(professionId)) {
+                return str(p, "factionId", "");
+            }
+        }
+        return "";
     }
 
     /** 数值展示文本（整数值不带 .0；缺失/非法回退空串，由用户补填）。 */
@@ -2033,7 +2120,13 @@ public class RpAdminScreen extends Screen {
             arr.add(o);
         }
         JsonObject p = payload();
-        p.addProperty("factionId", attributeModalTarget);
+        // 对象类型显式下发（缺省 faction，向后兼容旧客户端）：服务端据此选单字段接管入口与"在线重套"范围
+        p.addProperty("target", attributeModalKind);
+        if ("profession".equals(attributeModalKind)) {
+            p.addProperty("professionId", attributeModalTarget);
+        } else {
+            p.addProperty("factionId", attributeModalTarget);
+        }
         p.add("attributes", arr);
         closeAttributeModal();
         requestCrud("attribute", "set", p);
@@ -2182,6 +2275,10 @@ public class RpAdminScreen extends Screen {
         atOpBounds.clear();
         atRowX1 = cx;
         atRowX2 = cw;
+        // 角色（职业）层：标出正在覆盖阵营层的行（判定与生效同源，都是两层属性 id 的交集）
+        java.util.Set<String> overridden = overriddenFactionAttrIds();
+        String overrideTag =
+                Component.translatable("ccnr_rp.gui.admin.attribute.override").getString();
         g.enableScissor(cx, atListY1, cw, atListY2);
         for (int i = attrScroll; i < attrRows.size() && i < attrScroll + maxVis; i++) {
             int ry = atListY1 + (i - attrScroll) * ATTR_ROW_H;
@@ -2219,6 +2316,11 @@ public class RpAdminScreen extends Screen {
                     Component.translatable("ccnr_rp.gui.admin.attribute.remove").getString(),
                     inRect(mouseX, mouseY, delX, ry, delX + delW, ry + 18) ? borderHover : border,
                     false);
+            // 「覆盖」标记：该行的属性 id 同时被阵营层声明 → 本条整体压住了继承来的阵营值
+            if (overridden.contains(row[0] == null ? "" : row[0].trim())) {
+                int tagX = Math.max(cx, delX - font.width(overrideTag) - 6);
+                g.drawString(font, overrideTag, tagX, ry + 5, RpTheme.RED_LINE, false);
+            }
         }
         g.disableScissor();
         if (attrRows.isEmpty()) {

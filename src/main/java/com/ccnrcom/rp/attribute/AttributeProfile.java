@@ -186,6 +186,56 @@ public final class AttributeProfile {
     }
 
     /**
+     * 分层合并结果：生效条目 + **被职业层覆盖掉的属性 id**（后者供管理界面标「覆盖」/「已覆盖阵营」）。
+     *
+     * @param effective     实际套用到玩家的条目（阵营未覆盖者在前、职业条目在后，便于界面回显与排查）
+     * @param overriddenIds 同时存在于阵营层与职业层、最终由职业层生效的 id（= 两层 id 的交集）
+     */
+    public record Layered(List<Entry> effective, java.util.Set<String> overriddenIds) {
+        public Layered {
+            effective = effective == null ? List.of() : List.copyOf(effective);
+            overriddenIds = overriddenIds == null ? java.util.Set.of() : java.util.Set.copyOf(overriddenIds);
+        }
+
+        /** 该属性 id 是否被职业层覆盖（管理界面的标记判据）。 */
+        public boolean isOverridden(String attributeId) {
+            return attributeId != null && overriddenIds.contains(attributeId);
+        }
+    }
+
+    /**
+     * 层级合并（纯逻辑）：**职业层覆盖阵营层，判定键 = 属性 id**。
+     *
+     * <p><b>规则</b>：只要职业层声明了某个属性 id，阵营层该 id 的**全部运算条目**都被取代——
+     * 不是按 (id+运算) 逐条覆盖。理由：'血量'这类语义下把两层的不同运算叠在一起既没意义也难解释，
+     * 而"同 id 整体覆盖"是管理员最容易预期的行为（用户定调）。
+     *
+     * <p>职业层没声明的 id 照旧从阵营层继承；职业层新声明的 id 属于"新增"而非覆盖
+     * （不计入 {@link Layered#overriddenIds}）。
+     */
+    public static Layered layer(List<Entry> factionEntries, List<Entry> professionEntries) {
+        List<Entry> fac = factionEntries == null ? List.of() : factionEntries;
+        List<Entry> prof = professionEntries == null ? List.of() : professionEntries;
+        if (prof.isEmpty()) {
+            return new Layered(fac, java.util.Set.of());
+        }
+        java.util.Set<String> profIds = new java.util.LinkedHashSet<>();
+        for (Entry e : prof) {
+            profIds.add(e.id());
+        }
+        List<Entry> out = new ArrayList<>();
+        java.util.Set<String> overridden = new java.util.LinkedHashSet<>();
+        for (Entry e : fac) {
+            if (profIds.contains(e.id())) {
+                overridden.add(e.id()); // 该 id 由职业层接管：阵营层条目整体让位
+            } else {
+                out.add(e);
+            }
+        }
+        out.addAll(prof);
+        return new Layered(out, overridden);
+    }
+    /**
      * 按原版结算顺序计算 base 基值经过本配置后的最终值（纯函数，供单测与 FirstAid 血量换算复用）：
      * {@code v = (base + Σadd) * (1 + Σmultiply_base) * Π(1 + multiply_total_i)}。
      * 未配置该属性时返回 base 原值。

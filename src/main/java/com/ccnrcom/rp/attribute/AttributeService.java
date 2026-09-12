@@ -47,17 +47,35 @@ public final class AttributeService {
             return List.of();
         }
         AttributeProfile.ParseResult parsed = AttributeProfile.parse(CCNRRPMod.factions.factionAttributes(factionId));
-        parsed.warnings().forEach(w -> logOnce(factionId, w));
-        parsed.errors().forEach(e -> logOnce(factionId, e));
+        parsed.warnings().forEach(w -> logOnce("faction:" + factionId, w));
+        parsed.errors().forEach(e -> logOnce("faction:" + factionId, e));
         return parsed.entries();
     }
 
-    /** 套用阵营属性到玩家（部署/登录统一入口）。 */
-    public static void applyTo(ServerPlayer player, String factionId) {
+    /** 某职业的属性配置（factions.json 的 {@code professions[].attributes}；未配置返回空列表）。 */
+    public static List<Entry> entriesForProfession(String professionId) {
+        if (professionId == null || professionId.isBlank() || CCNRRPMod.factions == null) {
+            return List.of();
+        }
+        AttributeProfile.ParseResult parsed =
+                AttributeProfile.parse(CCNRRPMod.factions.professionAttributes(professionId));
+        parsed.warnings().forEach(w -> logOnce("profession:" + professionId, w));
+        parsed.errors().forEach(e -> logOnce("profession:" + professionId, e));
+        return parsed.entries();
+    }
+
+    /** 实际生效的属性（阵营层 + 职业层合并，职业层同 id 覆盖阵营层）。 */
+    public static List<Entry> effectiveFor(String factionId, String professionId) {
+        return AttributeProfile.layer(entriesFor(factionId), entriesForProfession(professionId))
+                .effective();
+    }
+
+    /** 套用属性到玩家（部署/登录统一入口）。职业层覆盖阵营层同 id 条目。 */
+    public static void applyTo(ServerPlayer player, String factionId, String professionId) {
         if (player == null) {
             return;
         }
-        PlayerAttributeBridge.apply(player, factionId, entriesFor(factionId));
+        PlayerAttributeBridge.apply(player, factionId, effectiveFor(factionId, professionId));
     }
 
     /** 移除本 mod 施加的属性修饰（退场时调用；幂等）。 */
@@ -80,11 +98,36 @@ public final class AttributeService {
             if (CCNRRPMod.users.status(uuid) != CharacterStatus.ALIVE) {
                 continue; // 不在场（观察者）不套用：加成本来就只在部署后生效
             }
-            applyTo(p, factionId);
+            applyTo(p, factionId, CCNRRPMod.users.professionId(uuid));
             n++;
         }
         if (n > 0) {
             LOGGER.info("[CCNR-RP] 阵营 {} 属性变更已即时套用到 {} 名在线成员", factionId, n);
+        }
+        return n;
+    }
+
+    /** 配置保存后：以该职业**在线**的成员立即重套（职业层属性变更入口，与阵营层同一纪律）。 */
+    public static int applyToOnlineProfessionMembers(String professionId) {
+        MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+        if (server == null || CCNRRPMod.users == null || professionId == null || professionId.isBlank()) {
+            return 0;
+        }
+        int n = 0;
+        for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+            String uuid = p.getUUID().toString();
+            if (!professionId.equals(CCNRRPMod.users.professionId(uuid))) {
+                continue; // 只处理该职业的在线成员
+            }
+            if (CCNRRPMod.users.status(uuid) != CharacterStatus.ALIVE) {
+                continue; // 不在场（观察者）不套用
+            }
+            // 职业层覆盖阵营层，故重套时要带上该玩家自己的阵营（不是职业所属阵营）
+            applyTo(p, CCNRRPMod.users.factionId(uuid), professionId);
+            n++;
+        }
+        if (n > 0) {
+            LOGGER.info("[CCNR-RP] 职业 {} 属性变更已即时套用到 {} 名在线成员", professionId, n);
         }
         return n;
     }

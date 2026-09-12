@@ -138,7 +138,11 @@ public final class RpButton extends Button {
         }
         int color = active ? (isHovered() ? fgHover : fg) : RpTheme.TEXT_DISABLED;
         Font f2 = Minecraft.getInstance().font;
-        int tw = f2.width(getMessage());
-        g.drawString(f2, getMessage(), getX() + (getWidth() - tw) / 2, getY() + (getHeight() - 8) / 2, color, true);
+        // 标签按像素裁剪到按钮内：按钮行会随按钮数变窄（例如职业页签从 4 个变 5 个），
+        // 不裁剪就会把文字画到按钮外面去（与文档/提示行同一类"出框"问题）。
+        // 共享裁剪入口：RpTheme.clip（docs/14 §2.1）。
+        String label = RpTheme.clip(f2, getMessage().getString(), Math.max(8, getWidth() - 6));
+        int tw = f2.width(label);
+        g.drawString(f2, label, getX() + (getWidth() - tw) / 2, getY() + (getHeight() - 8) / 2, color, true);
     }
 }

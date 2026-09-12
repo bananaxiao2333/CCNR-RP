@@ -699,15 +699,28 @@ public final class CharacterService {
                 });
             }
             case "attribute" -> {
-                // 阵营属性配置（部署时套用到该阵营玩家）：单字段接管，只替换 attributes 字段
-                String fid = str(p, "factionId", str(p, "id", ""));
-                errors = CCNRRPMod.factions.setFactionAttributes(
-                        fid, p.has("attributes") ? p.get("attributes") : new com.google.gson.JsonArray());
+                // 属性配置（部署时套用）：单字段接管，只替换 attributes 字段。
+                // target 缺省 faction（向后兼容旧客户端）：
+                //   faction    → 阵营层；
+                //   profession → 角色（职业）层，**同 id 整体覆盖**阵营层（AttributeProfile.layer）。
+                boolean prof = "profession".equalsIgnoreCase(str(p, "target", "faction"));
+                String tid = prof ? str(p, "professionId", "") : str(p, "factionId", str(p, "id", ""));
+                com.google.gson.JsonElement attrs =
+                        p.has("attributes") ? p.get("attributes") : new com.google.gson.JsonArray();
+                errors = prof
+                        ? CCNRRPMod.factions.setProfessionAttributes(tid, attrs)
+                        : CCNRRPMod.factions.setFactionAttributes(tid, attrs);
                 if (errors.isEmpty()) {
                     // 在线成员立即生效（服务端权威 + 所见即所得）；未注册属性（mod 未装）提示但不算失败
-                    com.ccnrcom.rp.attribute.AttributeService.applyToOnlineMembers(fid);
-                    List<String> unknown = com.ccnrcom.rp.attribute.AttributeService.unknownIds(
-                            com.ccnrcom.rp.attribute.AttributeService.entriesFor(fid));
+                    List<com.ccnrcom.rp.attribute.AttributeProfile.Entry> entries = prof
+                            ? com.ccnrcom.rp.attribute.AttributeService.entriesForProfession(tid)
+                            : com.ccnrcom.rp.attribute.AttributeService.entriesFor(tid);
+                    if (prof) {
+                        com.ccnrcom.rp.attribute.AttributeService.applyToOnlineProfessionMembers(tid);
+                    } else {
+                        com.ccnrcom.rp.attribute.AttributeService.applyToOnlineMembers(tid);
+                    }
+                    List<String> unknown = com.ccnrcom.rp.attribute.AttributeService.unknownIds(entries);
                     if (!unknown.isEmpty()) {
                         service().sendError(player, "ccnr_rp.manager.attribute.unknown", String.join(", ", unknown));
                     }
@@ -1498,6 +1511,11 @@ public final class CharacterService {
                     JsonObject profSpawn = professionSpawnJson(def);
                     if (profSpawn != null) {
                         o.add("spawn", profSpawn);
+                    }
+                    // 角色（职业）层属性：管理面板「属性」弹窗要用它回显 + 标出覆盖了阵营层的哪些 id。
+                    // 新增配置字段必须同步补投影，否则会出现"保存成功但界面看不到"（docs/01 §11.2）。
+                    if (def.has("attributes") && !def.get("attributes").isJsonNull()) {
+                        o.add("attributes", def.get("attributes").deepCopy());
                     }
                     pa.add(o);
                 });
