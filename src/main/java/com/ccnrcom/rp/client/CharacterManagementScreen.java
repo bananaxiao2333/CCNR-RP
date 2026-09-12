@@ -583,11 +583,8 @@ public class CharacterManagementScreen extends Screen {
         }
         // 管理按钮
         if (mx >= mgrX1 && mx <= mgrX2 && my >= mgrY1 && my <= mgrY2) {
-            if (ClientCharacterState.isAdmin()) {
-                net.minecraft.client.Minecraft.getInstance().setScreen(new RpAdminScreen());
-            } else {
-                notice("ccnr_rp.command.no_permission");
-            }
+            // 权限判据只在 RpAdminScreen.open() 里写一份（此处不再自行判一次，避免两处判据漂移）
+            RpAdminScreen.open();
             return true;
         }
         // 机构导轨芯片（命中判定用与渲染同一套像素位移，否则横滚后点到的是别家机构）

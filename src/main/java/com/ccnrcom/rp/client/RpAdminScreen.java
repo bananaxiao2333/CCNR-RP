@@ -371,6 +371,39 @@ public class RpAdminScreen extends Screen {
         }
     }
 
+    /**
+     * 管理面板的**唯一打开入口**：无管理权限一律不开，并给玩家一条明确提示。
+     *
+     * <p>为什么要把打开这件事收成一个静态入口（而不是让调用方各自 {@code new}）：权限判据只能有一份，
+     * 调用方漏判一次，面板就会被没有权限的人打开。本方法 + {@link #tick()} 的自动关闭 + 服务端的
+     * {@code canAdmin} 校验构成三道独立的门——客户端这两道只管"能不能看到界面"，
+     * **真正的边界始终在服务端**（{@code CharacterService.onManagerRequest} 对非管理员直接回
+     * no_permission，一条管理数据都不发）。
+     */
+    public static void open() {
+        if (!ClientCharacterState.isAdmin()) {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.player != null) {
+                mc.player.displayClientMessage(Component.translatable("ccnr_rp.command.no_permission"), true);
+            }
+            return;
+        }
+        Minecraft.getInstance().setScreen(new RpAdminScreen());
+    }
+
+    /**
+     * 权限可能在面板打开期间被收回（服务端列表包重下发 {@code admin=false}：降权、切换服务器、
+     * 断线重连后尚未收到列表），因此每帧复核一次，一旦不是管理员立即关闭。
+     * 这同时兜住"任何绕过 {@link #open()} 的打开路径"。
+     */
+    @Override
+    public void tick() {
+        super.tick();
+        if (!ClientCharacterState.isAdmin()) {
+            onClose();
+        }
+    }
+
     /** 经验规则页签向本屏幕注册输入框控件（addRenderableWidget 为 protected）。 */
     public void addXpWidget(net.minecraft.client.gui.components.AbstractWidget widget) {
         addRenderableWidget(widget);

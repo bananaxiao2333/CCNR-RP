@@ -1,5 +1,37 @@
 # Changelog
 
+## 2.26.12（管理面板权限门：没有权限打不开）
+
+- **用户要求**：「确保没有权限无法打开 P 界面和 K 界面」（P 界面 = CCNR-PM 管理界面，K 界面 = 本模组管理面板）。
+  本条记的是**本模组（CCNR-RP）管理面板**这一半。
+- **查证结论先说清楚：服务端本来就是对的**，不需要改。三条证据：
+  1. `CharacterService.onManagerRequest` 对非管理员直接 `sendError(no_permission)` 并 **return**，
+     一条管理数据都不发（不是"发了再让客户端藏起来"）；
+  2. 管理 CRUD（`kind` → 权限节点分派）逐个 `Permissions.canAdmin` 校验；
+  3. 关系测定图那条 `FactionGraphOpenS2C` 由 `/rp faction graph` 触发，该命令 `requires(ADMIN_FACTION)`。
+  所以本次修的是**客户端那道门**，服务端这道门一直关着。
+- **缺口一：打开管理面板的判据散落在调用点，面板自身不自检**。`RpAdminScreen` 的构造器与 `init()`
+  都不看权限，只有 K 面板那个「管理」按钮判了一次。判据散落就意味着"漏判一次就开了"，而且面板打开后
+  只是把按钮变灰、画一句"无管理权限"，**界面本身照样在**。
+- **缺口二（真漏洞）：换服会沿用上一个服的管理权限**。`ClientCharacterState.resetForJoin()` 复位了
+  自动开面板、征召身份、对局状态等，**唯独没有复位 `isAdmin`**。于是在 A 服是管理员、切到 B 服
+  （或重连后尚未收到列表包的那段时间）时 `isAdmin` 仍为 `true`，管理面板就能被打开。
+- **修复**：
+  1. `RpAdminScreen.open()` 成为**唯一打开入口**：无权限一律不开，并在 actionbar 给一条
+     `ccnr_rp.command.no_permission`。K 面板改为调用它，权限判据只此一份。
+  2. `RpAdminScreen.tick()` 每帧复核：一旦不是管理员立即 `onClose()`。它兜住两件事——权限在面板打开期间
+     被收回（服务端列表包重下发 `admin=false`），以及**任何绕过 `open()` 的打开路径**。
+  3. `resetForJoin()` 增加 `isAdmin = false`（默认拒绝）。服务端随后会用 `CharacterListS2C` 的 `admin`
+     字段重下发真值（`applyUserListFields → Permissions.canAdmin`），所以不会误伤真管理员。
+- **边界（必须说清）**：客户端这两道门只管"能不能看到界面"，**改过的客户端仍可强行把面板画出来**——
+  但它拿不到任何数据、做不成任何操作，因为服务端每次都重新鉴权。**真正的边界始终在服务端。**
+- **不在本次范围**：K 面板本身（`CharacterManagementScreen`，角色管理 / 部署界面）**故意对所有玩家开放**——
+  它就是玩家部署上场用的界面，`panelLocked()` 只限制"仅观察者可开"。如果要把 K 面板也收成管理员专属，
+  那是另一个需求（会直接影响普通玩家部署），需要单独确认。
+- **测试**：`ClientCharacterStateTest` 补 2 例——`admin` 字段镜像为真；以及**`resetForJoin()` 必须清掉
+  管理权限**（钉住上面那个跨服漏洞）。`test -PrunTests` 全绿（**269 例 0 失败**，较 2.26.11 的 267 例新增 2 例）。
+- 构建：`spotlessApply` / `build` / `test -PrunTests` 全绿；版本号 **2.26.12**。
+
 ## 2.26.11（修复头顶标签阵营徽章隐形：世界空间绘制丢了 alpha）
 
 - **实机现象**（用户反馈"观察者状态下别人头上的悬浮标签图标变透明了看不见"）：观察者视角下看别人头顶的
