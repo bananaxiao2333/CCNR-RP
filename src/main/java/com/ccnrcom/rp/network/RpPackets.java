@@ -780,6 +780,35 @@ public final class RpPackets {
         }
     }
 
+    /**
+     * 对局状态（S2C）：当前模式 / 当前阶段 / 两种计时 / 激活事件及其**展示三件套**（显示名·描述·图标）。
+     * 供背包界面左侧「对局状态」面板与顶部事件横幅渲染——它们不再只显示内部 id。
+     * 计时以「剩余毫秒 + 服务端当前时间」下发，客户端本地倒数，避免每秒发包与两端时钟偏差。
+     */
+    public static final class MatchStateS2C {
+        public final String payload;
+
+        public MatchStateS2C(String payload) {
+            this.payload = payload;
+        }
+
+        public MatchStateS2C(FriendlyByteBuf buf) {
+            this(buf.readUtf(32768));
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(payload, 32768);
+        }
+
+        public static void handle(MatchStateS2C msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get()
+                    .enqueueWork(() -> net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(
+                            net.minecraftforge.api.distmarker.Dist.CLIENT,
+                            () -> () -> com.ccnrcom.rp.client.ClientPacketHandlers.onMatchState(msg.payload)));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
     /** 管理器状态（S2C）。 */
     public static final class ManagerStateS2C {
         public final String payload;

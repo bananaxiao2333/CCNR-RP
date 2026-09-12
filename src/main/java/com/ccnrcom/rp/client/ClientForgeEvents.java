@@ -244,6 +244,8 @@ public final class ClientForgeEvents {
     @SubscribeEvent
     public static void onScreenRender(net.minecraftforge.client.event.ScreenEvent.Render.Post event) {
         if (event.getScreen() instanceof net.minecraft.client.gui.screens.inventory.InventoryScreen) {
+            // 左侧「对局状态」面板（游戏模式 / 回合阶段 / 计时）：先画，避免被状态栏与横幅压住
+            MatchStatusPanel.render(event.getGuiGraphics(), event.getScreen().width, event.getScreen().height);
             StatusHud.render(event.getGuiGraphics(), event.getScreen().width, event.getScreen().height);
             EventBanner.render(event.getGuiGraphics(), event.getScreen().width, event.getScreen().height);
             // 背包右上角：已同意玩家列表（接受后不可取消）

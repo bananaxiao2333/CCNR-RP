@@ -224,6 +224,11 @@ public final class ClientPacketHandlers {
         ClientCharacterState.setActiveEvents(payload);
     }
 
+    /** 对局状态（模式/当前幕/计时/激活事件展示元数据）——背包左侧面板与顶部横幅的数据源。 */
+    public static void onMatchState(String payload) {
+        ClientCharacterState.setMatchState(payload);
+    }
+
     public static void onManagerState(String payload) {
         ClientCharacterState.setManager(payload);
     }

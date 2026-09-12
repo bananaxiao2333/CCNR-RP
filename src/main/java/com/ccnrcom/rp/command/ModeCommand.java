@@ -56,6 +56,7 @@ final class ModeCommand {
         }
         // 热切：重读新激活模式的剧本配置 + 重置剧本运行时（阶段回第 0 幕、事件/波次重载、停动画）
         ModeManager.resetScenarioRuntime();
+        broadcastMatch();
         source.sendSuccess(() -> Component.translatable("ccnr_rp.command.mode.set", id), true);
         return 1;
     }
@@ -69,7 +70,15 @@ final class ModeCommand {
             return 0;
         }
         ModeManager.resetScenarioRuntime();
+        broadcastMatch();
         source.sendSuccess(() -> Component.translatable("ccnr_rp.command.mode.clear"), true);
         return 1;
+    }
+
+    /** 模式变了 → 推送对局状态：面板上的模式名/描述/图标必须立刻跟着换（docs/01 §11.2 所见即所得）。 */
+    private static void broadcastMatch() {
+        if (CCNRRPMod.eventManager != null) {
+            CCNRRPMod.eventManager.broadcastMatchState();
+        }
     }
 }

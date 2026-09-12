@@ -27,6 +27,9 @@
   ]
 }
 ```
+- 可选 `name` / `desc` / `icon`：**展示三件套**（显示名·描述·图标）。事件横幅与背包左侧对局状态面板
+  按它渲染，不再只画内部 id；`name` 空则回退事件 id，旧配置零影响。字段与画法契约见
+  [docs/15 §4.9](15-模式编排与多模式设计.md) 与 [docs/14 §5.8](14-界面主题设计.md)。
 - 可选 sequence 数组：事件触发时的行为序列（步骤 WAIT/WAVE/COMMAND/FORCE_PICK/RULECHANGE/SWITCHPHASE/EVACUATE，
   字段见 docs/09-spawn.md / SequenceEngine；阶段 phase 与刷新波 wave 同样支持）。
 - **hooks 段的解析优先级**（v2.26.5 起代码与本节示例对齐）：

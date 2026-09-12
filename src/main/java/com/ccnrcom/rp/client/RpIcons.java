@@ -172,6 +172,17 @@ public final class RpIcons {
         glyph(g, x1 + 2, y1 + 2, Math.max(4, size - 4), name, color, RpTheme.SLOT_PUNCH);
     }
 
+    /**
+     * 单画一个图标图形（**无底盘、无等级环**），圆心 (cx,cy)、半径 r；{@code img:<名>} 走服务器素材库图片。
+     *
+     * <p>给"半遮挡角标"类用法（对局状态卡片左下角、事件卡片左下角）：调用方自行
+     * {@code enableScissor} 裁到卡片矩形，于是伸出卡片的那一半自然被裁掉。
+     * 与 {@link #badge}/{@link #bigBadge} 的区别是它不画盘与环——那些在裁剪下会变成脏边。
+     */
+    public static void icon(GuiGraphics g, int cx, int cy, int r, String icon, int color) {
+        polygon(g, cx, cy, r, icon, color, RpTheme.BADGE_PUNCH);
+    }
+
     /** 在盒子内画多边形图标（16 单位盒映射）；img:<名> 时绘制服务器下发的图片徽章。 */
     private static void polygon(GuiGraphics g, int cx, int cy, int r, String name, int color, int punchColor) {
         if (name != null && name.startsWith("img:")) {

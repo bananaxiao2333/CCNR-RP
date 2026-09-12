@@ -246,6 +246,10 @@ public final class ClientCharacterState {
         autoOpenArmed = false;
         autoOpenPending = false;
         conscript = null;
+        matchStateSeen = false; // 换服/重连后重新判定，避免残留上一局的对局状态
+        seqDeadlineMs = -1;
+        phaseTicksLeft = -1;
+        phaseTicksBase = -1;
     }
 
     /** 征召兵在场身份（JSON：professionId/factionId）；null=未以征召兵身份在场。 */
@@ -707,6 +711,141 @@ public final class ClientCharacterState {
 
     public static synchronized List<String> activeEvents() {
         return List.copyOf(activeEvents);
+    }
+
+    // ---------- 对局状态（模式 / 当前幕 / 计时 / 事件展示三件套） ----------
+
+    private static boolean matchRunning = true;
+    /**
+     * 是否收到过对局状态。**从未收到时（例如连了未装本 mod / 通道不可用的服务器）不画左侧面板**——
+     * 否则会显示"未启用模式"这种并非事实的假状态（docs/01 §9.6：不显示假数据）。
+     */
+    private static boolean matchStateSeen = false;
+
+    private static JsonObject matchMode = new JsonObject();
+    private static JsonObject matchPhase = new JsonObject();
+    private static final List<JsonObject> matchEvents = new ArrayList<>();
+    private static final java.util.Map<String, JsonObject> matchEventById = new java.util.HashMap<>();
+    /** 阶段倒计时（收到时的剩余 tick + 当时的 level gameTime）——按 **tick** 倒数，游戏暂停时一起停。 */
+    private static long phaseTicksLeft = -1;
+
+    private static long phaseTicksBase = -1;
+    /** 行为序列"下一步"截止时刻（墙钟毫秒）——服务端 dueAtMs 就是墙钟，暂停期间照样流逝。 */
+    private static long seqDeadlineMs = -1;
+
+    /**
+     * 对局状态更新（服务端 MatchStateS2C）。
+     *
+     * <p>两种计时用**两种时钟**，这是刻意的：阶段按 durationMinutes 由 tick 推进（暂停即停），
+     * 行为序列的 {@code dueAtMs} 是墙钟（暂停期间照样到期）。用错时钟会出现"暂停后倒计时对不上"。
+     */
+    public static synchronized void setMatchState(String payload) {
+        if (payload == null || payload.isBlank()) {
+            return;
+        }
+        JsonObject root;
+        try {
+            root = JsonUtil.GSON.fromJson(payload, JsonObject.class);
+        } catch (Exception e) {
+            return; // 载荷异常仅丢弃本次更新
+        }
+        if (root == null) {
+            return;
+        }
+        matchStateSeen = true;
+        matchRunning = !root.has("running") || root.get("running").getAsBoolean();
+        matchMode =
+                root.has("mode") && root.get("mode").isJsonObject() ? root.getAsJsonObject("mode") : new JsonObject();
+        matchPhase = root.has("phase") && root.get("phase").isJsonObject()
+                ? root.getAsJsonObject("phase")
+                : new JsonObject();
+        if (root.has("phaseTimerMs") && root.get("phaseTimerMs").isJsonPrimitive()) {
+            phaseTicksLeft = Math.max(0, root.get("phaseTimerMs").getAsLong() / 50L);
+            phaseTicksBase = currentGameTime();
+        } else {
+            phaseTicksLeft = -1;
+            phaseTicksBase = -1;
+        }
+        if (root.has("seqTimerMs") && root.get("seqTimerMs").isJsonPrimitive()) {
+            seqDeadlineMs = System.currentTimeMillis()
+                    + Math.max(0, root.get("seqTimerMs").getAsLong());
+        } else {
+            seqDeadlineMs = -1;
+        }
+        matchEvents.clear();
+        matchEventById.clear();
+        List<String> ids = new ArrayList<>();
+        if (root.has("events") && root.get("events").isJsonArray()) {
+            for (JsonElement e : root.getAsJsonArray("events")) {
+                if (!e.isJsonObject()) {
+                    continue;
+                }
+                JsonObject o = e.getAsJsonObject();
+                matchEvents.add(o);
+                String id = str(o, "id", "");
+                matchEventById.put(id, o);
+                ids.add(id);
+            }
+        }
+        // 与 EventStateS2C 的 id 列表保持一致（横幅的点位/滚动逻辑照旧按 id 走）
+        activeEvents.clear();
+        activeEvents.addAll(ids);
+    }
+
+    private static long currentGameTime() {
+        try {
+            net.minecraft.client.multiplayer.ClientLevel level = net.minecraft.client.Minecraft.getInstance().level;
+            return level == null ? 0L : level.getGameTime();
+        } catch (Throwable t) {
+            return 0L; // 极端时序下（未进世界）按 0 处理，下次同步即恢复
+        }
+    }
+
+    /** 是否已收到过对局状态（未收到时左侧面板整块不画）。 */
+    public static synchronized boolean matchStateSeen() {
+        return matchStateSeen;
+    }
+
+    /** 本局是否在运行中（`/rp end` 后为空窗期）。 */
+    public static synchronized boolean matchRunning() {
+        return matchRunning;
+    }
+
+    /** 当前模式（id/active/name/desc/icon；未激活时字段为空串）。 */
+    public static synchronized JsonObject matchMode() {
+        return matchMode;
+    }
+
+    /** 当前阶段（id/name/desc/icon/index/total/conditionDriven）。 */
+    public static synchronized JsonObject matchPhase() {
+        return matchPhase;
+    }
+
+    /** 激活事件的展示三件套列表（顺序与 {@link #activeEvents()} 一致）。 */
+    public static synchronized List<JsonObject> matchEvents() {
+        return List.copyOf(matchEvents);
+    }
+
+    /** 某事件的展示三件套（无则 null——横幅据此回退显示 id）。 */
+    public static synchronized JsonObject matchEventDisplay(String id) {
+        return matchEventById.get(id);
+    }
+
+    /** 阶段倒计时剩余秒数（无倒计时返回 -1）：按 tick 倒数，游戏暂停时停住。 */
+    public static synchronized long phaseSecondsLeft() {
+        if (phaseTicksLeft < 0) {
+            return -1;
+        }
+        long elapsed = Math.max(0, currentGameTime() - phaseTicksBase);
+        return Math.max(0, (phaseTicksLeft - elapsed) / 20L);
+    }
+
+    /** 行为序列"下一步"剩余秒数（无运行中序列返回 -1）：按墙钟倒数。 */
+    public static synchronized long seqSecondsLeft() {
+        if (seqDeadlineMs < 0) {
+            return -1;
+        }
+        return Math.max(0, (seqDeadlineMs - System.currentTimeMillis()) / 1000L);
     }
 
     /** 入服自动打开面板是否处于待定状态（未消费也未取消）。 */

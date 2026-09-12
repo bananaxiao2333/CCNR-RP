@@ -90,6 +90,110 @@ public final class EventManager {
         for (ServerPlayer p : onlinePlayers()) {
             RpChannels.sendTo(p, new RpPackets.EventStateS2C(pay.toString()));
         }
+        broadcastMatchState();
+    }
+
+    // ------------------------------------------------------------------ 对局状态（左侧面板 / 事件横幅）
+
+    /**
+     * 对局状态载荷：当前模式 / 当前阶段 / 两种计时 / 激活事件的**展示三件套**。
+     *
+     * <p>为什么要它：界面过去只拿得到内部 id（事件横幅直接画 {@code qdf_support}），
+     * 模式与"现在是哪一幕"客户端完全没有镜像。这里把"给人看的"一次给全。
+     *
+     * <p><b>计时怎么传</b>：只传**剩余毫秒** + 服务端当前时间，客户端本地倒数——
+     * 既不用每秒发包，也不受两端时钟偏差影响（docs/01 §9.2：不每 tick 全量同步）。
+     * 两种计时都支持：{@code phaseTimerMs}（时长驱动幕的倒计时）与 {@code seqTimerMs}
+     * （行为序列"下一步还有多久"，供 evac_round 那类 WAIT 剧本用）。
+     */
+    public JsonObject matchStatePayload() {
+        JsonObject o = new JsonObject();
+        o.addProperty("serverNowMs", System.currentTimeMillis());
+        o.addProperty("running", running);
+        // 模式（未激活时只给 id="" 与 active=false，客户端回退本地化文案，不露空串）
+        com.ccnrcom.rp.config.ModeManager modes = CCNRRPMod.modes;
+        JsonObject mode = new JsonObject();
+        mode.addProperty("id", modes == null ? "" : modes.activeId());
+        mode.addProperty("active", modes != null && modes.active());
+        if (modes != null && modes.active()) {
+            JsonObject d = null;
+            for (com.ccnrcom.rp.config.ModeManager.ModeDef m : modes.modes()) {
+                if (m.id().equals(modes.activeId())) {
+                    d = m.display().toJson();
+                    break;
+                }
+            }
+            if (d != null) {
+                mode.add("name", d.get("name"));
+                mode.add("desc", d.get("desc"));
+                mode.add("icon", d.get("icon"));
+            }
+        }
+        if (!mode.has("name")) {
+            mode.addProperty("name", "");
+            mode.addProperty("desc", "");
+            mode.addProperty("icon", "");
+        }
+        o.add("mode", mode);
+        // 当前阶段（含序号/总数，供"第 n/m 幕"读数）
+        GamePhase cur = clock.current();
+        JsonObject phase = new JsonObject();
+        if (cur != null) {
+            phase = cur.display().toJson();
+            phase.addProperty("id", cur.id());
+            phase.addProperty("index", clock.index());
+            phase.addProperty("total", clock.phases().size());
+            phase.addProperty("conditionDriven", cur.conditionDriven());
+        } else {
+            phase.addProperty("id", "");
+            phase.addProperty("name", "");
+            phase.addProperty("desc", "");
+            phase.addProperty("icon", "");
+            phase.addProperty("index", -1);
+            phase.addProperty("total", 0);
+        }
+        o.add("phase", phase);
+        // 计时 1：时长驱动幕的剩余时间（条件驱动/无阶段 → 不写该键 = 客户端不显示）
+        long remainTicks = clock.ticksRemaining();
+        if (remainTicks >= 0) {
+            o.addProperty("phaseTimerMs", remainTicks * 50L); // 20 tick = 1 秒
+        }
+        // 计时 2：行为序列"下一步还有多久"（无运行中序列 → 不写该键）
+        if (CCNRRPMod.sequenceEngine != null) {
+            long seqMs = CCNRRPMod.sequenceEngine.nextStepInMs();
+            if (seqMs >= 0) {
+                o.addProperty("seqTimerMs", seqMs);
+            }
+        }
+        // 激活事件：id + 展示三件套（横幅与面板都按它渲染，不再只画 id）
+        JsonArray evs = new JsonArray();
+        for (EventDefinition def : events) {
+            if (def.state() != EventState.RUNNING) {
+                continue;
+            }
+            JsonObject eo = def.display().toJson();
+            eo.addProperty("id", def.id());
+            evs.add(eo);
+        }
+        o.add("events", evs);
+        return o;
+    }
+
+    /** 推送对局状态给全体在线玩家。 */
+    public void broadcastMatchState() {
+        String payload = matchStatePayload().toString();
+        for (ServerPlayer p : onlinePlayers()) {
+            RpChannels.sendTo(p, new RpPackets.MatchStateS2C(payload));
+        }
+    }
+
+    /** 推送对局状态给单个玩家（登录时补发；late-join 必须拿到当前有效状态，docs/01 §9.2）。 */
+    public void sendMatchState(ServerPlayer player) {
+        if (player == null) {
+            return;
+        }
+        RpChannels.sendTo(
+                player, new RpPackets.MatchStateS2C(matchStatePayload().toString()));
     }
 
     /** 清空当前事件（/rp event clear）：全部 RUNNING → SETTLED → 重置为 SCHEDULED 并广播横幅。 */
@@ -206,6 +310,9 @@ public final class EventManager {
         }
         // 空窗期（未运行）阶段不自动推进；仅开局事件可触发以重新开局
         evaluateAll(tr);
+        if (tr.changed()) {
+            broadcastMatchState(); // 切幕了：面板的"第 n/m 幕"与倒计时必须立刻跟上
+        }
         autoEndRunnings();
     }
 
@@ -362,7 +469,8 @@ public final class EventManager {
                         d.notifyTitleKey(),
                         d.durationSeconds(),
                         on ? EventState.SCHEDULED : EventState.SETTLED,
-                        d.steps());
+                        d.steps(),
+                        d.display());
                 events.set(i, nd);
                 return true;
             }
@@ -394,6 +502,7 @@ public final class EventManager {
             }
             syncRulesPhase();
             evaluateAll(tr);
+            broadcastMatchState();
         }
         return tr.changed();
     }
@@ -438,6 +547,7 @@ public final class EventManager {
             }
         }
         resetToPhase(script == null ? "" : script.resetToPhase());
+        broadcastMatchState(); // 复位待启：面板要立刻显示"空窗期 + 第 0 幕"
         LOGGER.info("[CCNR-RP] 结局触发（{}）", reason == null || reason.isBlank() ? "无理由" : reason);
         return true;
     }

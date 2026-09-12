@@ -74,6 +74,25 @@ public final class PhaseClock {
         return ticksInPhase;
     }
 
+    /**
+     * 距离"按时长自动推进"还剩多少 tick；**条件驱动幕（advanceOn 非空）返回 -1 = 没有倒计时**。
+     *
+     * <p>供左侧对局状态面板显示计时数字（客户端按"剩余毫秒"本地倒数，见 docs/14 §5.8）。
+     * 纯逻辑，与 {@link #tick(long)} 用同一套 limit 计算，避免两处算法漂移。
+     * 无阶段返回 -1。
+     */
+    public long ticksRemaining() {
+        if (phases.isEmpty()) {
+            return -1;
+        }
+        GamePhase p = current();
+        if (p.conditionDriven()) {
+            return -1; // 条件驱动：不按时长推进，界面上不显示倒计时
+        }
+        long limit = Math.max(1, p.durationMinutes()) * 1200L;
+        return Math.max(0, limit - ticksInPhase);
+    }
+
     public int index() {
         return index;
     }

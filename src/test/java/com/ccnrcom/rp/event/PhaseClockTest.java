@@ -77,4 +77,37 @@ class PhaseClockTest {
         assertTrue(c.advance().changed());
         assertEquals("b", c.phaseId());
     }
+    // ---------- ticksRemaining（左侧对局状态面板的"本幕剩余"倒计时） ----------
+
+    /** 时长驱动幕：剩余 = limit - 已过 tick，随时间减少、到点归零。 */
+    @Test
+    void ticksRemainingCountsDownForDurationDrivenPhase() {
+        PhaseClock c = clock();
+        long full = 30 * 1200L;
+        assertEquals(full, c.ticksRemaining());
+        c.tick(1200L);
+        assertEquals(full - 1200L, c.ticksRemaining());
+    }
+
+    /** 条件驱动幕（advanceOn 非空）：不按时长推进 → 没有倒计时（返回 -1，界面不显示该行）。 */
+    @Test
+    void ticksRemainingIsMinusOneForConditionDrivenPhase() {
+        PhaseClock c = new PhaseClock(List.of(new GamePhase(
+                "round",
+                0,
+                0,
+                new com.ccnrcom.rp.event.EventModels.Trigger(
+                        com.ccnrcom.rp.event.EventModels.Trigger.Type.CONDITION,
+                        java.util.Map.of("cond", "ALIVE_COUNT", "op", ">=", "value", "4")),
+                List.of())));
+        assertEquals(-1, c.ticksRemaining());
+        c.tick(100000L);
+        assertEquals(-1, c.ticksRemaining());
+    }
+
+    /** 无阶段：没有倒计时（不抛异常）。 */
+    @Test
+    void ticksRemainingIsMinusOneWithoutPhases() {
+        assertEquals(-1, new PhaseClock(List.of()).ticksRemaining());
+    }
 }

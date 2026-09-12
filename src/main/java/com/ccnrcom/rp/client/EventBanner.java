@@ -99,18 +99,7 @@ public final class EventBanner {
         var font = Minecraft.getInstance().font;
         g.enableScissor(8, y - 2, w - 8, y + bh + 4);
         for (String id : ids) {
-            // 4:3 横向长方形（红色警戒边框 + 警示卡片底）
-            RpRoundRect.outlined(g, x, y, x + bw, y + bh, 4f, RpTheme.RED_LINE, RpTheme.SURFACE_ALERT);
-            g.fill(x, y + 3, x + 4, y + bh - 3, RpTheme.RED);
-            g.drawCenteredString(font, Component.literal(id).getString(), x + bw / 2 + 2, y + 12, RpTheme.RED_LINE);
-            g.drawCenteredString(
-                    font,
-                    Component.translatable("ccnr_rp.event.banner.active").getString(),
-                    x + bw / 2 + 2,
-                    y + 24,
-                    RpTheme.TEXT_SECONDARY);
-            // 底部警戒刻度
-            g.fill(x + 8, y + bh - 4, x + bw - 8, y + bh - 3, RpTheme.RED_LINE);
+            drawEventCard(g, font, x, y, bw, bh, id);
             x += bw + gap;
         }
         g.disableScissor();
@@ -134,6 +123,69 @@ public final class EventBanner {
         } else {
             lastTotal = 0;
             lastVisible = 0;
+        }
+    }
+
+    /**
+     * 单张事件卡片（4:3 横向，红色警戒边框 + 警示底）。
+     *
+     * <p><b>不再直接画 id</b>：优先用服务端下发的展示三件套（显示名 + 描述 + 图标，见 docs/15 §4.9），
+     * 显示名为空才回退 id；描述按像素断行、最多两行，超出走 {@link RpTheme#clip} 裁剪。
+     * 图标**半遮挡在卡片左下角**（圆心落在左下角顶点 + 裁到卡片矩形 → 伸出卡片的一半被裁掉），
+     * 与左侧对局状态面板同一画法（{@link MatchStatusPanel}）。
+     */
+    private static void drawEventCard(
+            GuiGraphics g, net.minecraft.client.gui.Font font, int x, int y, int bw, int bh, String id) {
+        com.google.gson.JsonObject d = ClientCharacterState.matchEventDisplay(id);
+        String name = display(d, "name");
+        String desc = display(d, "desc");
+        String icon = display(d, "icon");
+        if (name.isBlank()) {
+            name = id; // 未配置显示名：回退 id（旧配置照常工作）
+        }
+        RpRoundRect.outlined(g, x, y, x + bw, y + bh, 4f, RpTheme.RED_LINE, RpTheme.SURFACE_ALERT);
+        g.fill(x, y + 3, x + 4, y + bh - 3, RpTheme.RED);
+        // 图标预留带：底部 13px 留给左下角半遮挡图标，文字不越过它
+        int textW = bw - 16;
+        int ty = y + 8;
+        g.drawString(font, RpTheme.clip(font, name, textW), x + 8, ty, RpTheme.ACCENT_FILL, false);
+        ty += 11;
+        g.drawString(
+                font,
+                Component.translatable("ccnr_rp.event.banner.active").getString(),
+                x + 8,
+                ty,
+                RpTheme.RED_LINE,
+                false);
+        ty += 11;
+        if (!desc.isBlank()) {
+            int shown = 0;
+            for (String line : RpTheme.wrapText(font, desc, textW)) {
+                if (shown >= 2 || ty + 9 > y + bh - 14) {
+                    break; // 最多两行、且不越过图标预留带
+                }
+                g.drawString(font, line, x + 8, ty, RpTheme.TEXT_SECONDARY, false);
+                ty += 9;
+                shown++;
+            }
+        }
+        g.fill(x + 8, y + bh - 4, x + bw - 8, y + bh - 3, RpTheme.RED_LINE);
+        if (!icon.isBlank()) {
+            // 半遮挡图标：圆心 = 卡片左下角顶点，裁到卡片内 → 只剩卡片里的部分
+            g.enableScissor(x, y, x + bw, y + bh);
+            RpIcons.icon(g, x + 1, y + bh - 1, 12, icon, RpTheme.RED_LINE);
+            g.disableScissor();
+        }
+    }
+
+    private static String display(com.google.gson.JsonObject o, String key) {
+        if (o == null || !o.has(key) || o.get(key).isJsonNull()) {
+            return "";
+        }
+        try {
+            return o.get(key).getAsString();
+        } catch (Exception e) {
+            return "";
         }
     }
 }

@@ -64,6 +64,31 @@ class ModeManagerTest {
         ModeConfig c = ModeManager.parseModes(
                 JsonParser.parseString("{\"modes\":[{\"id\":\"m1\"}]}").getAsJsonObject());
         assertEquals("m1", c.modes().get(0).name());
-        assertEquals(new ModeDef("m1", "m1"), c.modes().get(0));
+        assertEquals(
+                new ModeDef("m1", com.ccnrcom.rp.util.DisplayInfo.EMPTY),
+                c.modes().get(0));
+    }
+
+    /** 展示三件套（docs/15 §4.9）：name/desc/icon 都解析；显示名缺省回退 id（界面不露空串）。 */
+    @Test
+    void modeDefParsesDisplayTriple() {
+        ModeConfig c = ModeManager.parseModes(JsonParser.parseString(
+                        "{\"modes\":[{\"id\":\"evac\",\"name\":\"定时疏散\",\"desc\":\"人数达标开局\",\"icon\":\"shield\"}]}")
+                .getAsJsonObject());
+        ModeDef m = c.modes().get(0);
+        assertEquals("evac", m.id());
+        assertEquals("定时疏散", m.name());
+        assertEquals("人数达标开局", m.display().desc());
+        assertEquals("shield", m.display().icon());
+    }
+
+    /** 显示名空串（显式写了 ""）也回退 id——不能把空串画到界面上。 */
+    @Test
+    void blankNameFallsBackToId() {
+        ModeConfig c = ModeManager.parseModes(
+                JsonParser.parseString("{\"modes\":[{\"id\":\"m2\",\"name\":\"  \",\"icon\":\"hex\"}]}")
+                        .getAsJsonObject());
+        assertEquals("m2", c.modes().get(0).name());
+        assertEquals("hex", c.modes().get(0).display().icon());
     }
 }
