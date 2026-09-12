@@ -32,6 +32,8 @@ public final class RpCommand {
         ModeCommand.register(rp);
         AnimationCommand.register(rp);
         SpawnCommand.register(rp);
+        WaveCommand.register(rp);
+        EvacCommand.register(rp);
         DbCommand.register(rp);
         AttributeCommand.register(rp);
         VarCommand.register(rp);
@@ -59,6 +61,8 @@ public final class RpCommand {
             "ccnr_rp.command.usage.end",
             "ccnr_rp.command.usage.animation",
             "ccnr_rp.command.usage.spawn",
+            "ccnr_rp.command.usage.wave",
+            "ccnr_rp.command.usage.evac",
             "ccnr_rp.command.usage.db",
             "ccnr_rp.command.usage.attribute",
             "ccnr_rp.command.usage.var",

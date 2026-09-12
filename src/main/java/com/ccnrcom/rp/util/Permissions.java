@@ -35,6 +35,9 @@ public final class Permissions {
             new PermissionNode<>("ccnrrp", "admin.xp", PermissionTypes.BOOLEAN, (player, uuid, context) -> false);
     public static final PermissionNode<Boolean> ADMIN_DB =
             new PermissionNode<>("ccnrrp", "admin.db", PermissionTypes.BOOLEAN, (player, uuid, context) -> false);
+    /** 波次库显式召波（/rp wave spawn）：与 /rp spawn 分开授权（docs/15 §5）。 */
+    public static final PermissionNode<Boolean> ADMIN_WAVE =
+            new PermissionNode<>("ccnrrp", "admin.wave", PermissionTypes.BOOLEAN, (player, uuid, context) -> false);
     /** 阵营属性（玩家属性编辑器）：可单独授权的管理节点。 */
     public static final PermissionNode<Boolean> ADMIN_ATTRIBUTE = new PermissionNode<>(
             "ccnrrp", "admin.attribute", PermissionTypes.BOOLEAN, (player, uuid, context) -> false);
@@ -55,6 +58,7 @@ public final class Permissions {
                 ADMIN_MODE,
                 ADMIN_ANIMATION,
                 ADMIN_SPAWN,
+                ADMIN_WAVE,
                 ADMIN_KILL,
                 ADMIN_XP,
                 ADMIN_DB,

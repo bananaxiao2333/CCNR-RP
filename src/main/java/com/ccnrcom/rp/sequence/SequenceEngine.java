@@ -279,6 +279,7 @@ public final class SequenceEngine {
                 case "FORCE_PICK" -> forcePick(p, vars);
                 case "RULECHANGE", "RULE_CHANGE" -> ruleChange(p, vars);
                 case "SWITCHPHASE", "SWITCH_PHASE" -> switchPhaseStep(p, vars);
+                case "EVACUATE" -> evacuate(p, vars);
                 default -> LOGGER.warn("[CCNR-RP] 未知序列步骤类型: {}", type);
             }
         } catch (Throwable t) {
@@ -302,6 +303,27 @@ public final class SequenceEngine {
         // 作用域：动作自带 phase 优先，否则当前幕（RuleService.apply 内部回退 currentPhase）
         CCNRRPMod.rules.apply(p, "");
         LOGGER.info("[CCNR-RP] ruleChange {}（{} 幕）", rule, CCNRRPMod.rules.currentPhase());
+    }
+
+    /**
+     * 疏散结算步骤（EVACUATE）：对当前在场（ALIVE）用户追加疏散分并立即结算，随后转观察者。
+     *
+     * <p>参数：{@code xp}（疏散分，缺省 0 = 只疏散不加分）、{@code title}（疏散分标题，**必填**——
+     * 它同时是合并键与结算动画里显示在数值后的文案，缺了会变成一条无名条目，故缺 title 时跳过并 WARN）。
+     * 走非死亡路径：不广播 character_death、不落遗体、不产生阵亡扣分（docs/06 §6）。
+     */
+    private void evacuate(JsonObject p, Map<String, String> vars) {
+        if (CCNRRPMod.experience == null) {
+            LOGGER.warn("[CCNR-RP] EVACUATE 跳过：经验服务未就绪");
+            return;
+        }
+        String title = inject(str(p, "title", ""), vars).trim();
+        if (title.isEmpty()) {
+            LOGGER.warn("[CCNR-RP] EVACUATE 跳过：缺少 title（疏散分标题不能为空）");
+            return;
+        }
+        long xp = num(p, "xp", 0);
+        CCNRRPMod.experience.evacuateAlive(title, xp);
     }
 
     /** 强制切幕步骤（switchPhase）：空 phase → 下一幕；否则按 id 切。 */

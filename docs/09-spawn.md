@@ -116,6 +116,8 @@
 ## 5. 命令（OP≥2 或 ccnnrp.admin.spawn）
 /rp spawn list、/rp spawn trigger <id>（强制触发一次，召唤波通道，幂等忽略 RUNNING）、
 /rp spawn enable <id> <on|off>（运行中切换生效）。玩家部署入口：GUI 按钮 / /rp character deploy <id>。
+另见 **/rp wave spawn &lt;id&gt;**（权限 `ccnnrp.admin.wave`）：从波次库显式召一波，供剧本/管理端手动调兵
+（docs/15 §4.4 波次库纯脚本/命令召、§5 命令族）。
 
 ## 6. WBS 小任务
 1. SpawnWaveDefinition + 配置读写 + 校验（未知 profession/team 报错带行号）；2. WaveSelector 纯类（双池+排序+配额+回退）；

@@ -39,4 +39,30 @@ public final class DeathInventoryPolicy {
         }
         return offlineDeath || spectatorAtDeath || keepInventory;
     }
+
+    /** 进入观察者时的背包处置方式。 */
+    public enum Disposal {
+        /** 爆到地上：物品留在世界里，玩家能找回（遗体收纳或落地）。 */
+        DROP,
+        /** 直接删除：不产生任何掉落物。 */
+        DELETE
+    }
+
+    /**
+     * 进入观察者时该用哪种背包处置（纯逻辑，可脱机单测）。
+     *
+     * <p><b>规则：只有死亡把物品爆到地上，其他一切切观察者的路径一律直接删除。</b>
+     * 这里说的"死亡路径"只有两种——<b>自然死亡</b>（{@code reason="death"}）与<b>掉线判死</b>
+     * （{@code RetireFlag.OFFLINE}）：它们的物品要留在世界里（遗体收纳 / 落地），玩家能找回。
+     *
+     * <p>其余全部属于 DELETE：管理员 {@code /rp kill} 与 {@code /rp retire}（reason 分别是
+     * {@code command}/{@code retire}，语义是"退场"而不是"死在场上"）、疏散结算、旁观者兜底轮询、
+     * DEAD 与登录归一化——观察者不该把上一局的装备留在世界里，也就不该在脚下掉一地。
+     *
+     * @param naturalDeath 自然死亡（reason=death）
+     * @param offlineDeath 掉线判死（RetireFlag.OFFLINE）
+     */
+    public static Disposal disposalOnObserving(boolean naturalDeath, boolean offlineDeath) {
+        return (naturalDeath || offlineDeath) ? Disposal.DROP : Disposal.DELETE;
+    }
 }

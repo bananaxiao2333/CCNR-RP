@@ -4,9 +4,11 @@
  */
 package com.ccnrcom.rp.status;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.ccnrcom.rp.status.DeathInventoryPolicy.Disposal;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -45,5 +47,40 @@ class DeathInventoryPolicyTest {
     void survivalDeathWithKeepInventoryFalseStaysWithVanilla() {
         // 原版会爆出：不重复处理（否则等于把物品掉两次/绕过消失诅咒等原版语义）
         assertFalse(DeathInventoryPolicy.dropExplicitly(false, false, false, false));
+    }
+
+    // ---------- 进入观察者的背包处置（"只有死亡爆一地，其他直接删"） ----------
+
+    @Test
+    void naturalDeathDropsOnGround() {
+        assertEquals(Disposal.DROP, DeathInventoryPolicy.disposalOnObserving(true, false));
+    }
+
+    @Test
+    void offlineDeathDropsOnGround() {
+        // 掉线判死也是"死在场上"：物品要留在世界里（遗体收纳 / 落地），玩家能找回
+        assertEquals(Disposal.DROP, DeathInventoryPolicy.disposalOnObserving(false, true));
+        assertEquals(Disposal.DROP, DeathInventoryPolicy.disposalOnObserving(true, true));
+    }
+
+    @Test
+    void everyOtherObserverPathDeletesSilently() {
+        // /rp kill（reason=command）、/rp retire（reason=retire）、疏散、旁观兜底、归一化
+        // —— 都不是死亡路径：直接删除，不在脚下掉一地
+        assertEquals(Disposal.DELETE, DeathInventoryPolicy.disposalOnObserving(false, false));
+    }
+
+    @Test
+    void deathPathsAreTheOnlyOnesThatDrop() {
+        // 反向断言：把"如何判定死亡路径"钉死，防止以后有人顺手把 /rp kill 也算成死亡而开始掉一地
+        for (boolean natural : new boolean[] {false, true}) {
+            for (boolean offline : new boolean[] {false, true}) {
+                Disposal d = DeathInventoryPolicy.disposalOnObserving(natural, offline);
+                assertEquals(
+                        (natural || offline) ? Disposal.DROP : Disposal.DELETE,
+                        d,
+                        "natural=" + natural + " offline=" + offline);
+            }
+        }
     }
 }

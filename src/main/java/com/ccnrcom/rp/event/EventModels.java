@@ -279,9 +279,11 @@ public final class EventModels {
                 tasks.add(new Task(str(t, "id", "task"), (int) num(t, "xp", 50)));
             }
         }
-        // hooks 兼容（docs/15 §6）：startAnimation / spawnWave 可在顶层或 hooks 段声明（顶层优先）
+        // hooks 兼容（docs/07 §3、docs/15 §6）：startAnimation / spawnWave / notify.titleKey
+        // 可在顶层或 hooks 段声明（顶层优先）。notify 只在 hooks 段出现（顶层名为 notifyTitleKey）。
         String startAnimation = str(o, "startAnimation", "");
         String spawnWave = str(o, "spawnWave", "");
+        String notifyTitleKey = str(o, "notifyTitleKey", "");
         if (o.has("hooks") && o.get("hooks").isJsonObject()) {
             JsonObject hk = o.getAsJsonObject("hooks");
             if (startAnimation.isBlank()) {
@@ -289,6 +291,9 @@ public final class EventModels {
             }
             if (spawnWave.isBlank()) {
                 spawnWave = str(hk, "spawnWave", "");
+            }
+            if (notifyTitleKey.isBlank() && hk.has("notify") && hk.get("notify").isJsonObject()) {
+                notifyTitleKey = str(hk.getAsJsonObject("notify"), "titleKey", "");
             }
         }
         return Optional.of(new EventDefinition(
@@ -299,7 +304,7 @@ public final class EventModels {
                 startAnimation,
                 spawnWave,
                 str(o, "startSequence", ""),
-                str(o, "notifyTitleKey", ""),
+                notifyTitleKey,
                 num(o, "durationSeconds", 0),
                 EventState.SCHEDULED,
                 parseSteps(o)));

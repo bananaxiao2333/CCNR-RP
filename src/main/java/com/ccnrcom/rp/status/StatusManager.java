@@ -309,6 +309,10 @@ public final class StatusManager {
                     CCNRRPMod.users.isAlive(uuid) || com.ccnrcom.rp.sequence.SequenceEngine.isConscripted(uuid);
             if (!deployed && p.gameMode.getGameModeForPlayer() != GameType.SPECTATOR) {
                 p.setGameMode(GameType.SPECTATOR);
+                // 漂移纠正 = 一次真正的状态变化（不是每 2 秒重复的动作）：此刻也把背包与阵营属性收掉。
+                // 幂等且只在模式真的被改时才触发，所以不会反复清空；部署流程在同一个 tick 内同步完成
+                // （applyDeployCore → setStatus(ALIVE) 之间无 tick 边界），不会被这里误伤。
+                purgeOnObserving(p, false);
             }
         }
     }
@@ -366,10 +370,42 @@ public final class StatusManager {
                 // 损坏 uuid：跳过
             }
             if (owner != null && CCNRRPMod.characters != null) {
+                purgeOnObserving(owner, false); // 归一化 = 切观察者：清背包 + 卸下阵营属性（非死亡路径）
                 CCNRRPMod.characters.sendList(owner); // 在线拥有者：同步回观察模式 + 面板
             }
             LOGGER.info("[CCNR-RP] 轮询兜底：{} 旧 DEAD 已归一化为观察者（冷却标记保留）", uuid);
         }
+    }
+
+    // ---------- 进入观察者的统一清理 ----------
+
+    /**
+     * 进入观察者时的统一清理：**背包处置 + 阵营属性卸载**（唯一入口）。
+     *
+     * <p><b>背包处置约定（用户定调，docs/05 §3）</b>：**只有死亡路径把物品爆到地上**
+     * （{@code dropInventory=true}）；其它一切切观察者的路径 —— 退役、疏散、旁观者兜底轮询、
+     * DEAD 归一化轮询、登录归一化 —— 都是<b>直接删除</b>，不产生任何掉落物。
+     *
+     * <p><b>为什么必须收成一个入口</b>：切观察者一共有七条路径（见 docs/05 §2.1 的契约表），
+     * 历史上只有 {@code retire} 清了阵营属性、且没有任何一条路径清背包，于是观察者身上会残留上一局的加成
+     * （血量/护甲）与装备（docs/01 §9.4 对称清理：资源与状态必须对称创建释放）。
+     *
+     * <p>幂等：背包清空后再清一次无副作用；属性按 {@code ccnr_rp:attr:} 前缀清理，重复调用不叠加、
+     * 也<b>只清该玩家自己的</b>修饰，不触碰其他玩家（docs/16 §2.2）。
+     *
+     * @param player        目标玩家；为 null（离线路径）时只做状态迁移，本方法直接返回
+     * @param dropInventory true = 爆到地上（仅死亡路径）；false = 直接删除
+     */
+    public static void purgeOnObserving(ServerPlayer player, boolean dropInventory) {
+        if (player == null) {
+            return;
+        }
+        if (dropInventory) {
+            DeathDrops.dropAll(player);
+        } else {
+            DeathDrops.clearAll(player);
+        }
+        com.ccnrcom.rp.attribute.AttributeService.clear(player);
     }
 
     // ---------- 退场（统一 retire 核心） ----------
@@ -439,8 +475,17 @@ public final class StatusManager {
             CCNRRPMod.users.save();
         }
         if (playerOrNull != null && alive) {
-            // 退场即卸下阵营属性（docs/16）：观察者不带上一局的加成，重新部署时按当前阵营重套
-            com.ccnrcom.rp.attribute.AttributeService.clear(playerOrNull);
+            // 退场即卸下阵营属性（docs/16）：观察者不带上一局的加成，重新部署时按当前阵营重套。
+            // 背包处置按"是否死亡路径"分流（纯策略见 DeathInventoryPolicy.disposalOnObserving）：
+            //   死亡（自然死亡 / 掉线判死）→ 物品留在世界里，由下方 DeathInventoryPolicy 分支与遗体模组负责，
+            //     这里只卸属性、不插手，否则会把遗体该收纳的东西提前销毁；
+            //   其余退场（/rp kill、/rp retire）→ 走统一入口直接删除，不在脚下掉一地。
+            if (DeathInventoryPolicy.disposalOnObserving(deathRetire, offline)
+                    == DeathInventoryPolicy.Disposal.DELETE) {
+                purgeOnObserving(playerOrNull, false);
+            } else {
+                com.ccnrcom.rp.attribute.AttributeService.clear(playerOrNull);
+            }
             if (CCNRRPMod.characters != null) {
                 CCNRRPMod.characters.sendList(playerOrNull); // 立即刷新用户档案列表（观察模式；K 面板可打开）
             }

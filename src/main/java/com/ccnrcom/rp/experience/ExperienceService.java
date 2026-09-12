@@ -417,6 +417,9 @@ public final class ExperienceService {
         if (CCNRRPMod.users != null && CCNRRPMod.users.status(playerUuid) != CharacterStatus.OBSERVING) {
             CCNRRPMod.users.setStatus(playerUuid, CharacterStatus.OBSERVING);
             CCNRRPMod.users.save();
+            // 切观察者即清背包 + 卸下阵营属性（非死亡路径 → 直接删除，不爆落地）；
+            // retire 路径已在其内部处理过，这里是任何"绕过 retire 直接刷观察者"的兜底入口。
+            com.ccnrcom.rp.status.StatusManager.purgeOnObserving(ownerOrNull, false);
         }
         // 在线：HUD 结算动画已下发（XpSettleAnimS2C）；离线：挂起，登录补发（flushPending）
         if (ownerOrNull == null) {
@@ -449,6 +452,57 @@ public final class ExperienceService {
             }
         }
         return results;
+    }
+
+    // ------------------------------------------------------------------ 疏散结算（EVACUATE）
+
+    /**
+     * 疏散结算（序列步骤 {@code EVACUATE} / 命令 {@code /rp evac}）：对**当前在场（ALIVE）**的用户，
+     * 追加一条疏散分 → 立即结算（整份列表求和，<b>其他分数照算</b>）→ 强制转观察者。
+     *
+     * <p>刻意走**非死亡路径**：不广播 {@code character_death}、不落遗体，因此不产生阵亡扣分
+     * （{@code death_penalty} 只在 {@link #emitDeath} 时触发，见 docs/06 §6）；观察者/已死亡用户不在
+     * 作用范围内——他们本回合的分数已在死亡当时结算过，不应再拿一次疏散分。
+     *
+     * <p>单个用户异常隔离，不阻塞整批（与 {@link #settleAll} 同一纪律）。
+     *
+     * @param title 疏散分标题（非空；同时作为合并键与结算动画显示文案）
+     * @param xp    疏散分
+     * @return 实际疏散的人数
+     */
+    public int evacuateAlive(String title, long xp) {
+        UserService users = CCNRRPMod.users;
+        if (users == null || title == null || title.isBlank()) {
+            return 0;
+        }
+        String safeTitle = title.trim();
+        int count = 0;
+        for (String uuid : List.copyOf(users.uuids())) {
+            if (users.status(uuid) != CharacterStatus.ALIVE) {
+                continue; // 仅在场 ALIVE（docs/06 §6 疏散结算范围）
+            }
+            try {
+                users.setPendingXp(uuid, EvacSettlement.apply(users.pendingXp(uuid), safeTitle, xp));
+                users.save();
+                settleUser(uuid, true); // 整份列表求和入账 + 清空列表（含疏散分与既有条目）
+                users.setStatus(uuid, CharacterStatus.OBSERVING);
+                users.save();
+                ServerPlayer owner = online(uuid);
+                if (owner != null) {
+                    // 切观察者统一清理：清背包（非死亡路径 → 直接删除）+ 卸下阵营属性 + 刷新档案
+                    // （与 retire 同一纪律，docs/16 §2.2、docs/05 §3）
+                    com.ccnrcom.rp.status.StatusManager.purgeOnObserving(owner, false);
+                    if (CCNRRPMod.characters != null) {
+                        CCNRRPMod.characters.sendList(owner);
+                    }
+                }
+                count++;
+            } catch (Exception ex) {
+                LOGGER.error("[CCNR-RP] 疏散结算失败（跳过该用户，不影响整批）: {}", uuid, ex);
+            }
+        }
+        LOGGER.info("[CCNR-RP] 疏散结算完成：{} 人（+{}「{}」）", count, xp, safeTitle);
+        return count;
     }
 
     // ------------------------------------------------------------------ 客户端推送

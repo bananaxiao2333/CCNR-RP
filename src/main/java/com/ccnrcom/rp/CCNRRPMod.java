@@ -139,6 +139,8 @@ public class CCNRRPMod {
                 CCNRRPMod.users.setStatus(uuid, com.ccnrcom.rp.status.CharacterStatus.OBSERVING);
                 CCNRRPMod.users.setCooldown(uuid, 0);
                 CCNRRPMod.users.save();
+                // 归一到观察者 = 切观察者：清背包 + 卸下阵营属性（非死亡路径 → 直接删除，不留掉落物）
+                com.ccnrcom.rp.status.StatusManager.purgeOnObserving(player, false);
             }
             characters.sendList(player);
             characters.broadcastPlayerTags();
@@ -151,6 +153,9 @@ public class CCNRRPMod {
             // 死亡强制旁观者：登录时若用户处于复活冷却（近期死亡/判死）且无在场 → 旁观者模式（不传送）
             if (CCNRRPMod.users != null && !CCNRRPMod.users.isAlive(uuid) && CCNRRPMod.users.onCooldown(uuid)) {
                 player.setGameMode(net.minecraft.world.level.GameType.SPECTATOR);
+                // 登录即观察者：清背包（非死亡路径 → 直接删除）+ 卸下阵营属性，
+                // 防止上一局的装备与加成随玩家存档被带回来（docs/01 §9.4 对称清理）。
+                com.ccnrcom.rp.status.StatusManager.purgeOnObserving(player, false);
             }
             // 阵营属性（docs/16）：在场玩家重连后按当前配置重套一次（永久修饰随存档保留，这里保证与配置一致）
             if (CCNRRPMod.users != null && CCNRRPMod.users.isAlive(uuid)) {
