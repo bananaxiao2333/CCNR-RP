@@ -41,6 +41,14 @@ export GRADLE_USER_HOME=/Users/bananaxiao/Documents/MirageV/mod/CCNR-Com/.gradle
   Modrinth API 请求必须带 User-Agent，否则返回空。
 - **mods.toml**：corpse 依赖 `mandatory=false`；对 mods.toml 的任何改动同步 `ProjectMetadataTest`。
 - **语言包**：zh_cn/en_us 键必须同步，LangFileTest 会拒绝漏翻（值 == 键 = 红字）。
+  **另有反查守卫 `everyKeyReferencedByCodeExists`**：以 `src/main/java` 的 `"ccnr_rp.*"` 字面量为基准，
+  任一被引用的键在任一份语言包缺失即失败——因为"两侧一起丢"时同步性检查是绿的（2.26.9 真实事故）。
+  两条硬纪律：**① 只许就地锚点插入，禁止用脚本重排整个文件**（它不是字母序排的，重排=上千行噪声 diff）；
+  **② 禁止对语言包做整文件级 `git checkout -- lang/` 回退**（要撤就撤具体那几行，否则会静默吞掉新键）。
+- **有未提交改动时禁用 `git checkout --` 还原**：本仓库常年积累跨多版本、上千行的未提交改动，
+  `git checkout -- .` / `git checkout -- <目录>` 会**静默丢弃全部**（2.26.9 开发中真实发生过一次，
+  靠事先快照才恢复）。要回到已知状态：先把受影响文件整体快照到仓库外（如 `/tmp`），再逐文件恢复；
+  需要"只看不改工作区"的操作，改用 `git apply --cached` 只动 index。
 - **不要改动 CCNR-Com / CC-api**；所有变更限本仓库。
 - **钩子契约**：player_spawn / player_death / game_end / event_start / level_up 是公共契约，先改 docs/00 §6 与 docs/08 再改代码。
 - **判死幂等**：掉线判死有事件 + 轮询兜底两条路径，必须幂等（重复触发只处理一次）。
