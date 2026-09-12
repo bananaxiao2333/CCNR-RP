@@ -218,7 +218,51 @@ public final class SequenceEngine {
             runs.add(new Run(label, merged, steps, now));
         }
         LOGGER.info("[CCNR-RP] 序列启动: {} ({} 步)", label, steps.size());
+        pushMatchState(); // 新序列开始 = "下一步"变了：推送对局状态给面板
         return List.of();
+    }
+
+    /**
+     * 下一个待执行步骤还有多少毫秒；没有运行中的序列返回 -1。
+     *
+     * <p>供左侧对局状态面板显示"序列下一步倒计时"——剧本常用 `WAIT 180` 这种写法表达时序
+     * （例如 evac_round 的"3 分钟广播 / 5 分钟疏散"），阶段表本身并没有倒计时，
+     * 那种剧本的计时数字就来自这里（docs/14 §5.8）。
+     */
+    public long nextStepInMs() {
+        long best = -1;
+        long now = System.currentTimeMillis();
+        synchronized (runs) {
+            for (Run r : runs) {
+                for (Step s : r.steps()) {
+                    long left = s.dueAtMs() - now;
+                    if (left < 0) {
+                        left = 0;
+                    }
+                    if (best < 0 || left < best) {
+                        best = left;
+                    }
+                }
+            }
+        }
+        return best;
+    }
+
+    /** 正在运行的序列名（取最早到期的那条；无则空串）——面板上标注"下一步属于哪个序列"。 */
+    public String nextStepLabel() {
+        String label = "";
+        long best = Long.MAX_VALUE;
+        synchronized (runs) {
+            for (Run r : runs) {
+                for (Step s : r.steps()) {
+                    if (s.dueAtMs() < best) {
+                        best = s.dueAtMs();
+                        label = r.seqId();
+                    }
+                }
+            }
+        }
+        return label;
     }
 
     /** 服务端 tick：到点执行步骤。 */
@@ -230,6 +274,7 @@ public final class SequenceEngine {
         long now = System.currentTimeMillis();
         List<Step> due = new ArrayList<>();
         Map<String, String> vars = new HashMap<>();
+        boolean advanced = false;
         synchronized (runs) {
             for (int i = runs.size() - 1; i >= 0; i--) {
                 Run r = runs.get(i);
@@ -247,6 +292,7 @@ public final class SequenceEngine {
                 for (Step s : due) {
                     execute(s.type(), s.params(), vars);
                 }
+                advanced = true;
                 List<Step> rest =
                         r.steps().stream().filter(s -> s.dueAtMs() > now).toList();
                 if (rest.isEmpty()) {
@@ -256,6 +302,17 @@ public final class SequenceEngine {
                     runs.set(i, new Run(r.seqId(), r.vars(), rest, r.startAt()));
                 }
             }
+        }
+        if (advanced) {
+            // 有步骤落地 = "下一步"变了：推送对局状态，让面板倒计时跟上（每步一次，频率极低）
+            pushMatchState();
+        }
+    }
+
+    /** 序列时序变化 → 推送对局状态（面板的"下一步"倒计时随步骤推进更新）。 */
+    private static void pushMatchState() {
+        if (CCNRRPMod.eventManager != null) {
+            CCNRRPMod.eventManager.broadcastMatchState();
         }
     }
 

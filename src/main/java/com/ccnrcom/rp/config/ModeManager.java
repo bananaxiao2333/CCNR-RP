@@ -31,7 +31,7 @@ public final class ModeManager {
     /** 登记文件（相对 config/ccnr_rp/）。 */
     private static final String FILE = "modes.json";
 
-    private volatile ModeDef active = new ModeDef("", "");
+    private volatile ModeDef active = new ModeDef("", com.ccnrcom.rp.util.DisplayInfo.EMPTY);
     private volatile List<ModeDef> modes = List.of();
 
     public ModeManager() {
@@ -46,7 +46,7 @@ public final class ModeManager {
         this.active = modes.stream()
                 .filter(m -> m.id().equals(parsed.activeId()))
                 .findFirst()
-                .orElse(new ModeDef("", ""));
+                .orElse(new ModeDef("", com.ccnrcom.rp.util.DisplayInfo.EMPTY));
         // 激活 id 不存在于登记列表时，视为未激活（避免指向缺失剧本）
         if (!parsed.activeId().isBlank() && !this.active.id().equals(parsed.activeId())) {
             LOGGER.warn("[CCNR-RP] modes.json 激活 '{}' 不在登记列表，回退为未激活", parsed.activeId());
@@ -123,7 +123,17 @@ public final class ModeManager {
     /** 解析结果：激活 id + 登记列表。 */
     public record ModeConfig(String activeId, List<ModeDef> modes) {}
 
-    public record ModeDef(String id, String name) {}
+    /**
+     * 模式登记项。{@code display} 为界面三件套（显示名/描述/图标，docs/15）；
+     * 显示名缺省回退 id，故 {@link #name()} 保留为便捷访问器，行为与旧版一致。
+     */
+    public record ModeDef(String id, com.ccnrcom.rp.util.DisplayInfo display) {
+
+        /** 显示名（空则回退 id）——旧调用点（命令列举/模式名）不变。 */
+        public String name() {
+            return display.nameOr(id);
+        }
+    }
 
     /** 从 modes.json 根对象解析：active（缺省 ""）与 modes[]（缺失时回退空）。 */
     public static ModeConfig parseModes(JsonObject root) {
@@ -142,7 +152,8 @@ public final class ModeManager {
                 if (id.isBlank()) {
                     continue;
                 }
-                out.add(new ModeDef(id, str(o, "name", id)));
+                // 展示三件套：name/desc/icon（name 缺省由 ModeDef.name() 回退 id）
+                out.add(new ModeDef(id, com.ccnrcom.rp.util.DisplayInfo.parse(o)));
             }
         }
         return new ModeConfig(active, List.copyOf(out));
@@ -159,9 +170,8 @@ public final class ModeManager {
         JsonArray arr = new JsonArray();
         if (mgr != null) {
             for (ModeDef m : mgr.modes()) {
-                JsonObject mo = new JsonObject();
+                JsonObject mo = m.display().toJson();
                 mo.addProperty("id", m.id());
-                mo.addProperty("name", m.name());
                 arr.add(mo);
             }
         }

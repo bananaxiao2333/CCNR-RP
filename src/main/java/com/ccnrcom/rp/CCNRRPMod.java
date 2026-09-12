@@ -144,6 +144,10 @@ public class CCNRRPMod {
             }
             characters.sendList(player);
             characters.broadcastPlayerTags();
+            // 对局状态（模式/当前幕/计时/激活事件）：晚加入与重连必须立刻拿到当前有效状态（docs/01 §9.2）
+            if (eventManager != null) {
+                eventManager.sendMatchState(player);
+            }
             // 素材同步：音乐/阵营图标由服务器中央下发，客户端异步下载（左上角「同步数据中」提示）；
             // 同步完成确认前禁用部署/复活（有通道才需要同步）
             if (com.ccnrcom.rp.network.RpChannels.hasChannel(player.connection.connection)) {

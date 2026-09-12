@@ -17,14 +17,28 @@ import java.util.Set;
 /** 事件/阶段/触发器领域模型与 JSON 解析（纯逻辑，无 MC 依赖）。 */
 public final class EventModels {
 
-    /** 游戏阶段（内嵌行为序列：阶段开始时执行）。advanceOn=条件驱动触发器（非空时不按时长自动推进）。 */
-    public record GamePhase(String id, int order, long durationMinutes, Trigger advanceOn, List<JsonObject> steps) {
+    /**
+     * 游戏阶段（内嵌行为序列：阶段开始时执行）。advanceOn=条件驱动触发器（非空时不按时长自动推进）。
+     * {@code display} 为界面三件套（显示名/描述/图标）——左侧对局状态面板按它渲染，空则回退阶段 id。
+     */
+    public record GamePhase(
+            String id,
+            int order,
+            long durationMinutes,
+            Trigger advanceOn,
+            List<JsonObject> steps,
+            com.ccnrcom.rp.util.DisplayInfo display) {
+
         public GamePhase(String id, int order, long durationMinutes) {
-            this(id, order, durationMinutes, null, List.of());
+            this(id, order, durationMinutes, null, List.of(), com.ccnrcom.rp.util.DisplayInfo.EMPTY);
         }
 
         public GamePhase(String id, int order, long durationMinutes, List<JsonObject> steps) {
-            this(id, order, durationMinutes, null, steps);
+            this(id, order, durationMinutes, null, steps, com.ccnrcom.rp.util.DisplayInfo.EMPTY);
+        }
+
+        public GamePhase(String id, int order, long durationMinutes, Trigger advanceOn, List<JsonObject> steps) {
+            this(id, order, durationMinutes, advanceOn, steps, com.ccnrcom.rp.util.DisplayInfo.EMPTY);
         }
 
         /** 是否条件驱动（advanceOn 非空）——不按时长推进，由触发器命中时 advance。 */
@@ -59,7 +73,11 @@ public final class EventModels {
     /** 事件中的任务（供经验结算）。 */
     public record Task(String id, int xp) {}
 
-    /** 事件定义（内嵌行为序列：事件开始时执行）。 */
+    /**
+     * 事件定义（内嵌行为序列：事件开始时执行）。
+     * {@code display} 为界面三件套（显示名/描述/图标）——事件横幅与左侧对局状态面板按它渲染，
+     * 空则回退事件 id（旧配置照常工作，只是仍显示 id）。
+     */
     public record EventDefinition(
             String id,
             boolean enabled,
@@ -71,7 +89,8 @@ public final class EventModels {
             String notifyTitleKey,
             long durationSeconds,
             EventState state,
-            List<JsonObject> steps) {
+            List<JsonObject> steps,
+            com.ccnrcom.rp.util.DisplayInfo display) {
 
         public EventDefinition(
                 String id,
@@ -95,7 +114,8 @@ public final class EventModels {
                     notifyTitleKey,
                     durationSeconds,
                     state,
-                    List.of());
+                    List.of(),
+                    com.ccnrcom.rp.util.DisplayInfo.EMPTY);
         }
 
         public EventDefinition withState(EventState s) {
@@ -110,7 +130,8 @@ public final class EventModels {
                     notifyTitleKey,
                     durationSeconds,
                     s,
-                    steps);
+                    steps,
+                    display);
         }
     }
 
@@ -232,7 +253,8 @@ public final class EventModels {
                         (int) num(o, "order", out.size()),
                         num(o, "durationMinutes", 30),
                         parseAdvanceOn(o),
-                        parseSteps(o)));
+                        parseSteps(o),
+                        com.ccnrcom.rp.util.DisplayInfo.parse(o)));
             }
         }
         return out;
@@ -307,7 +329,8 @@ public final class EventModels {
                 notifyTitleKey,
                 num(o, "durationSeconds", 0),
                 EventState.SCHEDULED,
-                parseSteps(o)));
+                parseSteps(o),
+                com.ccnrcom.rp.util.DisplayInfo.parse(o)));
     }
 
     private static String str(JsonObject o, String key, String def) {
