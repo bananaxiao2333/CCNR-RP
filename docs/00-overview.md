@@ -50,6 +50,7 @@ CCNR 服务器 RolePlay 模组（Forge 1.20.1）。世界观为"量子科学"设
 | `config/ccnr_rp/events.json` | 事件定义与触发器 | 是 |
 | `config/ccnr_rp/animations.json` | 动画序列 | 是 |
 | `config/ccnr_rp/spawn_waves.json` | 刷新波定义 | 是 |
+| `config/ccnr_rp/settings.json` | 管理器设置（管理面板「设置」页开关行）：入服强制观察者 / 入服默认开面板 / 强制保留角色 / **部署后冒险模式**（`deployAdventureMode`，docs/09 §4.4）/ HUD 三行 / 首次入服自动部署 | 是 |
 | `world/ccnr_rp/characters.json` | 角色数据（运行时） | 否 |
 | `world/ccnr_rp/xp_ledger.json` | 结算账本 | 否 |
 | `world/ccnr_rp/skins/<charId>.png` | 角色皮肤 | 否 |

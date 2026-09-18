@@ -232,7 +232,7 @@ Web 端保存/导入前，必须镜像模组的**纯逻辑校验器**（docs/02~
 - **阵营组（factions.json groups）**：id + memberIds[]；创建/删除；组不可嵌套组。
 - **关系（relations + relationRules）**：from[]/to[]/type(hostile|neutral|friendly)/内部关系（省略 to）；set/upsert/update（按 original 定位原位替换）/remove；顺序=优先级。
 - **职业（professions）**：CRUD（id/name/factionId/selfDeploy/unlockLevel/loadout{ inventory[{slot,item,count,nbt}], armor[...], offhand{...} }/music/profile/cmdcamScene/radio/radioDisabled/spawn）。
-- **设置（settings.json）**：forceObserving/openPanelOnJoin/forceRetain/hudEnabled/hudProfessionText/hudFactionText/hudHealthText/firstJoinAutoDeploy/firstJoinProfession。
+- **设置（settings.json）**：forceObserving/openPanelOnJoin/forceRetain/deployAdventureMode/hudEnabled/hudProfessionText/hudFactionText/hudHealthText/firstJoinAutoDeploy/firstJoinProfession。
 - **事件（events.json）**：CRUD（id/enabled/durationSeconds/triggers[]/tasks[{id,xp}]/hooks{startAnimation,spawnWave,notify{titleKey}}/sequence[]）。
 - **阶段（phases.json）**：CRUD（id/order/durationMinutes/steps[]）。
 - **刷新波（spawn_waves.json）**：CRUD（id/mode/enabled/teamIds/professionIds/factionIds/count/minLevel/deployAt/recruitTimeoutSeconds/autoEnableByTeam/sequence[]）。

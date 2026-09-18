@@ -23,6 +23,8 @@ import net.minecraft.server.level.ServerPlayer;
  * 多角色角色库、皮肤上传与绑定已全部移除。
  */
 public final class CharacterService {
+    private static final org.apache.logging.log4j.Logger LOGGER = org.apache.logging.log4j.LogManager.getLogger();
+
     private final MinecraftServer server;
     private final java.util.Map<java.util.UUID, MusicUpload> musicUploads = new java.util.HashMap<>();
 
@@ -318,6 +320,13 @@ public final class CharacterService {
         if (!errors.isEmpty()) {
             service().sendError(player, "ccnr_rp.error.invalid_argument", String.join("; ", errors));
             return;
+        }
+        // 部署模式开关（2.26.14）：运行时切换必须立刻改执行路径，否则要等每个人重新部署才生效 = 假开关
+        // （docs/01 §9.5「运行时切换必须完成旧模式清理、新模式初始化和必要的状态重放」）。
+        // 重放判据在 SpawnFramework/DeployedGameMode：只在已部署玩家的生存↔冒险之间迁移，不碰创造/旁观。
+        if ("deployAdventureMode".equals(key) && CCNRRPMod.spawnFramework != null) {
+            int changed = CCNRRPMod.spawnFramework.reapplyDeployedGameModeAll();
+            LOGGER.info("[CCNR-RP] 部署模式开关切换为 {}，重放 {} 名在场玩家", value, changed);
         }
         // serverconfig 全服生效：编辑者立即全量刷新，其余玩家异步广播
         broadcastConfigAll(player);

@@ -165,6 +165,13 @@ public class CCNRRPMod {
             if (CCNRRPMod.users != null && CCNRRPMod.users.isAlive(uuid)) {
                 com.ccnrcom.rp.attribute.AttributeService.applyTo(
                         player, CCNRRPMod.users.factionId(uuid), CCNRRPMod.users.professionId(uuid));
+                // 部署模式开关的重放（docs/01 §9.5）：游戏模式随 playerdata 持久化，跨服务端重启、
+                // 手改 settings.json、切换配置档（DB server_settings）后都可能残留开关的上一个取值——
+                // 没有任何兜底会纠正在场玩家（2s 轮询刻意不干预在场者），所以登录时按当前开关纠正一次。
+                // 判据同部署落位：只在生存↔冒险之间迁移，创造/旁观一律不碰。
+                if (spawnFramework != null) {
+                    spawnFramework.reapplyDeployedGameMode(player);
+                }
             }
         }
         // 补发离线期间的结算通知（死亡/断联结算结果）+ 经验规则集（管理面板展示）

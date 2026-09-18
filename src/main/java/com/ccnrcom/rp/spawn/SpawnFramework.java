@@ -388,7 +388,7 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
     }
 
     /**
-     * 统一部署磨子（普通角色与征召兵共用）：装备→传送→生存→入场电影（cinematic=false 跳过入场动画）。
+     * 统一部署磨子（普通角色与征召兵共用）：装备→传送→下发部署模式（默认生存）→入场电影（cinematic=false 跳过入场动画）。
      * 部署位置由 wave 的 deployAt 决定（未配置则世界出生点）。
      */
     private void applyDeployCore(
@@ -418,10 +418,10 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
         // 时序（2.14.0 起「先播后落位」；2.14.5 起电影 HUD/音乐与 CMDCam 解耦；本版起无 CMDCam 改「先落位 + 动画同播」）：
         // - 电影 HUD + 出场音乐始终播放（未 SKIP_CINEMATIC/NO_MUSIC）；CMDCam 场景为可选叠加层：
         //   场景已配置且 CMDCam 已装 → 强制旁观者 + 电影 HUD 与场景同一时刻播放 → 全部播完
-        //   （客户端检测 HUD 结束 + 场景结束）发 DeployLandC2S → 移动玩家到部署点 → 设置生存；
-        // - 未配置场景 / 未装 CMDCam → 开局直接传送部署点 + 切生存，电影 HUD/音乐与落位同一时刻开始
+        //   （客户端检测 HUD 结束 + 场景结束）发 DeployLandC2S → 移动玩家到部署点 → 下发部署模式（默认生存）；
+        // - 未配置场景 / 未装 CMDCam → 开局直接传送部署点 + 下发部署模式，电影 HUD/音乐与落位同一时刻开始
         //   （不再等动画播完；客户端播完后的 DeployLandC2S 因无待落位记录而为空操作）；
-        // - SKIP_CINEMATIC → 开局直接落位切生存（不播动画、不等待）。
+        // - SKIP_CINEMATIC → 开局直接落位下发部署模式（不播动画、不等待）。
         boolean deferred = cinematic && sceneReady; // 仅 CMDCam 场景可用时延迟落位（旁观者播场景）
         if (deferred) {
             p.setGameMode(GameType.SPECTATOR); // 动画全程强制旁观者（不可见/不可交互/不可被打）
@@ -433,7 +433,7 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
                     p.getName().getString(),
                     cmdcamScene);
         } else {
-            teleport(p, wave, factionId, professionId); // 开局直接落位：移动玩家到部署点 + 切生存（teleport 内含 SURVIVAL）
+            teleport(p, wave, factionId, professionId); // 开局直接落位：移动玩家到部署点 + 下发部署模式（teleport 内含）
             LOGGER.info(
                     "[CCNR-RP] 部署直接落位（{}）: {}",
                     cinematic ? "无 CMDCam 场景" : "SKIP_CINEMATIC/跳过动画",
@@ -498,7 +498,7 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
             }
             if (cinematic) {
                 // 电影 HUD 与（可选）CMDCam 场景同一时刻开始播放（场景在目标维度查取）；
-                // 无 CMDCam 时玩家已先落位切生存，动画仅作视觉叠加
+                // 无 CMDCam 时玩家已先落位并拿到部署模式，动画仅作视觉叠加
                 RpChannels.sendTo(p, new RpPackets.CinematicS2C(en.toString()));
                 if (sceneReady) {
                     com.ccnrcom.rp.cmdcam.CamSceneBridge.playScene(
@@ -562,7 +562,7 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
 
     /**
      * 客户端全部动画播完（DeployLandC2S，HUD 电影 + CMDCam 场景均已结束）：
-     * 移动玩家到部署点 → 设置生存（teleport 内部先传送后设 SURVIVAL）。
+     * 移动玩家到部署点 → 下发部署模式（teleport 内部先传送后设模式，默认生存）。
      * CMDCam 场景已在部署时与电影同步播放，此处不再触发。
      */
     public void onDeployLand(ServerPlayer player) {
@@ -656,6 +656,8 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
     /**
      * 落位传送（部署点优先级：职业部署点 > 阵营部署点 > wave deployAt > 世界复活点）。
      * 职业/阵营部署点均为管理面板可配置的「多个点 + 分布规则」。
+     *
+     * <p>落位同时下发**部署游戏模式**（{@link #deployedGameMode()}）：这是全部部署入口唯一的模式下发点。
      */
     private void teleport(ServerPlayer p, Wave wave, String factionId, String professionId) {
         // 职业部署点优先（管理面板可为每个职业配置专属部署点）
@@ -674,7 +676,7 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
                 ServerLevel level = spawnLevel(sp.dim());
                 if (level != null) {
                     p.teleportTo(level, sp.x() + 0.5, sp.y(), sp.z() + 0.5, 0, 0);
-                    p.setGameMode(GameType.SURVIVAL);
+                    p.setGameMode(deployedGameMode());
                     return;
                 }
             }
@@ -695,7 +697,7 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
                 ServerLevel level = spawnLevel(sp.dim());
                 if (level != null) {
                     p.teleportTo(level, sp.x() + 0.5, sp.y(), sp.z() + 0.5, 0, 0);
-                    p.setGameMode(GameType.SURVIVAL);
+                    p.setGameMode(deployedGameMode());
                     return;
                 }
             }
@@ -706,7 +708,77 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
                 ? new net.minecraft.core.BlockPos((int) wave.x(), (int) wave.y(), (int) wave.z())
                 : level.getSharedSpawnPos();
         p.teleportTo(level, pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5, 0, 0);
-        p.setGameMode(GameType.SURVIVAL);
+        p.setGameMode(deployedGameMode());
+    }
+
+    /**
+     * 落位时要下发的游戏模式：默认**生存**；管理面板「设置」页的全局开关
+     * {@code deployAdventureMode}（settings.json）打开时改发**冒险**——防在场玩家破坏/放置方块。
+     *
+     * <p><b>为什么收成一个方法</b>：落位点有三条分支（职业部署点 / 阵营部署点 / 世界复活点），
+     * 历史上每一条都各写一次 {@code setGameMode(SURVIVAL)}；开关只改其中一条就成了"部分生效"的假开关。
+     * 现在三条分支共用这一处判据（docs/01 §9.3「同一件事只留一个判据」），取值语义在纯类
+     * {@link DeployedGameMode} 里，本方法只做"模式名 → GameType"的映射。
+     */
+    private static GameType deployedGameMode() {
+        return gameType(deployedGameModeName());
+    }
+
+    /** 开关 → 本次应下发的模式名（纯判据见 {@link DeployedGameMode#target(boolean)}）。 */
+    private static String deployedGameModeName() {
+        return DeployedGameMode.target(
+                CCNRRPMod.managerSettings != null && CCNRRPMod.managerSettings.deployAdventureMode());
+    }
+
+    /** 模式名 → GameType（只认本 mod 会下发的两种：生存 / 冒险）。 */
+    private static GameType gameType(String name) {
+        return DeployedGameMode.ADVENTURE.equals(name) ? GameType.ADVENTURE : GameType.SURVIVAL;
+    }
+
+    /**
+     * 状态重放（单个玩家）：按当前开关值把该玩家迁移到部署模式。返回 true = 真的改了模式。
+     *
+     * <p>用于两处，判据同一份：
+     * <ol>
+     *   <li>管理员在面板上切换 {@code deployAdventureMode} 时（{@link #reapplyDeployedGameModeAll()}）；</li>
+     *   <li>玩家登录时（CCNRRPMod 的 PlayerLoggedInEvent）——原版把游戏模式随 playerdata 持久化，
+     *       跨重启/手改 settings.json/切换配置档后可能残留上一个取值。</li>
+     * </ol>
+     *
+     * <p>只对**已部署**（在场 ALIVE 或征召在场）且当前处于生存/冒险的玩家生效：观察者必须保持旁观、
+     * 管理员的创造模式不被本开关碰（判据在 {@link DeployedGameMode#shouldSwitch}）。
+     * 死亡界面中的玩家跳过（与 2 秒旁观轮询同一条纪律：不打断死亡结算）。
+     */
+    public boolean reapplyDeployedGameMode(ServerPlayer player) {
+        if (player == null || CCNRRPMod.users == null || player.isDeadOrDying()) {
+            return false;
+        }
+        String uuid = player.getUUID().toString();
+        boolean deployed = CCNRRPMod.users.isAlive(uuid) || com.ccnrcom.rp.sequence.SequenceEngine.isConscripted(uuid);
+        if (!deployed) {
+            return false;
+        }
+        String target = deployedGameModeName();
+        if (!DeployedGameMode.shouldSwitch(
+                player.gameMode.getGameModeForPlayer().name(), target)) {
+            return false;
+        }
+        player.setGameMode(gameType(target));
+        return true;
+    }
+
+    /**
+     * 状态重放（全服）：管理员切换 {@code deployAdventureMode} 后立即调用（docs/01 §9.5
+     * 「运行时切换必须完成旧模式清理、新模式初始化和必要的状态重放」）。返回实际改动的玩家人数。
+     */
+    public int reapplyDeployedGameModeAll() {
+        int changed = 0;
+        for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+            if (reapplyDeployedGameMode(p)) {
+                changed++;
+            }
+        }
+        return changed;
     }
 
     /** 按维度 id 解析 ServerLevel；未知维度回退主世界。 */
@@ -772,7 +844,7 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
     /**
      * 唯一部署核心：自部署 / 管理员刷人 / 复活波 / 强制征召 / 手动部署全部汇入此入口。
      * 行为差异一律由 {@link DeployFlag} 控制（SKIP_CINEMATIC / FORCE_DEPLOY / NO_MUSIC / QUIET / TEMP），
-     * 不定义预设与来源：装备 → 传送 → 生存 → 入场电影（按 SKIP/NO_MUSIC）→ 状态/角色（按 TEMP）→ 广播（按 QUIET）→ 经验回合重置。
+     * 不定义预设与来源：装备 → 传送 → 下发部署模式（默认生存）→ 入场电影（按 SKIP/NO_MUSIC）→ 状态/角色（按 TEMP）→ 广播（按 QUIET）→ 经验回合重置。
      */
     public boolean deploy(ServerPlayer player, String professionId, Wave wave, Set<DeployFlag> flags) {
         if (player == null

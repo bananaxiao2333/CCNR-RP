@@ -15,6 +15,7 @@ import org.apache.logging.log4j.Logger;
  * - forceObserving  : 入服强制观察者状态（默认开启）
  * - openPanelOnJoin : 入服默认打开角色面板（选择部署）
  * - forceRetain     : 强制保留角色
+ * - deployAdventureMode : 部署落位改发冒险模式（默认关闭＝生存，防在场玩家破坏方块）
  * - firstJoinAutoDeploy / firstJoinProfession : 首次入服自动部署
  * P1 起经 {@link ConfigStore}：DB 启用时读/写库配置文档，否则读/写磁盘。
  */
@@ -33,6 +34,7 @@ public final class ManagerSettings {
         o.addProperty("forceObserving", true);
         o.addProperty("openPanelOnJoin", true);
         o.addProperty("forceRetain", true);
+        o.addProperty("deployAdventureMode", false);
         o.addProperty("hudEnabled", true);
         o.addProperty("hudProfessionText", true);
         o.addProperty("hudFactionText", false);
@@ -68,6 +70,18 @@ public final class ManagerSettings {
 
     public boolean forceRetain() {
         return bool("forceRetain", true);
+    }
+
+    /**
+     * 部署落位时的游戏模式开关：true=冒险模式（在场玩家不能破坏/放置方块、不能与方块交互），
+     * false=生存模式（原行为）。
+     *
+     * <p><b>消费点只有一处</b>：{@code SpawnFramework.deployedGameMode()}——所有部署入口
+     * （K 面板自部署 / 重新部署 / 刷新波 / 征召 / 首次入服自动部署 / 复活波）都经同一条落位路径下发模式，
+     * 因此"改执行路径"的开关是真开关（关掉即回到 2.26.13 的生存模式，docs/01 §9.5）。
+     */
+    public boolean deployAdventureMode() {
+        return bool("deployAdventureMode", false);
     }
 
     private boolean bool(String key, boolean def) {
@@ -118,6 +132,7 @@ public final class ManagerSettings {
                 "forceObserving",
                 "openPanelOnJoin",
                 "forceRetain",
+                "deployAdventureMode",
                 "hudEnabled",
                 "hudProfessionText",
                 "hudFactionText",

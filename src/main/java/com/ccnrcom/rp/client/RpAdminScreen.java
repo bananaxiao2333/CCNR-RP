@@ -3845,7 +3845,7 @@ public class RpAdminScreen extends Screen {
                     "hudEnabled",
                     "hudProfessionText",
                     "firstJoinAutoDeploy" -> true;
-            case "hudFactionText", "hudHealthText" -> false;
+            case "deployAdventureMode", "hudFactionText", "hudHealthText" -> false;
             default -> true;
         };
     }
@@ -5325,6 +5325,8 @@ public class RpAdminScreen extends Screen {
             case "openPanelOnJoin" -> Component.translatable("ccnr_rp.gui.admin.setting.open_panel")
                     .getString();
             case "forceRetain" -> Component.translatable("ccnr_rp.gui.admin.setting.force_retain")
+                    .getString();
+            case "deployAdventureMode" -> Component.translatable("ccnr_rp.gui.admin.setting.deploy_adventure")
                     .getString();
             case "hudEnabled" -> Component.translatable("ccnr_rp.gui.admin.setting.hud_enabled")
                     .getString();

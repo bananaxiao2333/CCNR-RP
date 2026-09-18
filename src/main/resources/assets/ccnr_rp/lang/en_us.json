@@ -310,6 +310,7 @@
   "ccnr_rp.gui.admin.setting.open_panel.desc": "Auto-open the character terminal (K) on join for selection/deployment",
   "ccnr_rp.gui.admin.setting.force_retain": "Force retain characters",
   "ccnr_rp.gui.admin.setting.force_retain.desc": "Reincarnate/abandon or leaving server judges the character DEAD with a corpse; record kept",
+  "ccnr_rp.gui.admin.setting.deploy_adventure": "Adventure mode on deploy",
   "ccnr_rp.gui.admin.setting.hud_enabled": "Bottom-right status HUD",
   "ccnr_rp.gui.admin.setting.hud_enabled.desc": "Show HUD (profession/faction/health rows)",
   "ccnr_rp.gui.admin.setting.hud_profession": "Profession row mode",
