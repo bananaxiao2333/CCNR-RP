@@ -46,6 +46,14 @@ export GRADLE_USER_HOME=/Users/bananaxiao/Documents/MirageV/mod/CCNR-Com/.gradle
      —— 字符集受限，拼错的表现是"等级一直不显示"而不是一条明确的错误。
 - `/rp data status|events|flush` 是诊断口；事件流在数据服务不可达时照常可见（可见性不依赖连通性）。
 - 改 `sync` 包前先读 docs/19 §4.4 的三个实测坑（重放路径的副作用、永久失败出队、幂等键字符集）。
+- **CCNR-PM 通过反射读本模组的对局数据、并通过反射下发对局指令**（PM 侧无编译期依赖，
+  也**不会**自己连数据服务）。因此 `EventManager.matchStatePayload()` / `clock().phases()` /
+  `events()` / `DataLink.recentEvents()` 与 `switchPhase` / `triggerEvent` / `endEvent` / `end` /
+  `gameOver` / `clearAll` 的签名是**跨仓库契约**：改名**不会让任何一边编译失败**，
+  症状只会是「PM 的对局页签突然变空 / 按钮点了没反应」。改签名前先读 docs/19 §7，
+  并在同一次交付里同步 PM 的 `integration/RpBridge.java`。
+  另：`end(String)` 把理由**字符串拼接**进上报 JSON 载荷，不得传入未转义的自由文本
+  （`/rp end <理由>` 目前有这个隐患，见 docs/19 §8.1）。
 
 ## Gotchas
 
