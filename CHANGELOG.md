@@ -1,5 +1,60 @@
 # Changelog
 
+## 2.27.0（接入 CCNR-Data 数据服务：事件/结算入库 + 等级显示改由数据服务确认）
+
+- **需求**：「模组里显示的数据从服务器拉；没连上就不显示」「事件、玩家结算都发给数据服务器」。
+  契约方是 `CCNR-Data`（gRPC + SQLite），本轮只做模组侧接入。
+- **等级显示（本轮的主要目标）**：等级**数值仍由本模组计算**（曲线是本模组的，它是权威端），
+  但**界面上要显示的值必须已经由数据服务确认过** —— 确认来源是 `RecordSettlement` 响应的
+  `xp_after`/`level_after` 回显，或 `GetPlayer` 的返回。确认不了就**不显示等级**，绝不回退本地推算。
+  这不是洁癖：回退会让「显示的等级」与「账上确认的等级」成为两个来源，玩家会看到一会儿 7 级一会儿 6 级。
+- **等级只算一遍（收敛了三处）**：此前同一个等级在三处各算一次（`LevelCurve` / `UserService.level`
+  / 客户端 `StatusHud` 用下发的 `levelBase`/`levelPow` 自己算）。本轮：
+  - `UserXpS2C` 增加 `levelKnown` 与 `levelProgress`（进度由服务端算好，客户端没有曲线因而算不出来）；
+  - `CharacterListS2C` **删除 `levelBase` / `levelPow`**，改为下发 `userLevelKnown`；
+  - 客户端 `ClientCharacterState` 删除这两个字段与全部相关解析 —— 客户端从此**没有任何算等级的材料**，
+    这是「取不到就不显示」能成立的前提；`PlayerTag.level`（白传、无人读）一并删除。
+- **未确认 ≠ 玩不了（刻意的边界）**：`CharacterManagementScreen` 的等级读数在未确认时**整段不渲染**
+  （不是画成 `LV.0`）；但**席位达标判定在未确认时放行**，交给服务端的部署入口裁决 ——
+  「取不到就不显示」是**显示**规则，不是游戏规则，把两者混起来会让一次网络抖动变成点不动部署按钮。
+- **上报（11 个汇聚点，每个只接一次）**：结算 `ExperienceService.settleUser`（全部经验变化唯一汇聚点）；
+  事件接在 `EventManager`（触发/结束/清空/阶段推进/收束/游戏结束）、`ExperienceService`（击杀/阵亡/疏散）、
+  `CharacterService` + `SpawnFramework`（部署落位两处）、`SpawnFramework.triggerWave`（刷新波）。
+  `EVENTS_CLEARED` 同时**换 `match_id` 并清空事件流** —— 「清空事件」在本模组里就是重开一局，
+  沿用旧 id 会让两局的事件在数据侧串成一条时间线。刻意**不上报** `character_alive`（每 60 秒一次的规则广播，不是对局事件）。
+- **`reason` 显式贯穿**：`settleUser`/`settleUserDown` 增加 `reason` 参数，
+  在 `StatusManager.retire`（它本来就有 `reason`）、`XpCommand`、`evacuateAlive` 各填真实取值，
+  而不是猜一个或留空。
+- **链路（`sync` 包，MC 无关，可脱机单测）**：`DataLink`（通道 + 唯一发送出口 + 重放）、
+  `DataOutbox`（落盘 FIFO 重试队列）、`RemoteProfiles`（**已确认值**的镜像，界面等级的唯一来源）、
+  `DataReports`（MC 感知的门面，只做「没装配就静默跳过」）。所有 gRPC 回调都派发回**服务端主线程**，
+  因此主线程之外的并发访问为零，不需要锁。
+- **幂等与重试**：请求在 `DataLink` 内统一盖 `serverId` / `matchId` / `request_id`。
+  可重试（`UNAVAILABLE`/`DEADLINE_EXCEEDED`/`INTERNAL`…）入队；不可重试
+  （`INVALID_ARGUMENT`/`FAILED_PRECONDITION`…）记日志丢弃 —— 重放一万次也不会成功，只会把该重试的挤出去。
+  重试队列存的是**整条 protobuf 字节**，所以重放与首发是同一条消息，不存在 JSON 往返失真。
+- **`/rp data`**（新管理命令，复用 `ccnrrp.admin.db` 权限）：链路状态、成功/失败/待重放/已丢弃计数、
+  已确认/确认失败人数、最近一次错误，以及 `data events [n]` 列出**当局事件流**
+  （内存环形缓冲，数据服务不可达时照常可见 —— 可见性不该依赖连通性）与 `data flush` 手动投递一条重放。
+- **构建**：`com.google.protobuf` 插件在构建期用 protoc 生成契约桩（`build/generated`，**不入库**）。
+  `proto-include/` 放 well-known type（include-only）。依赖走 Forge `jarJar` 打入 `-all.jar`；
+  **不做重定位、不打 Guava/Gson/SLF4J** —— 实测 grpc 1.68.1 引用的 93 个 Guava 成员在 MC 自带的
+  31.1-jre 里逐个存在，于是开发期与实机用的是同一份 Guava（避免「本地全绿、上线 NoSuchMethodError」）。
+- **实测修掉三个只在真实链路上才暴露的缺陷**（都已进 `DataLinkTest` 或无网络 E2E）：
+  1. `request_id` 按草稿拼成 `matchId/uuid/时间戳`，而数据服务的字符集不含 `/` →
+     **每一条结算都被 `INVALID_ARGUMENT` 拒绝**，症状是「等级一直不显示」而不是一条明确错误。
+     现在键的格式收在 `DataLink.nextRequestId` 一处：`<kind>:<matchId>:<递增序号>`。
+  2. 重放路径上没有回填等级 —— 重放成功也不再显示等级，等于「数据补上了但界面永远不认」。
+     现在首发与重放**共用同一条投递路径**，副作用只可能有一份。
+  3. 重放时遇到不可重试拒绝既不重入队也不出队 → 队头永久堵死，FIFO 之后全部停摆，
+     现象与「数据服务挂了」一模一样。现在永久失败一律出队。
+- **验证**：`DataLinkTest` 15 项（对着真实 gRPC 通道，不 mock 序列化/状态码），全仓 293 项测试通过、
+  spotless 与 `-Xlint:all` 门禁通过；另做了一次无网络 E2E（真实 CCNR-Data 实例）覆盖
+  7 条链路：无档案不显示 → 结算确认后可显示 → `GetPlayer` 读回 → 事件入库 →
+  不可达时入队且不显示 → 队列跨重启存活 → 重放成功后恢复显示。
+- **未做（下轮）**：CCNR-PM 的对局管理面板（经本模组的反射中继，不引入第二份 gRPC 客户端）；
+  `WatchChanges` 订阅（当前无消费方）；客户端 `MatchStatusPanel` 的事件流呈现（事件已由 `/rp data events` 可见）。
+
 ## 2.26.14（部署模式全局开关：部署后冒险模式，防拆图）
 
 - **需求**（用户转述的玩家要求）：「复活出来部署的人物是冒险模式而不是生存模式，防止破坏」；

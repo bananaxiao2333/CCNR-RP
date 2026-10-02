@@ -221,22 +221,17 @@ public final class StatusHud {
         }
     }
 
-    /** 等级进度：经验随用户走（用户总经验）。 */
+    /**
+     * 等级进度（0..1）：**直接取服务端算好的值**。
+     *
+     * <p>以前这里用下发的 levelBase/levelPow 在客户端自己算 —— 那是等级在三个地方各算一遍的
+     * 第三处（见 CCNR-Data docs/04 §3.2）。现在曲线与进度都只在服务端算，客户端没有算它的材料，
+     * 也就不会再出现"客户端算出来的等级与服务端确认的不一致"。
+     *
+     * <p>未确认（数据服务不可达 / 还没回）时返回 0：空条比一条按错数字填的条诚实。
+     */
     private static float levelProgress() {
-        try {
-            long xp = ClientCharacterState.userXp();
-            var curve = new com.ccnrcom.rp.experience.LevelCurve(
-                    ClientCharacterState.levelBase(), ClientCharacterState.levelPow());
-            int lv = curve.level(xp);
-            long cur = curve.xpForLevel(lv);
-            long next = curve.xpForLevel(lv + 1);
-            if (next <= cur) {
-                return 0f;
-            }
-            return (float) Math.max(0.0, Math.min(1.0, (double) (xp - cur) / (next - cur)));
-        } catch (Exception e) {
-            return 0f;
-        }
+        return ClientCharacterState.userLevelProgress();
     }
 
     private static int parseColor(String hex, int def) {

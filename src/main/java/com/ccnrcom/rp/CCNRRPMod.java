@@ -59,6 +59,13 @@ public class CCNRRPMod {
     public static com.ccnrcom.rp.data.Database database;
     /** 自定义设定服务（变量/预设方案；服务端权威，ServerStopping 置空）。同时是对外只读取值接口。 */
     public static com.ccnrcom.rp.variable.VariableService variables;
+    /**
+     * 数据服务（CCNR-Data）链路；未启用（serverconfig data.enabled=false）时为 disabled 实例。
+     *
+     * <p>它同时是**等级显示的数据源**：界面上的等级只能从它的 {@code profiles()} 里取，
+     * 取不到就不显示（见 {@code sync.RemoteProfiles}）。
+     */
+    public static com.ccnrcom.rp.sync.DataLink data;
 
     public CCNRRPMod() {
         ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, CCNRRPConfig.SPEC);
@@ -115,10 +122,80 @@ public class CCNRRPMod {
         MinecraftForge.EVENT_BUS.register(eventManager);
         sequenceEngine = new com.ccnrcom.rp.sequence.SequenceEngine(event.getServer());
         MinecraftForge.EVENT_BUS.register(sequenceEngine);
+        // 数据服务链路：放在所有服务之后装配 —— 上报点会读 users/characters/eventManager，
+        // 早装配会让「服务还没建好时的上报」读到 null。回调统一派发回服务端主线程。
+        data = buildDataLink(event.getServer());
+        if (data != null) {
+            data.start();
+        }
         LOGGER.info(
                 "[CCNR-RP] 服务端运行时就绪：阵营 {} 个 / 组 {} 个",
                 factions.graph().factions().size(),
                 factions.graph().groups().size());
+    }
+
+    /**
+     * 装配数据服务链路；**gRPC 运行时不在时安全降级**（等价于关闭）。
+     *
+     * <h2>为什么必须有这一层</h2>
+     * gRPC 运行时是打进 `-all.jar` 的嵌套 jar。只放普通 `ccnr_rp-<版本>.jar` 时
+     * `io.grpc.*` 根本不在类路径上，直接 `new DataLink(...)` 会抛 {@code NoClassDefFoundError}
+     * —— 那是个 **Error**，会在 ServerAboutToStart 里把**整个服务端启动**打掉。
+     * 一个可选功能缺依赖导致服务器起不来，比功能不可用严重得多（对照：Corpse 缺失走原生降级、
+     * CCNR-PM 与 CCNR-RP 的反射桥在对方未装时全部降级，都是同一条纪律）。
+     *
+     * <p>因此：先按类名探测（不加载本模组的 sync 包），再捕获 {@code Throwable} 兜底
+     * （类存在但传递依赖缺失时，NoClassDefFoundError 会在构造期才出现）。
+     * 降级后的行为与 `data.enabled=false` 完全一致：不上报、界面不显示等级。
+     */
+    private static com.ccnrcom.rp.sync.DataLink buildDataLink(net.minecraft.server.MinecraftServer server) {
+        try {
+            Class.forName("io.grpc.ManagedChannelBuilder");
+        } catch (Throwable t) {
+            LOGGER.error(
+                    "[CCNR-RP] 未找到 gRPC 运行时：数据服务不可用，界面将不显示等级。" + "要启用请使用 ccnr_rp-{}-all.jar（内含嵌套依赖），而不是普通 jar",
+                    gradleVersion());
+            return null;
+        }
+        try {
+            return new com.ccnrcom.rp.sync.DataLink(
+                    server.getWorldPath(new net.minecraft.world.level.storage.LevelResource("ccnr_rp")),
+                    com.ccnrcom.rp.config.CCNRRPConfig.DATA_ENABLED.get(),
+                    com.ccnrcom.rp.config.CCNRRPConfig.DATA_TARGET.get(),
+                    com.ccnrcom.rp.config.CCNRRPConfig.DATA_SERVER_ID.get(),
+                    com.ccnrcom.rp.config.CCNRRPConfig.DATA_TIMEOUT_MS.get(),
+                    com.ccnrcom.rp.config.CCNRRPConfig.DATA_OUTBOX_MAX.get(),
+                    com.ccnrcom.rp.config.CCNRRPConfig.DATA_RECENT_EVENTS.get(),
+                    server::execute); // 所有 gRPC 回调都派发回服务端主线程（见 sync.DataLink 的线程模型）
+        } catch (Throwable t) {
+            LOGGER.error("[CCNR-RP] 数据服务链路装配失败（已降级为不可用）: {}", t.toString());
+            return null;
+        }
+    }
+
+    /** 仅用于日志：mods.toml 注入的实现版本。 */
+    private static String gradleVersion() {
+        return net.minecraftforge.fml.ModList.get()
+                .getModContainerById(MODID)
+                .map(c -> c.getModInfo().getVersion().toString())
+                .orElse("<版本>");
+    }
+
+    /** 重放节奏：每 100 tick（5 秒）试一条。刻意不在 tick 里直接发 —— 只投一次，等回调。 */
+    private static final int DATA_FLUSH_TICKS = 100;
+
+    private int dataFlushCounter = 0;
+
+    @SubscribeEvent
+    public void onServerTick(net.minecraftforge.event.TickEvent.ServerTickEvent event) {
+        if (event.phase != net.minecraftforge.event.TickEvent.Phase.END || data == null) {
+            return;
+        }
+        if (++dataFlushCounter < DATA_FLUSH_TICKS) {
+            return;
+        }
+        dataFlushCounter = 0;
+        data.tick();
     }
 
     @SubscribeEvent
@@ -174,6 +251,16 @@ public class CCNRRPMod {
                 }
             }
         }
+        // 登录即向数据服务确认该玩家的等级：确认不到就推 levelKnown=false（界面不显示等级）。
+        // 先推一次「未知」，避免重连时客户端沿用上一局的值；确认回来后再覆盖。
+        if (data != null && event.getEntity() instanceof net.minecraft.server.level.ServerPlayer p3) {
+            if (experience != null) {
+                experience.pushUserXp(p3.getUUID().toString());
+            }
+            data.fetchPlayer(
+                    p3.getUUID().toString(),
+                    pd -> experience.pushUserXp(p3.getUUID().toString()));
+        }
         // 补发离线期间的结算通知（死亡/断联结算结果）+ 经验规则集（管理面板展示）
         if (experience != null && event.getEntity() instanceof net.minecraft.server.level.ServerPlayer p2) {
             experience.flushPending(p2);
@@ -202,6 +289,10 @@ public class CCNRRPMod {
 
     @SubscribeEvent
     public void onServerStopping(ServerStoppingEvent event) {
+        if (data != null) {
+            data.stop(); // 停通道 + 把未发出的上报落盘（对称清理；丢了就是永久丢账）
+            data = null;
+        }
         if (database != null) {
             database.disconnect(); // 关闭数据库连接与写线程（对称清理）
         }

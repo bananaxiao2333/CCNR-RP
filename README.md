@@ -58,12 +58,35 @@ CCNR 服务器 RolePlay 模组：围绕 **量子科学设施（CCNR 机构）** 
 
 ## 安装（客户端 + 服务端）
 
-1. 使用 Forge `47.2.0+`（Minecraft **1.20.1**）启动器（如 HMCL / 官方启动器），把 `ccnr_rp-2.26.14.jar` 放入 `mods` 目录。
+1. 使用 Forge `47.2.0+`（Minecraft **1.20.1**）启动器（如 HMCL / 官方启动器），把 `ccnr_rp-2.27.0-all.jar`（**含内嵌 gRPC 运行时，接入数据服务要用这个**）或 `ccnr_rp-2.27.0.jar` 放入 `mods` 目录。
 2. 首次启动自动生成默认配置：`config/ccnr_rp/` 下的 `factions.json` / `phases.json` / `events.json` / `animations.json` / `spawn_waves.json` / `variables.json`（含精简样板：3 个样例阵营、4 个样例职业、3 个样例变量）。
 3. 按 `K`（可在按键设置里改键，类别 **CCNR-RP → 角色管理界面**）打开角色管理终端。
 4. 连远程服务器时，**服务器与客户端都要装同一版本**，阵营/职业/阶段/事件等以**服务器**配置为准。
 
-> **依赖**：`corpse` 为可选依赖（`mandatory=false`），缺失时自动使用原生死亡降级；除 Forge / Minecraft 外运行时零强制第三方依赖。
+> **依赖**：`corpse` 为可选依赖（`mandatory=false`），缺失时自动使用原生死亡降级。
+> 需要数据服务时用 `-all.jar`（内含 `META-INF/jarjar/` 的 grpc + protobuf）；普通 jar 不含它们。
+
+## 数据服务（CCNR-Data）
+
+模组把**对局事件**与**玩家结算**上报给它，并**只显示它确认过的等级**。配置在 `serverconfig/ccnr_rp-server.toml` 的 `[data]` 段：
+
+| 键 | 默认 | 说明 |
+| --- | --- | --- |
+| `enabled` | `true` | 关闭 = 完全不上报，且界面不显示等级 |
+| `target` | `127.0.0.1:8081` | 数据服务地址 `host:port` |
+| `serverId` | `ccnr-rp` | 本服务器在数据侧的标识（多服务器/多分区必须各不相同） |
+| `timeoutMs` | `5000` | 单次 RPC 超时 |
+| `outboxMax` | `8192` | 本地重试队列上限（超出丢最旧的并告警） |
+| `recentEvents` | `200` | `/rp data events` 保留的当局事件条数（内存环形缓冲） |
+
+**三条规则**（为什么这样设计见 `docs/19-数据服务.md`）：
+
+1. **等级由模组算，但显示的必须是数据服务确认过的值** —— 确认不了就不显示等级，不回退本地推算。
+2. **上报失败按状态码分流**：可重试的入本地队列（落盘，跨重启存活）；不可重试的记日志丢弃。
+3. **`request_id` 必须是"一次业务意图"的标识**：由 `DataLink` 统一生成 `<kind>:<matchId>:<序号>`，
+   重试复用同一条消息字节，因此不会把重试变成重复落账。
+
+> ⚠️ **不要手改队列文件** `world/ccnr_rp/data_outbox.json`：里面的 payload 是 protobuf 字节的 base64。
 
 ## 配置
 
@@ -93,6 +116,7 @@ CCNR 服务器 RolePlay 模组：围绕 **量子科学设施（CCNR 机构）** 
 | 事件与阶段 | `/rp event trigger <id>`、`/rp phase set <id>`、`/rp gameover` |
 | 动画与刷新 | `/rp animation play <id>`、`/rp spawn trigger <id>` |
 | 数据库 | `/rp db status\|test\|migrate\|export\|flush\|connect\|profile` |
+| 数据服务 | `/rp data status`、`/rp data events [n]`、`/rp data flush` |
 
 ## 构建
 

@@ -47,8 +47,8 @@ public final class ClientPacketHandlers {
     }
 
     /** 用户经验/等级更新（经验随用户走）。 */
-    public static void onUserXp(long xp, int level) {
-        ClientCharacterState.setUserXp(xp, level);
+    public static void onUserXp(long xp, int level, boolean levelKnown, float levelProgress) {
+        ClientCharacterState.setUserXp(xp, level, levelKnown, levelProgress);
         CharacterManagementScreen.refreshIfOpen();
     }
 

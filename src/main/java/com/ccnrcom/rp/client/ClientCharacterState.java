@@ -20,10 +20,6 @@ public final class ClientCharacterState {
     private static final List<JsonObject> professions = new ArrayList<>();
     private static JsonObject settings = new JsonObject();
     private static JsonObject serverConfig = new JsonObject();
-    /** 等级曲线（服务端同步，客户端仅用于展示换算；未同步时回退服务端默认值）。 */
-    private static double levelBase = 100.0;
-
-    private static double levelPow = 2.0;
     /** 玩家头顶悬浮标签开关（服务端同步，默认开）。 */
     private static boolean nametagEnabled = true;
     /** 玩家头顶悬浮标签阵营徽章大小（服务端同步，默认 9；0=不显示徽章）。 */
@@ -55,6 +51,16 @@ public final class ClientCharacterState {
     // 用户维度（经验随用户走 / 支援开关）
     private static long userXp = 0;
     private static int userLevel = 0;
+    /**
+     * 该等级是否已被数据服务（CCNR-Data）确认。**false = 界面不得显示任何等级**。
+     *
+     * <p>默认 false 而不是 true：连接建立到第一次确认之间有一段真空期，默认 true 会让这段真空期
+     * 显示上一局的旧值 —— 那比不显示更糟（看起来像"等级掉了"）。
+     */
+    private static boolean userLevelKnown = false;
+    /** 当前等级内的进度 0..1（服务端算好下发；客户端没有曲线，算不出来也不该算）。 */
+    private static float userLevelProgress = 0f;
+
     private static boolean anySupportRevive = false;
     /** 关系测定图边（a↔b 生效关系；来自 CharacterListS2C 的 relations）。 */
     private static final List<JsonObject> relations = new ArrayList<>();
@@ -79,7 +85,7 @@ public final class ClientCharacterState {
     private ClientCharacterState() {}
 
     /** 其他玩家头顶标签（客户端镜像）。 */
-    public record PlayerTag(String name, String professionId, String factionId, int level) {}
+    public record PlayerTag(String name, String professionId, String factionId) {}
 
     /** 更新全玩家头顶标签（服务端 PlayerTagsS2C 下发）。 */
     public static synchronized void setPlayerTags(String payload) {
@@ -96,13 +102,7 @@ public final class ClientCharacterState {
                 JsonObject o = e.getValue().getAsJsonObject();
                 playerTags.put(
                         e.getKey(),
-                        new PlayerTag(
-                                str(o, "name", e.getKey()),
-                                str(o, "professionId", ""),
-                                str(o, "factionId", ""),
-                                o.has("level") && o.get("level").isJsonPrimitive()
-                                        ? o.get("level").getAsInt()
-                                        : 0));
+                        new PlayerTag(str(o, "name", e.getKey()), str(o, "professionId", ""), str(o, "factionId", "")));
             }
         } catch (Exception ignored) {
             // 标签数据异常仅丢弃本次更新
@@ -196,6 +196,10 @@ public final class ClientCharacterState {
         if (root.has("userLevel")) {
             userLevel = root.get("userLevel").getAsInt();
         }
+        // 缺键时按「未确认」处理：老服务端/异常载荷不该让客户端显示一个来源不明的等级
+        userLevelKnown =
+                root.has("userLevelKnown") && root.get("userLevelKnown").getAsBoolean();
+        userLevelProgress = 0f;
         anySupportRevive =
                 root.has("anySupportRevive") && root.get("anySupportRevive").getAsBoolean();
         if (root.has("status")) {
@@ -211,13 +215,6 @@ public final class ClientCharacterState {
             userCooldownUntil = root.get("cooldownUntil").getAsLong();
         }
         panelLocked = false;
-        // 等级曲线跟随服务端（服务端调参，客户端不读本地 serverconfig）
-        if (root.has("levelBase")) {
-            levelBase = root.get("levelBase").getAsDouble();
-        }
-        if (root.has("levelPow")) {
-            levelPow = root.get("levelPow").getAsDouble();
-        }
         // 玩家头顶悬浮标签配置跟随服务端（服务端权威）
         if (root.has("nametagEnabled")) {
             nametagEnabled = root.get("nametagEnabled").getAsBoolean();
@@ -256,6 +253,9 @@ public final class ClientCharacterState {
         // isAdmin=true**，管理面板就能被打开。服务端随后会用 CharacterListS2C 的 admin 字段重下发真值
         // （applyUserListFields → Permissions.canAdmin），所以清成 false 不会误伤真管理员。
         isAdmin = false;
+        // 等级回到「未确认」：换服/重连后必须等数据服务重新确认，不能沿用上一个服的值
+        userLevelKnown = false;
+        userLevelProgress = 0f;
     }
 
     /** 征召兵在场身份（JSON：professionId/factionId）；null=未以征召兵身份在场。 */
@@ -280,32 +280,42 @@ public final class ClientCharacterState {
         return conscript;
     }
 
-    /** 用户经验/等级更新（结算推送）。 */
-    public static synchronized void setUserXp(long xp, int level) {
+    /**
+     * 用户经验/等级更新（结算推送，服务端权威）。
+     *
+     * @param levelKnown false = 数据服务尚未确认该等级 → 界面不显示等级（{@link #userLevel()} 无意义）
+     */
+    public static synchronized void setUserXp(long xp, int level, boolean levelKnown, float levelProgress) {
         userXp = xp;
         userLevel = level;
+        userLevelKnown = levelKnown;
+        userLevelProgress = levelProgress;
     }
 
     public static synchronized long userXp() {
         return userXp;
     }
 
+    /**
+     * 玩家等级。**调用前必须先看 {@link #userLevelKnown()}**：未确认时这个值没有意义，
+     * 任何把它画到界面上的地方都是 bug。
+     */
     public static synchronized int userLevel() {
         return userLevel;
     }
 
+    /** 等级是否已被数据服务确认。false = 不显示等级（不是"显示 0 级"）。 */
+    public static synchronized boolean userLevelKnown() {
+        return userLevelKnown;
+    }
+
+    /** 当前等级内的进度 0..1（服务端下发；未确认时为 0）。 */
+    public static synchronized float userLevelProgress() {
+        return userLevelKnown ? userLevelProgress : 0f;
+    }
+
     public static synchronized boolean anySupportRevive() {
         return anySupportRevive;
-    }
-
-    /** 服务端同步的等级曲线基数（仅展示换算用）。 */
-    public static synchronized double levelBase() {
-        return levelBase;
-    }
-
-    /** 服务端同步的等级曲线指数（仅展示换算用）。 */
-    public static synchronized double levelPow() {
-        return levelPow;
     }
 
     /** 玩家头顶悬浮标签开关（服务端同步）。 */

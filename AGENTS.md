@@ -32,6 +32,21 @@ export GRADLE_USER_HOME=/Users/bananaxiao/Documents/MirageV/mod/CCNR-Com/.gradle
 - **质量与交付**：编译通过≠正确，未验证的必须明说；无占位/空壳/伪异步/只为过编译的假逻辑；保留未被需求否定的原行为；提交前查 git diff，单一职责，Git 操作只限任务授权；文档写"为什么/边界/如何失效"。
 
 
+## 数据服务（CCNR-Data）
+
+- 模组把**对局事件**与**玩家结算**上报给 CCNR-Data，并且**只显示它确认过的等级**。
+  完整说明见 [docs/19](docs/19-数据服务.md)。
+- 契约桩由 protoc 在构建期生成（`build/generated`，**不入库**）；`src/main/proto/` 是 vendored 副本，
+  真源在 CCNR-Data，同步与漂移检查见 `src/main/proto/README.md`。
+- **三条硬纪律**：
+  1. 等级数值由本模组算（权威端），但**界面显示的值必须已经由数据服务确认**
+     （`sync/RemoteProfiles` 是唯一来源）。确认不了就不显示，**绝不回退本地推算**。
+  2. 上报是旁路：数据服务不可达**不得**影响击杀/部署/阶段推进。显示不是旁路，两者别混。
+  3. `request_id` 由 `DataLink.nextRequestId` 统一生成，**不要在调用点自己拼**
+     —— 字符集受限，拼错的表现是"等级一直不显示"而不是一条明确的错误。
+- `/rp data status|events|flush` 是诊断口；事件流在数据服务不可达时照常可见（可见性不依赖连通性）。
+- 改 `sync` 包前先读 docs/19 §4.4 的三个实测坑（重放路径的副作用、永久失败出队、幂等键字符集）。
+
 ## Gotchas
 
 - **构建环境**：本仓库位于 `MirageV/mod/CCNR-RP`；构建需 JDK 21（系统默认是 Zulu 26，务必 export JAVA_HOME），且需 GRADLE_USER_HOME 指向共享缓存（见上方 Commands）。

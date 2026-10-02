@@ -246,7 +246,7 @@ public final class StatusManager {
         } else if (wasConscript && CCNRRPMod.experience != null) {
             // 征召兵死亡（用户本身非在场，状态 OBSERVING）：同一结算函数（执勤时长已并入档案）
             CCNRRPMod.experience.emitDeath(uuid, "death");
-            CCNRRPMod.experience.settleUserDown(uuid, player, "ccnr_rp.xp.settle.death");
+            CCNRRPMod.experience.settleUserDown(uuid, player, "ccnr_rp.xp.settle.death", "death");
         }
     }
 
@@ -565,7 +565,7 @@ public final class StatusManager {
         if (CCNRRPMod.experience != null && !skipSettle) {
             boolean isOffline = offline || reason.startsWith("offline");
             String resultKey = isOffline ? "ccnr_rp.xp.settle.offline" : "ccnr_rp.xp.settle.death";
-            CCNRRPMod.experience.settleUserDown(playerUuid, isOffline ? null : playerOrNull, resultKey);
+            CCNRRPMod.experience.settleUserDown(playerUuid, isOffline ? null : playerOrNull, resultKey, reason);
         }
         LOGGER.info(
                 "[CCNR-RP] 退场 [{}] {} 用户 {}（原因={} → 观察模式，复活冷却 {} 分钟）",

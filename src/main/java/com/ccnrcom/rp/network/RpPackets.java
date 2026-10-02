@@ -884,30 +884,47 @@ public final class RpPackets {
         }
     }
 
-    /** 用户经验/等级更新（S2C，经验随用户走）。 */
+    /**
+     * 用户经验/等级更新（S2C，经验随用户走）。
+     *
+     * <p><b>{@code levelKnown} 是这套字段的核心</b>：等级要由数据服务（CCNR-Data）确认后才算数，
+     * 未确认（未连接 / 上报还没回来 / 被拒绝）时为 {@code false}，此时 {@code level} 与
+     * {@code levelProgress} 都没有意义，界面**不得显示任何等级**。
+     *
+     * <p>为什么不再让客户端自己按曲线算：那会让「显示的等级」与「账上确认的等级」成为两个来源，
+     * 漂移的表现是玩家看到 7 级而库里是 6 级。曲线留在服务端，{@code levelProgress}
+     * （当前等级内的进度 0..1）也由服务端算好，客户端只画。
+     */
     public static final class UserXpS2C {
         public final long xp;
         public final int level;
+        public final boolean levelKnown;
+        public final float levelProgress;
 
-        public UserXpS2C(long xp, int level) {
+        public UserXpS2C(long xp, int level, boolean levelKnown, float levelProgress) {
             this.xp = xp;
             this.level = level;
+            this.levelKnown = levelKnown;
+            this.levelProgress = levelProgress;
         }
 
         public UserXpS2C(FriendlyByteBuf buf) {
-            this(buf.readLong(), buf.readVarInt());
+            this(buf.readLong(), buf.readVarInt(), buf.readBoolean(), buf.readFloat());
         }
 
         public void encode(FriendlyByteBuf buf) {
             buf.writeLong(xp);
             buf.writeVarInt(level);
+            buf.writeBoolean(levelKnown);
+            buf.writeFloat(levelProgress);
         }
 
         public static void handle(UserXpS2C msg, Supplier<NetworkEvent.Context> ctx) {
             ctx.get()
                     .enqueueWork(() -> net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(
                             net.minecraftforge.api.distmarker.Dist.CLIENT,
-                            () -> () -> com.ccnrcom.rp.client.ClientPacketHandlers.onUserXp(msg.xp, msg.level)));
+                            () -> () -> com.ccnrcom.rp.client.ClientPacketHandlers.onUserXp(
+                                    msg.xp, msg.level, msg.levelKnown, msg.levelProgress)));
             ctx.get().setPacketHandled(true);
         }
     }

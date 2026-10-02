@@ -35,6 +35,7 @@ public final class RpCommand {
         WaveCommand.register(rp);
         EvacCommand.register(rp);
         DbCommand.register(rp);
+        DataCommand.register(rp);
         AttributeCommand.register(rp);
         VarCommand.register(rp);
         rpNode = rp;

@@ -42,6 +42,23 @@ public final class CCNRRPConfig {
     /** 击杀友好提示距聊天区上方的额外间距（像素；锚点=聊天区底部+聊天区高度+本数值）。 */
     public static final ConfigValue<Integer> KILL_NOTICE_OFFSET;
 
+    // ---------- 数据服务（CCNR-Data）----------
+    // 刻意**不进**管理面板的 values()/keys()：那张表是按「扁平 key」寻址的（上面已有两个
+    // "enabled"），再塞一组进去必然撞名；而且连接参数改完要重连，本就不该在局内随手改。
+
+    /** 数据服务总开关。关闭 = 完全不上报，也不显示任何需要服务端确认的数据。 */
+    public static final ConfigValue<Boolean> DATA_ENABLED;
+    /** 数据服务地址 host:port（只连内网，见 CCNR-Data docs/04 §1.1）。 */
+    public static final ConfigValue<String> DATA_TARGET;
+    /** 本服务器在数据侧的标识（多服务器/多分区时必须各不相同）。 */
+    public static final ConfigValue<String> DATA_SERVER_ID;
+    /** 单次 RPC 超时（毫秒）。 */
+    public static final ConfigValue<Integer> DATA_TIMEOUT_MS;
+    /** 本地重试队列上限（条）。超出后丢弃最旧的并告警。 */
+    public static final ConfigValue<Integer> DATA_OUTBOX_MAX;
+    /** 管理面板保留的当局事件条数（仅内存环形缓冲，不落盘）。 */
+    public static final ConfigValue<Integer> DATA_RECENT_EVENTS;
+
     static {
         ForgeConfigSpec.Builder b = new ForgeConfigSpec.Builder();
         b.push("character");
@@ -70,6 +87,14 @@ public final class CCNRRPConfig {
         b.push("kill");
         KILL_FRIENDLY_NOTICE = b.comment("击杀友好玩家时左下角提示（false=关闭）").define("friendlyNotice", true);
         KILL_NOTICE_OFFSET = b.comment("击杀友好提示距聊天区上方的额外间距（像素）").define("noticeOffset", 4);
+        b.pop();
+        b.push("data");
+        DATA_ENABLED = b.comment("上报/确认数据服务（CCNR-Data）。false=完全不上报，且界面不显示等级").define("enabled", true);
+        DATA_TARGET = b.comment("数据服务地址 host:port").define("target", "127.0.0.1:8081");
+        DATA_SERVER_ID = b.comment("本服务器在数据侧的标识（多服务器/多分区必须各不相同）").define("serverId", "ccnr-rp");
+        DATA_TIMEOUT_MS = b.comment("单次 RPC 超时（毫秒）").define("timeoutMs", 5000);
+        DATA_OUTBOX_MAX = b.comment("本地重试队列上限（条）；超出后丢弃最旧的并告警").define("outboxMax", 8192);
+        DATA_RECENT_EVENTS = b.comment("管理面板保留的当局事件条数（内存环形缓冲，不落盘）").define("recentEvents", 200);
         b.pop();
         SPEC = b.build();
     }

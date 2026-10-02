@@ -403,7 +403,7 @@ public class CharacterManagementScreen extends Screen {
         int[] r = deployButtonRect();
         int w = r[2] - r[0];
         int h = r[3] - r[1];
-        boolean met = userLevel() >= unlockLevel(p);
+        boolean met = levelMeets(p);
         CharacterStatus st = ClientCharacterState.userStatus();
         boolean observing = st == CharacterStatus.OBSERVING;
         boolean alive = st == CharacterStatus.ALIVE;
@@ -501,6 +501,21 @@ public class CharacterManagementScreen extends Screen {
         return ClientCharacterState.userLevel();
     }
 
+    /** 等级是否已被数据服务确认；未确认时界面上不出现任何等级读数。 */
+    private boolean levelKnown() {
+        return ClientCharacterState.userLevelKnown();
+    }
+
+    /**
+     * 是否达到该席位的等级要求（**仅用于预览**，服务端在部署入口会再判一次）。
+     *
+     * <p>等级未确认时**返回 true**（放行）：数据服务不可达不该让玩家点不动部署按钮。
+     * 「取不到就不显示」是**显示**规则，不是游戏规则 —— 把两者混起来会让一次网络抖动变成玩不了。
+     */
+    private boolean levelMeets(JsonObject p) {
+        return !levelKnown() || userLevel() >= unlockLevel(p);
+    }
+
     private int unlockLevel(JsonObject p) {
         try {
             return p.has("unlockLevel") ? Math.max(0, p.get("unlockLevel").getAsInt()) : 0;
@@ -548,7 +563,7 @@ public class CharacterManagementScreen extends Screen {
 
     /** 席位状态色：等级未达=弱灰 / 编制无余额=红 / 可部署=白。 */
     private int seatColor(JsonObject p) {
-        if (userLevel() < unlockLevel(p)) {
+        if (levelKnown() && userLevel() < unlockLevel(p)) {
             return RpTheme.BORDER_DIM;
         }
         return profNoBalance(p) ? RpTheme.RED_LINE : RpTheme.CYAN;
@@ -848,7 +863,8 @@ public class CharacterManagementScreen extends Screen {
                     default -> Component.translatable("ccnr_rp.gui.character.status.observing")
                             .getString();
                 };
-        String lvl = "LV." + userLevel() + " // STATUS: " + statusLabel;
+        // 等级未确认时**整段不渲染**（不是画成 LV.0）：见 ClientCharacterState.userLevelKnown 的说明
+        String lvl = levelKnown() ? "LV." + userLevel() + " // STATUS: " + statusLabel : statusLabel;
         g.drawString(
                 font,
                 lvl,
@@ -1054,7 +1070,7 @@ public class CharacterManagementScreen extends Screen {
         int textColor = sel ? RpTheme.ACCENT_TEXT : RpTheme.TEXT_PRIMARY;
         int subColor = sel ? RpTheme.ACCENT_TEXT : RpTheme.TEXT_SECONDARY;
         // 等级门控标签（右上）
-        boolean met = userLevel() >= unlockLevel(p);
+        boolean met = levelMeets(p);
         String tag = "LV." + unlockLevel(p);
         int tagW = font.width(tag) + 8;
         int tx2 = x2 - 6;
@@ -1255,9 +1271,13 @@ public class CharacterManagementScreen extends Screen {
                 .getString();
         String[] idPair = splitPair(idLine);
         readout(g, x1, top, w, 11, idPair[0], idPair[1], RpTheme.TEXT_PRIMARY, STRUCT_RED);
-        boolean met = userLevel() >= unlockLevel(p);
-        String req = Component.translatable("ccnr_rp.gui.character.term_lvl", unlockLevel(p), userLevel())
-                .getString();
+        boolean met = levelMeets(p);
+        // CURRENT 取不到就整段不渲染（只留 LV.REQ）
+        String req = levelKnown()
+                ? Component.translatable("ccnr_rp.gui.character.term_lvl", unlockLevel(p), userLevel())
+                        .getString()
+                : Component.translatable("ccnr_rp.gui.character.need_level", unlockLevel(p))
+                        .getString();
         readout(g, x1, top + 13, w, 11, req, "", RpTheme.TEXT_PRIMARY, met ? RpTheme.STATUS_ALIVE : RpTheme.RED);
         // 部署限制与当前在职（全局性限制预览；服务端 deploy 统一入口强校验）
         String profId = str(p, "id");

@@ -91,6 +91,7 @@ public final class CharacterService {
             boolean panelLocked,
             long userXp,
             int userLevel,
+            boolean userLevelKnown,
             boolean anySupportRevive,
             String status,
             String professionId,
@@ -225,6 +226,12 @@ public final class CharacterService {
         CCNRRPMod.users.save();
         svc.sendError(player, "ccnr_rp.spawn.deployed", com.ccnrcom.rp.faction.FactionProfessions.idsSafeName(def));
         svc.sendList(player);
+        // 部署落位的汇聚点之一（另一处在 SpawnFramework.deploy()）：走 onDeployPosition 的自部署经过这里。
+        // 只有两处，所以没有为它再造一个「统一部署入口」——那会把对方的部署流程抄一份（见 CCNR-PM 的同类教训）。
+        com.ccnrcom.rp.sync.DataReports.event(
+                com.ccnrcom.rp.data.grpc.v1.EventKind.EVENT_KIND_CHARACTER_DEPLOYED,
+                player.getName().getString() + " 部署为 " + com.ccnrcom.rp.faction.FactionProfessions.idsSafeName(def),
+                b -> b.setActorUuid(uuid).setTargetUuid(uuid).setDefinitionId(professionId));
     }
 
     /**
@@ -421,6 +428,9 @@ public final class CharacterService {
                 !isObserver(player),
                 CCNRRPMod.users.userXp(uuid),
                 CCNRRPMod.users.level(uuid),
+                // 等级门控仍然用**本地**曲线算（服务端是规则的权威端，见 CCNR-Data docs/04 §3.4）；
+                // 这个标志只影响**显示**：数据服务没确认过时界面不显示等级。
+                CCNRRPMod.data != null && CCNRRPMod.data.profiles().known(uuid),
                 CCNRRPMod.users.anySupportRevive(uuid),
                 CCNRRPMod.users.status(uuid).name().toLowerCase(java.util.Locale.ROOT),
                 CCNRRPMod.users.professionId(uuid),
@@ -1404,7 +1414,10 @@ public final class CharacterService {
     /**
      * 构建并下发用户档案列表（K 面板/客户端全量初始化）：
      * {factions, professions(含解锁等级/装备/音乐/简历), settings, admin, userXp, userLevel,
-     *  anySupportRevive, status, professionId, factionId, cooldownUntil, levelBase, levelPow, panelLocked}。
+     *  userLevelKnown, anySupportRevive, status, professionId, factionId, cooldownUntil, panelLocked}。
+     *
+     * <p>注意**没有** levelBase/levelPow：等级曲线不再下发，客户端因此没有任何算等级的材料 ——
+     * 「取不到就不显示」这条规则的前提就在这里。
      * 单人同步路径（登录/请求/部署）：共享部分主线程构建一次，逐玩家只补少量字段。
      */
     public void sendList(ServerPlayer player) {
@@ -1541,8 +1554,6 @@ public final class CharacterService {
             st = CCNRRPMod.managerSettings.toJson();
         }
         root.add("settings", st);
-        root.addProperty("levelBase", com.ccnrcom.rp.config.CCNRRPConfig.LEVEL_BASE.get());
-        root.addProperty("levelPow", com.ccnrcom.rp.config.CCNRRPConfig.LEVEL_POW.get());
         // 玩家头顶悬浮标签配置（服务端权威：开关 + 徽章大小 + 高度）
         root.addProperty("nametagEnabled", com.ccnrcom.rp.config.CCNRRPConfig.NAMETAG_ENABLED.get());
         root.addProperty("nametagBadgeSize", com.ccnrcom.rp.config.CCNRRPConfig.NAMETAG_BADGE_SIZE.get());
@@ -1558,6 +1569,8 @@ public final class CharacterService {
         root.addProperty("panelLocked", s.panelLocked());
         root.addProperty("userXp", s.userXp());
         root.addProperty("userLevel", s.userLevel());
+        // false = 数据服务没确认过这个玩家的等级 → 客户端不显示等级（也不再用本地曲线推算）
+        root.addProperty("userLevelKnown", s.userLevelKnown());
         root.addProperty("anySupportRevive", s.anySupportRevive());
         root.addProperty("status", s.status());
         root.addProperty("professionId", s.professionId());
@@ -1580,7 +1593,6 @@ public final class CharacterService {
             o.addProperty("name", playerName(uid));
             o.addProperty("professionId", CCNRRPMod.users.professionId(uid));
             o.addProperty("factionId", CCNRRPMod.users.factionId(uid));
-            o.addProperty("level", CCNRRPMod.users.level(uid));
             root.add(uid, o);
         }
         return root;

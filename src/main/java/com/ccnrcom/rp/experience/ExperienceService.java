@@ -6,11 +6,13 @@ package com.ccnrcom.rp.experience;
 
 import com.ccnrcom.rp.CCNRRPMod;
 import com.ccnrcom.rp.config.CCNRRPConfig;
+import com.ccnrcom.rp.data.grpc.v1.EventKind;
 import com.ccnrcom.rp.experience.ExprParser.Expr;
 import com.ccnrcom.rp.experience.XpChangeList.XpChange;
 import com.ccnrcom.rp.network.RpChannels;
 import com.ccnrcom.rp.network.RpPackets;
 import com.ccnrcom.rp.status.CharacterStatus;
+import com.ccnrcom.rp.sync.DataReports;
 import com.ccnrcom.rp.user.UserService;
 import com.ccnrcom.rp.util.JsonUtil;
 import com.google.gson.JsonArray;
@@ -258,6 +260,10 @@ public final class ExperienceService {
         if (applyEvent("character_kill", params, killerUuid)) {
             users.save();
         }
+        DataReports.event(
+                EventKind.EVENT_KIND_CHARACTER_KILL,
+                params.get("playerName") + " 击杀了 " + params.get("victimName"),
+                b -> b.setActorUuid(killerUuid).setTargetUuid(vu).setPayloadJson(JsonUtil.GSON.toJson(params)));
     }
 
     /** 两阵营间生效关系的小写名（hostile/neutral/friendly）；任一方为空/未知返回空串（纯静态，可脱机单测）。 */
@@ -287,6 +293,10 @@ public final class ExperienceService {
         if (applyEvent("character_death", params, uuid)) {
             users.save();
         }
+        DataReports.event(
+                EventKind.EVENT_KIND_CHARACTER_DEATH,
+                params.get("playerName") + " 阵亡（" + params.get("reason") + "）",
+                b -> b.setTargetUuid(uuid).setPayloadJson(JsonUtil.GSON.toJson(params)));
     }
 
     /**
@@ -376,8 +386,18 @@ public final class ExperienceService {
 
     // ------------------------------------------------------------------ 结算
 
-    /** 结算某用户（增量幂等：列表求和后清空）；返回汇总（null = 用户服务未就绪）。 */
-    public SettleSummary settleUser(String playerUuid, boolean notifyOwner) {
+    /** 无来源标注时的结算原因。刻意**不**猜：猜错的原因写进库里比空着更难查。 */
+    public static final String REASON_UNSPECIFIED = "unspecified";
+
+    /**
+     * 结算某用户并上报到数据服务。
+     *
+     * <p>这是**全部**经验变化的唯一汇聚点（/rp settle、死亡、掉线、退役、疏散都经过这里），
+     * 所以数据上报也接在这一处，而不是在每个上游分支各接一次。
+     *
+     * @param reason 结算原因，落库到 {@code settlements.reason}；取值见 CCNR-Data docs/04 §2.1
+     */
+    public SettleSummary settleUser(String playerUuid, boolean notifyOwner, String reason) {
         if (CCNRRPMod.users == null) {
             return null;
         }
@@ -394,7 +414,8 @@ public final class ExperienceService {
 
         ServerPlayer owner = online(playerUuid);
         if (owner != null) {
-            RpChannels.sendTo(owner, new RpPackets.UserXpS2C(newXp, newLevel));
+            // 经验值走本地账本（模组就是经验的权威端），**等级走数据服务确认过的值** —— 见 pushUserXp
+            pushUserXp(playerUuid);
             if (!changes.isEmpty()) {
                 RpChannels.sendTo(owner, new RpPackets.XpSettleAnimS2C(xpPayload(changes, newXp)));
             } else {
@@ -402,14 +423,108 @@ public final class ExperienceService {
             }
         }
         if (curve.level(before) < newLevel) {
+            // 升级动画按**本地**曲线判定：等级数值本身由本模组计算（权威端），数据服务只负责确认与持久化。
+            // 等确认回来才播动画会让升级延迟一个网络往返，而升级是手感的一部分。
             com.ccnrcom.rp.animation.AnimationHooks.levelUp(owner, newLevel);
         }
+        reportSettlement(playerUuid, reason, before, newXp, curve.level(before), newLevel, gain, changes);
         return new SettleSummary(gain, newXp, newLevel, changes);
     }
 
+    // ------------------------------------------------------------------ 数据服务上报与等级显示
+
+    /**
+     * 上报一次结算；数据服务确认后回填 {@link com.ccnrcom.rp.sync.RemoteProfiles} 并重推等级。
+     *
+     * <p>幂等键 = {@code matchId/playerUuid/settledAtMillis}。**同一笔结算重试时必须复用同一个键**：
+     * 这不是「唯一标识这次调用」，而是「唯一标识这次业务意图」（CCNR-Data docs/04 §2.4）。
+     * 所以键在组装请求时算一次，重放走的是同一份字节（见 sync.DataOutbox）。
+     */
+    private void reportSettlement(
+            String playerUuid,
+            String reason,
+            long xpBefore,
+            long xpAfter,
+            int levelBefore,
+            int levelAfter,
+            long gain,
+            List<XpChange> changes) {
+        com.ccnrcom.rp.sync.DataLink data = CCNRRPMod.data;
+        if (data == null) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        com.ccnrcom.rp.data.grpc.v1.RecordSettlementRequest.Builder b =
+                com.ccnrcom.rp.data.grpc.v1.RecordSettlementRequest.newBuilder()
+                        .setPlayerUuid(playerUuid)
+                        .setReason(reason == null ? REASON_UNSPECIFIED : reason)
+                        .setXpBefore(xpBefore)
+                        .setXpAfter(xpAfter)
+                        .setLevelBefore(levelBefore)
+                        .setLevelAfter(levelAfter)
+                        .setGain(gain)
+                        .setSettledAt(timestampOf(now))
+                        .setUsername(playerName(playerUuid));
+        for (XpChange c : changes) {
+            b.addLines(com.ccnrcom.rp.data.grpc.v1.SettlementLine.newBuilder()
+                    .setRuleId(c.ruleId() == null ? "" : c.ruleId())
+                    .setTitle(c.title() == null ? "" : c.title())
+                    .setValue(c.value()));
+        }
+        data.recordSettlement(b.build(), playerUuid, ack -> {
+            // 主线程回调：确认后立刻刷新界面，让「等级刚变成多少」与「账上确认的值」是同一个
+            pushUserXp(playerUuid);
+        });
+    }
+
+    /**
+     * 把**数据服务确认过的**等级推给该玩家；未确认就推 {@code levelKnown=false}（界面不显示等级）。
+     *
+     * <p>这是等级显示的唯一出口。任何地方想显示等级都必须走它，否则就又出现了第二个来源。
+     */
+    public void pushUserXp(String playerUuid) {
+        ServerPlayer owner = online(playerUuid);
+        if (owner == null || CCNRRPMod.users == null) {
+            return;
+        }
+        long xp = CCNRRPMod.users.userXp(playerUuid);
+        com.ccnrcom.rp.sync.DataLink data = CCNRRPMod.data;
+        com.ccnrcom.rp.sync.RemoteProfiles.Snapshot snap =
+                data == null ? null : data.profiles().get(playerUuid);
+        if (snap == null) {
+            RpChannels.sendTo(owner, new RpPackets.UserXpS2C(xp, 0, false, 0f));
+            return;
+        }
+        RpChannels.sendTo(owner, new RpPackets.UserXpS2C(xp, snap.level(), true, progressOf(snap)));
+    }
+
+    /**
+     * 当前等级内的进度 0..1，用**确认过的** xp 与等级算（两者同源才自洽）。
+     *
+     * <p>刻意在服务端算：客户端拿不到等级曲线（{@code levelBase}/{@code levelPow} 已不再下发），
+     * 于是它没有任何算等级的材料 —— 这正是「取不到就不显示」能成立的前提。
+     */
+    public static float progressOf(com.ccnrcom.rp.sync.RemoteProfiles.Snapshot snap) {
+        LevelCurve curve = new LevelCurve(CCNRRPConfig.LEVEL_BASE.get(), CCNRRPConfig.LEVEL_POW.get());
+        long cur = curve.xpForLevel(snap.level());
+        long next = curve.xpForLevel(snap.level() + 1);
+        if (next <= cur) {
+            return 0f;
+        }
+        return (float) Math.max(0.0, Math.min(1.0, (double) (snap.xp() - cur) / (next - cur)));
+    }
+
+    /** 毫秒 → protobuf Timestamp（手写，见 sync.DataLink#timestamp 的说明）。 */
+    private static com.google.protobuf.Timestamp timestampOf(long epochMillis) {
+        return com.google.protobuf.Timestamp.newBuilder()
+                .setSeconds(Math.floorDiv(epochMillis, 1000L))
+                .setNanos((int) Math.floorMod(epochMillis, 1000L) * 1_000_000)
+                .build();
+    }
+
     /** 死亡/断联/退役落定：结算该用户；在线看 HUD 结算动画，离线挂起上线补发。 */
-    public void settleUserDown(String playerUuid, ServerPlayer ownerOrNull, String resultKey) {
-        SettleSummary s = settleUser(playerUuid, true);
+    public void settleUserDown(String playerUuid, ServerPlayer ownerOrNull, String resultKey, String reason) {
+        SettleSummary s = settleUser(playerUuid, true, reason);
         if (s == null) {
             return;
         }
@@ -445,7 +560,7 @@ public final class ExperienceService {
         for (String uuid : CCNRRPMod.users.uuids()) {
             if (playerUuidOrNull == null || uuid.equals(playerUuidOrNull)) {
                 try {
-                    results.add(settleUser(uuid, false));
+                    results.add(settleUser(uuid, false, "command"));
                 } catch (Exception ex) {
                     LOGGER.error("[CCNR-RP] 结算失败（跳过该用户，不影响整批）: {}", uuid, ex);
                 }
@@ -484,7 +599,7 @@ public final class ExperienceService {
             try {
                 users.setPendingXp(uuid, EvacSettlement.apply(users.pendingXp(uuid), safeTitle, xp));
                 users.save();
-                settleUser(uuid, true); // 整份列表求和入账 + 清空列表（含疏散分与既有条目）
+                settleUser(uuid, true, "evac"); // 整份列表求和入账 + 清空列表（含疏散分与既有条目）
                 users.setStatus(uuid, CharacterStatus.OBSERVING);
                 users.save();
                 ServerPlayer owner = online(uuid);
@@ -502,6 +617,14 @@ public final class ExperienceService {
             }
         }
         LOGGER.info("[CCNR-RP] 疏散结算完成：{} 人（+{}「{}」）", count, xp, safeTitle);
+        Map<String, Object> evac = new LinkedHashMap<>();
+        evac.put("title", safeTitle);
+        evac.put("xp", xp);
+        evac.put("count", count);
+        DataReports.event(
+                EventKind.EVENT_KIND_EVACUATION,
+                "疏散结算：" + count + " 人（+" + xp + "「" + safeTitle + "」）",
+                b -> b.setPayloadJson(JsonUtil.GSON.toJson(evac)));
         return count;
     }
 

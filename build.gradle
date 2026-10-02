@@ -5,6 +5,8 @@ plugins {
     id 'net.minecraftforge.gradle' version '[6.0,6.2)'
     id 'com.diffplug.spotless' version '6.25.0'
     id 'org.spongepowered.mixin' version '0.7.38'
+    // 数据服务（CCNR-Data）gRPC 客户端：契约桩由 protoc 在构建期生成（不提交，见 src/main/proto/README.md）
+    id 'com.google.protobuf' version '0.9.4'
 }
 
 version = mod_version
@@ -56,6 +58,33 @@ mixin {
     config 'ccnr_rp.mixins.json'
 }
 
+// ---------------------------------------------------------------------------
+// 数据服务契约桩（protoc 构建期生成，见 src/main/proto/README.md）
+// ---------------------------------------------------------------------------
+
+protobuf {
+    protoc {
+        artifact = "com.google.protobuf:protoc:${protoc_version}"
+    }
+    plugins {
+        grpc {
+            artifact = "io.grpc:protoc-gen-grpc-java:${grpc_version}"
+        }
+    }
+    generateProtoTasks {
+        all().configureEach { task -> task.plugins { grpc {} } }
+    }
+}
+
+// well-known types 走 **include-only** 目录。两个理由：
+//   1. Maven 上的 protoc 可执行文件不带 WKT 搜索兜底（实测 3.21.12 / 3.25.5 / 4.29.3 都报
+//      「google/protobuf/timestamp.proto: File not found」），它只认 -I；
+//   2. 放进 src/main/proto 会被当成生成输入，产出与 protobuf-java.jar 同名的
+//      com.google.protobuf.Timestamp —— 两个同名类，最难查的一类问题。
+tasks.withType(com.google.protobuf.gradle.GenerateProtoTask).configureEach {
+    addIncludeDir(files("$projectDir/proto-include"))
+}
+
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
     // Mixin 注解处理器（InventoryObserverMixin：观察者禁止入包）
@@ -69,9 +98,81 @@ dependencies {
     // ---- 数据库后端（P0 起）：SQLite 默认（内嵌，打进 mod jar），MySQL 可选（网络后端）----
     implementation 'org.xerial:sqlite-jdbc:3.45.3.0'
     implementation 'com.mysql:mysql-connector-j:8.3.0'
-    // 打包进 mod jar（jarJar）以便单文件部署；MySQL 连接器较大，如需也可加入
+    // 打包进 mod jar（jarJar）以便单文件部署；MySQL 连接器较大，如需也可加入。
+    // transitive = false：jarJar 配置**会解析传递依赖**，不禁掉的话 sqlite-jdbc 的传递闭包也会被嵌进去。
     jarJar('org.xerial:sqlite-jdbc:3.45.3.0') {
+        transitive = false
         jarJar.ranged(it, '[3.45.3.0,)')
+    }
+
+    // ---- 数据服务（CCNR-Data）gRPC 客户端 ----
+    // **每一个都 transitive = false**，传递闭包在下面逐个声明。
+    // 为什么不用 Gradle 解析出来的闭包：grpc 的 POM 会带进 Guava 33 / Gson / SLF4J / protobuf-javalite /
+    // proto-google-common-protos，而 Minecraft 自带的是同族不同版本（Guava 31.1-jre、Gson、SLF4J 2.x）。
+    // 一旦让它们进开发 classpath，就是「开发期用 Guava 33、实机用 MC 的 31.1」——
+    // 「本地测试全绿、上线 NoSuchMethodError」正是这么来的。显式声明后两边用同一份 Guava。
+    //
+    // 该选择的前提已验证：grpc 1.68.1 全部 jar 引用的 **93 个** Guava 成员在 31.1-jre 里逐个存在
+    // （另有 4 个看似缺失的，是继承自 Future / AbstractFuture 的方法，javap 只在自身类上查）。
+    // 若将来升级 grpc 后出现 NoSuchMethodError：先确认 Forge 的嵌套层到底加载哪一份 Guava，
+    // 再决定是把 grpc 声明的 Guava 也声明进 jarJar，还是回到重定位方案。
+    implementation('io.grpc:grpc-stub:' + grpc_version) { transitive = false }
+    implementation('io.grpc:grpc-protobuf:' + grpc_version) { transitive = false }
+    implementation('io.grpc:grpc-protobuf-lite:' + grpc_version) { transitive = false }
+    implementation('io.grpc:grpc-api:' + grpc_version) { transitive = false }
+    implementation('com.google.protobuf:protobuf-java:' + protobuf_version) { transitive = false }
+    // 传输层用 netty-shaded：它已把 Netty 预重定位到 io.grpc.netty.shaded，与 MC 自带的
+    // io.netty 4.1.82 不冲突（本模组因此不需要 shadow，也不需要重定位任何包）。
+    runtimeOnly('io.grpc:grpc-netty-shaded:' + grpc_version) { transitive = false }
+    runtimeOnly('io.grpc:grpc-core:' + grpc_version) { transitive = false }
+    runtimeOnly('io.grpc:grpc-context:' + grpc_version) { transitive = false }
+    runtimeOnly('io.grpc:grpc-util:' + grpc_version) { transitive = false }
+    runtimeOnly('io.perfmark:perfmark-api:0.27.0') { transitive = false }
+    // 生成代码里的 @javax.annotation.Generated：仅编译期需要（CLASS 保留，运行时不查）
+    compileOnly 'org.apache.tomcat:annotations-api:6.0.53'
+
+    // 打包进 mod jar（jarJar）以便单文件部署。清单必须与上面**逐个对应**：
+    // jarJar 配置会解析传递依赖且只嵌套「显式 ranged 过」的那些——漏一个 = 实机 NoClassDefFoundError，
+    // 多一个 = 白白把 Guava/Gson/SLF4J 嵌进去覆盖 MC 自己那份。
+    jarJar('io.grpc:grpc-netty-shaded:' + grpc_version) {
+        transitive = false
+        jarJar.ranged(it, '[1.68.1,)')
+    }
+    jarJar('io.grpc:grpc-core:' + grpc_version) {
+        transitive = false
+        jarJar.ranged(it, '[1.68.1,)')
+    }
+    jarJar('io.grpc:grpc-api:' + grpc_version) {
+        transitive = false
+        jarJar.ranged(it, '[1.68.1,)')
+    }
+    jarJar('io.grpc:grpc-context:' + grpc_version) {
+        transitive = false
+        jarJar.ranged(it, '[1.68.1,)')
+    }
+    jarJar('io.grpc:grpc-util:' + grpc_version) {
+        transitive = false
+        jarJar.ranged(it, '[1.68.1,)')
+    }
+    jarJar('io.grpc:grpc-stub:' + grpc_version) {
+        transitive = false
+        jarJar.ranged(it, '[1.68.1,)')
+    }
+    jarJar('io.grpc:grpc-protobuf:' + grpc_version) {
+        transitive = false
+        jarJar.ranged(it, '[1.68.1,)')
+    }
+    jarJar('io.grpc:grpc-protobuf-lite:' + grpc_version) {
+        transitive = false
+        jarJar.ranged(it, '[1.68.1,)')
+    }
+    jarJar('com.google.protobuf:protobuf-java:' + protobuf_version) {
+        transitive = false
+        jarJar.ranged(it, '[3.25.5,)')
+    }
+    jarJar('io.perfmark:perfmark-api:0.27.0') {
+        transitive = false
+        jarJar.ranged(it, '[0.27.0,)')
     }
 
     // ---- 测试（JUnit5；离线开发环境不自动跑，显式 `-PrunTests` 才执行）----

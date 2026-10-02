@@ -65,7 +65,7 @@ final class XpCommand {
         if (CCNRRPMod.experience == null || CCNRRPMod.users == null) {
             return 0;
         }
-        SettleSummary s = CCNRRPMod.experience.settleUser(target.getUUID().toString(), true);
+        SettleSummary s = CCNRRPMod.experience.settleUser(target.getUUID().toString(), true, "command");
         if (s == null) {
             return 0;
         }
