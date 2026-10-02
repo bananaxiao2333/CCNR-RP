@@ -1,0 +1,198 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "CCNR-RP 项目架构",
+    "output": "CCNR-RP-架构总览.html",
+    "quality_profile": "showcase",
+    "viewBox": [1600, 720],
+    "repository": {
+      "url": "https://github.com/bananaxiao2333/CCNR-RP",
+      "revision": "bde5c8d4f9cf1019fbc8813cfe2e71f5bcee7a76"
+    },
+    "views": [
+      {
+        "id": "request-path",
+        "label": "玩家请求主链路",
+        "focus": ["player", "client", "net", "core"],
+        "note": "玩家从 K 键终端发起的操作，经 ccnr_rp:main 通道进入服务端装配层。"
+      },
+      {
+        "id": "runtime-loop",
+        "label": "运行时分支",
+        "focus": ["core", "defs", "runtime", "corpse"],
+        "note": "装配层两侧挂载内容定义与运行时系统，Corpse 为可降级的可选联动。"
+      },
+      {
+        "id": "data-backend",
+        "label": "数据后端与管理面",
+        "focus": ["core", "repo", "db", "web"],
+        "note": "文件与数据库双后端，Web 管理面板与模组共用同一套表结构。"
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "player",
+      "type": "external",
+      "label": "玩家 / 管理员",
+      "sublabel": "Minecraft 1.20.1 客户端",
+      "pos": [60, 85],
+      "size": [130, 64]
+    },
+    {
+      "id": "client",
+      "type": "frontend",
+      "label": "客户端表现层",
+      "sublabel": "终端界面 · HUD · 皮肤与素材缓存",
+      "pos": [280, 85],
+      "size": [190, 64],
+      "tag": "K 键",
+      "sources": [
+        { "path": "src/main/java/com/ccnrcom/rp/client/CharacterManagementScreen.java", "line": 26, "label": "终端界面" }
+      ]
+    },
+    {
+      "id": "net",
+      "type": "messagebus",
+      "label": "ccnr_rp:main",
+      "sublabel": "SimpleChannel C2S / S2C",
+      "pos": [670, 85],
+      "size": [160, 64],
+      "tag": "协议版本 1",
+      "sources": [
+        { "path": "src/main/java/com/ccnrcom/rp/network/RpChannels.java", "line": 19, "label": "通道注册" }
+      ]
+    },
+    {
+      "id": "defs",
+      "type": "backend",
+      "label": "内容定义层",
+      "sublabel": "阵营 · 职业 · 角色 · 属性 · 变量 · 模式",
+      "pos": [280, 325],
+      "size": [230, 64],
+      "sources": [
+        { "path": "src/main/java/com/ccnrcom/rp/faction/FactionManager.java", "line": 27, "label": "阵营定义" },
+        { "path": "src/main/java/com/ccnrcom/rp/variable/VariableService.java", "line": 30, "label": "自定义设定" }
+      ]
+    },
+    {
+      "id": "core",
+      "type": "backend",
+      "label": "服务端装配",
+      "sublabel": "服务构造 · 事件总线 · 权限",
+      "pos": [640, 325],
+      "size": [220, 64],
+      "tag": "服务端权威",
+      "sources": [
+        { "path": "src/main/java/com/ccnrcom/rp/CCNRRPMod.java", "line": 30, "label": "入口与服务构造" }
+      ]
+    },
+    {
+      "id": "runtime",
+      "type": "backend",
+      "label": "运行时系统层",
+      "sublabel": "状态机 · 事件 · 刷新 · 经验 · 动画 · 序列",
+      "pos": [970, 325],
+      "size": [240, 64],
+      "sources": [
+        { "path": "src/main/java/com/ccnrcom/rp/status/StatusManager.java", "line": 36, "label": "状态机" },
+        { "path": "src/main/java/com/ccnrcom/rp/spawn/SpawnFramework.java", "line": 41, "label": "刷新与招募" },
+        { "path": "src/main/java/com/ccnrcom/rp/experience/ExperienceService.java", "line": 41, "label": "经验结算" }
+      ]
+    },
+    {
+      "id": "corpse",
+      "type": "external",
+      "label": "Corpse 联动",
+      "sublabel": "遗体搜刮 · 未装则原生降级",
+      "pos": [1310, 325],
+      "size": [200, 64],
+      "sources": [
+        { "path": "src/main/java/com/ccnrcom/rp/corpse/CorpseBridge.java", "line": 35, "label": "可选联动桥" }
+      ]
+    },
+    {
+      "id": "repo",
+      "type": "backend",
+      "label": "仓储层",
+      "sublabel": "配置文档 · 用户档案 · 素材",
+      "pos": [660, 565],
+      "size": [180, 64],
+      "sources": [
+        { "path": "src/main/java/com/ccnrcom/rp/data/ConfigStore.java", "line": 25, "label": "配置文档读写" }
+      ]
+    },
+    {
+      "id": "db",
+      "type": "database",
+      "label": "SQLite / MySQL",
+      "sublabel": "配置档 · 用户 · 素材 BLOB",
+      "pos": [930, 565],
+      "size": [170, 64],
+      "sources": [
+        { "path": "src/main/java/com/ccnrcom/rp/data/DbSchema.java", "line": 18, "label": "表结构" }
+      ]
+    },
+    {
+      "id": "web",
+      "type": "backend",
+      "label": "Web 管理面板",
+      "sublabel": "FastAPI · 实时推送 · 版本护栏",
+      "pos": [1190, 565],
+      "size": [230, 64]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Minecraft Forge 1.20.1 运行时",
+      "wraps": ["client", "net", "defs", "core", "runtime", "corpse"],
+      "pad": 30
+    },
+    {
+      "kind": "region",
+      "label": "数据后端",
+      "wraps": ["repo", "db", "web"],
+      "pad": 30
+    }
+  ],
+  "connections": [
+    { "id": "player-to-client", "from": "player", "to": "client", "label": "K 键终端", "fromSide": "right", "toSide": "left", "variant": "emphasis" },
+    { "id": "client-to-net", "from": "client", "to": "net", "label": "C2S 请求", "fromSide": "right", "toSide": "left", "variant": "emphasis" },
+    { "id": "net-to-core", "from": "net", "to": "core", "label": "S2C 下发", "fromSide": "bottom", "toSide": "top", "variant": "emphasis", "labelAt": [750, 237] },
+    { "id": "defs-to-core", "from": "defs", "to": "core", "label": "装载定义", "fromSide": "right", "toSide": "left" },
+    { "id": "core-to-runtime", "from": "core", "to": "runtime", "label": "装配服务", "fromSide": "right", "toSide": "left" },
+    { "id": "runtime-to-corpse", "from": "runtime", "to": "corpse", "label": "遗体钩子", "fromSide": "right", "toSide": "left" },
+    { "id": "core-to-repo", "from": "core", "to": "repo", "label": "存档与配置", "fromSide": "bottom", "toSide": "top", "variant": "emphasis", "labelAt": [750, 477] },
+    { "id": "repo-to-db", "from": "repo", "to": "db", "label": "JDBC", "fromSide": "right", "toSide": "left", "variant": "emphasis" },
+    { "id": "web-to-db", "from": "web", "to": "db", "label": "SQLAlchemy", "fromSide": "left", "toSide": "right" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "分层原则",
+      "items": [
+        "涉及 MC 类型的代码收敛为薄适配层",
+        "规则逻辑（曲线 / 图解析 / 选人 / 触发器求值 / 动画解析）是无 MC 依赖的纯类，可 JUnit 直测"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "运行时闭环",
+      "items": [
+        "事件 → 刷新波/招募 → 部署 → 判死 → 冷却 → 复活 → 结算",
+        "状态机、掉线判死与冷却锁定均由服务端强制"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "数据与版本",
+      "items": [
+        "未启用数据库时为 JSON 原子写（临时文件 + rename），损坏保留 .bak",
+        "db.enabled=true 后转 SQLite / MySQL，Web 管理面板与模组共用表结构",
+        "客户端与服务端须同版本，配置以服务端为准"
+      ]
+    }
+  ]
+}

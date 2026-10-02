@@ -1,0 +1,15 @@
+# CCNR-RP 数据库连接配置（服务端：把本文件复制为 config/db.properties 并放到服务器配置目录）
+# 已把 ccnr_rp.zip 的配置 + 音乐/图标喂入下面这个 SQLite 库：/Users/bananaxiao/Documents/MirageV/mod/ccnr_rp.db
+db.enabled=true
+db.mode=sqlite
+db.file=/Users/bananaxiao/Documents/MirageV/mod/ccnr_rp.db
+db.profile=default
+db.poolSize=4
+db.fallbackToFiles=false
+# 若要接 MySQL（需先建库并导入同 schema），改用：
+#db.mode=mysql
+#db.host=localhost
+#db.port=3306
+#db.database=ccnr_rp
+#db.user=ccnr
+#db.pass=${CCNR_DB_PASS}

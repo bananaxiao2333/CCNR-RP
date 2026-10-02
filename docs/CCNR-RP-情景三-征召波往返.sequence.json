@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "CCNR-RP 情景三 · 征召波往返",
+    "output": "CCNR-RP-情景三-征召波往返.html",
+    "quality_profile": "showcase",
+    "viewBox": [1780, 860],
+    "column_fit": "spread",
+    "views": [
+      {
+        "id": "trigger-and-select",
+        "label": "触发与选人",
+        "focus": ["trigger", "spawn", "roster"],
+        "note": "波次由脚本或命令显式招募，候选池排除已登记征召者。"
+      },
+      {
+        "id": "invite-and-answer",
+        "label": "邀请与回执",
+        "focus": ["spawn", "net", "client", "player"],
+        "note": "招募是邀请制：玩家自行选择加入或拒绝，名单实时整表同步。"
+      },
+      {
+        "id": "settle",
+        "label": "结算与身份",
+        "focus": ["spawn", "roster", "net", "client"],
+        "note": "结算按当时状态判别，临时征召只推身份、不写用户库。"
+      }
+    ]
+  },
+  "participants": [
+    { "id": "trigger", "type": "external", "label": "序列脚本 / 命令", "sublabel": "波次触发源" },
+    { "id": "spawn", "type": "backend", "label": "招募管理器", "sublabel": "SpawnFramework" },
+    { "id": "roster", "type": "backend", "label": "用户档案 · 序列引擎", "sublabel": "状态与征召登记" },
+    { "id": "net", "type": "messagebus", "label": "ccnr_rp:main", "sublabel": "SimpleChannel" },
+    { "id": "client", "type": "frontend", "label": "客户端招募 HUD", "sublabel": "右侧列表 · 背包角标" },
+    { "id": "player", "type": "external", "label": "受邀玩家", "sublabel": "自行选择" }
+  ],
+  "segments": [
+    { "from": 150, "to": 305, "label": "触发与选人" },
+    { "from": 315, "to": 590, "label": "发邀请与回执" },
+    { "from": 600, "to": 750, "label": "结算与身份" }
+  ],
+  "messages": [
+    { "from": "trigger", "to": "spawn", "y": 175, "label": "波次触发（序列 WAVE 步骤 / 命令）", "variant": "emphasis" },
+    { "from": "spawn", "to": "roster", "y": 215, "label": "候选池筛选：排除已登记 · 过滤职业与阵营", "variant": "default" },
+    { "from": "roster", "to": "spawn", "y": 255, "label": "候选名单（DEAD 不入池）", "variant": "return" },
+    { "from": "spawn", "to": "net", "y": 295, "label": "RecruitOfferS2C（offerId · 倒计时 · 职业预览）", "variant": "emphasis" },
+    { "from": "net", "to": "client", "y": 335, "label": "RecruitOfferS2C", "variant": "default" },
+    { "from": "client", "to": "player", "y": 375, "label": "屏幕右侧招募列表 + 倒计时条", "variant": "default" },
+    { "from": "player", "to": "client", "y": 415, "label": "接受 / 拒绝", "variant": "default" },
+    { "from": "client", "to": "net", "y": 455, "label": "RecruitAnswerC2S", "variant": "emphasis" },
+    { "from": "net", "to": "spawn", "y": 495, "label": "RecruitAnswerC2S", "variant": "default" },
+    { "from": "spawn", "to": "net", "y": 535, "label": "RecruitRosterS2C（已加入名单整表）", "variant": "emphasis" },
+    { "from": "net", "to": "client", "y": 575, "label": "RecruitRosterS2C", "variant": "default" },
+    { "from": "spawn", "to": "roster", "y": 615, "label": "结算：按当时状态判别 ConscriptDeployMode", "variant": "emphasis" },
+    { "from": "roster", "to": "spawn", "y": 655, "label": "TEMP / 正式转职 / SKIP", "variant": "return" },
+    { "from": "spawn", "to": "net", "y": 695, "label": "ConscriptStateS2C（临时征召身份）", "variant": "emphasis" },
+    { "from": "net", "to": "client", "y": 735, "label": "征召身份 / 部署完成横幅", "variant": "default" }
+  ],
+  "activations": [
+    { "participant": "spawn", "from": 165, "to": 745, "type": "backend" },
+    { "participant": "roster", "from": 205, "to": 265, "type": "backend" },
+    { "participant": "net", "from": 285, "to": 345, "type": "messagebus" },
+    { "participant": "client", "from": 325, "to": 465, "type": "frontend" },
+    { "participant": "player", "from": 365, "to": 425, "type": "external" },
+    { "participant": "net", "from": 525, "to": 585, "type": "messagebus" },
+    { "participant": "roster", "from": 605, "to": 665, "type": "backend" },
+    { "participant": "net", "from": 685, "to": 745, "type": "messagebus" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "谁能被打到",
+      "items": [
+        "候选池 = 在线玩家，并排除已有征召登记者，防止重复邀请",
+        "DEAD 玩家不入池；存活与观察谁能收到由波模式决定",
+        "波次由脚本或命令显式招募，不再轮询玩家队伍"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "邀请制，不强制",
+      "items": [
+        "受邀玩家自行选择加入或拒绝，不再被强制复活",
+        "已加入名单由服务端权威整表推送，接受或离服即增量重推",
+        "人满即提前结算；超时按已加入人数部署；无人接受则公告失败"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "结算按当时状态判别",
+      "items": [
+        "观察 / 死亡 → TEMP 临时征召：不写用户库，仅推征召身份",
+        "存活 → 正式转职部署：状态置 ALIVE，不处死",
+        "已有征召在场 → SKIP：回 ErrorS2C 拒绝并清理登记"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "CCNR-RP 情景一 · 部署往返",
+    "output": "CCNR-RP-情景一-部署往返.html",
+    "quality_profile": "showcase",
+    "viewBox": [1780, 900],
+    "column_fit": "spread",
+    "views": [
+      {
+        "id": "guard-rails",
+        "label": "部署前置校验",
+        "focus": ["player", "client", "net", "server", "assets"],
+        "note": "素材未同步、已有在场身份、职位人数超限，任一不满足即拒绝部署。"
+      },
+      {
+        "id": "assemble",
+        "label": "服务端装配顺序",
+        "focus": ["server", "state"],
+        "note": "清空背包 → 套用阵营属性 → 重置状态 → 发放装备，顺序不可颠倒。"
+      },
+      {
+        "id": "cinematic-and-land",
+        "label": "入场与落位",
+        "focus": ["server", "net", "client", "state"],
+        "note": "有 CMDCam 场景时先播后落位，客户端播完回执才真正传送。"
+      }
+    ]
+  },
+  "participants": [
+    { "id": "player", "type": "external", "label": "玩家", "sublabel": "键鼠操作" },
+    { "id": "client", "type": "frontend", "label": "客户端表现层", "sublabel": "K 终端 · HUD · 电影" },
+    { "id": "net", "type": "messagebus", "label": "ccnr_rp:main", "sublabel": "SimpleChannel" },
+    { "id": "server", "type": "backend", "label": "服务端装配", "sublabel": "SpawnFramework.deploy" },
+    { "id": "state", "type": "backend", "label": "状态与用户档案", "sublabel": "UserService · 属性 · 装备" },
+    { "id": "assets", "type": "backend", "label": "素材库", "sublabel": "AssetLibrary 哈希校验" }
+  ],
+  "segments": [
+    { "from": 150, "to": 350, "label": "部署校验" },
+    { "from": 360, "to": 540, "label": "守卫与装配" },
+    { "from": 550, "to": 840, "label": "入场与落位" }
+  ],
+  "messages": [
+    { "from": "player", "to": "client", "y": 180, "label": "按 K 选择职业并确认部署", "variant": "emphasis" },
+    { "from": "client", "to": "net", "y": 220, "label": "DeployPositionC2S(professionId)", "variant": "emphasis" },
+    { "from": "net", "to": "server", "y": 260, "label": "DeployPositionC2S", "variant": "default" },
+    { "from": "server", "to": "assets", "y": 300, "label": "素材同步校验 isSynced", "variant": "default" },
+    { "from": "assets", "to": "server", "y": 340, "label": "未同步 → ErrorS2C 拒绝", "variant": "return" },
+    { "from": "server", "to": "state", "y": 400, "label": "单在场守卫 · 部署人数限制", "variant": "emphasis" },
+    { "from": "state", "to": "server", "y": 440, "label": "通过 / 拒绝", "variant": "return" },
+    { "from": "server", "to": "state", "y": 480, "label": "清空背包 → 套用阵营属性 → 重置状态", "variant": "default" },
+    { "from": "server", "to": "state", "y": 520, "label": "LoadoutManager 发放装备（含 NBT）", "variant": "default" },
+    { "from": "server", "to": "net", "y": 560, "label": "CinematicS2C（职业 / 阵营 / 关系 / 音乐）", "variant": "emphasis" },
+    { "from": "net", "to": "client", "y": 600, "label": "CinematicS2C", "variant": "default" },
+    { "from": "server", "to": "client", "y": 640, "label": "CMDCam 场景同播（可选叠加层）", "variant": "dashed" },
+    { "from": "server", "to": "state", "y": 680, "label": "状态置 ALIVE · 冷却清零 · 经验回合重置", "variant": "emphasis" },
+    { "from": "client", "to": "net", "y": 720, "label": "DeployLandC2S（HUD 与场景播完）", "variant": "default" },
+    { "from": "net", "to": "server", "y": 760, "label": "DeployLandC2S", "variant": "default" },
+    { "from": "server", "to": "state", "y": 800, "label": "落位：传送部署点 + 切生存", "variant": "emphasis" }
+  ],
+  "activations": [
+    { "participant": "client", "from": 170, "to": 232, "type": "frontend" },
+    { "participant": "net", "from": 210, "to": 272, "type": "messagebus" },
+    { "participant": "assets", "from": 290, "to": 352, "type": "backend" },
+    { "participant": "server", "from": 250, "to": 812, "type": "backend" },
+    { "participant": "state", "from": 390, "to": 532, "type": "backend" },
+    { "participant": "net", "from": 550, "to": 612, "type": "messagebus" },
+    { "participant": "client", "from": 590, "to": 732, "type": "frontend" },
+    { "participant": "state", "from": 670, "to": 692, "type": "backend" },
+    { "participant": "net", "from": 710, "to": 772, "type": "messagebus" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "部署前置",
+      "items": [
+        "素材未同步：直接 ErrorS2C 拒绝，客户端仍在异步下载",
+        "单在场守卫：已有存活身份或以征召兵在场时拒绝，防双身份",
+        "职位 / 阵营人数上限按「不含本人」计算，换岗不误判自占位"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "装配顺序不可颠倒",
+      "items": [
+        "清空背包（含护甲与副手）→ 套用阵营属性 → 重置状态 → 发放装备",
+        "阵营属性必须先于重置状态：后者按 getMaxHealth() 回满，顺序反了会按旧上限回满",
+        "临时征召走 TEMP：不写用户库，只推 ConscriptStateS2C 征召身份"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "两种落位时序",
+      "items": [
+        "有 CMDCam 场景：强制旁观者，电影 HUD 与场景同一时刻开播，客户端播完回执才传送",
+        "无场景或未装 CMDCam：开局直接落位切生存，电影 HUD 与音乐仅作叠加",
+        "SKIP_CINEMATIC：不播动画、不等待；落位超时有 checkPendingLandings 兜底"
+      ]
+    }
+  ]
+}

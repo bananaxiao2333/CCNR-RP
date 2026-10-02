@@ -1,0 +1,254 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "CCNR-RP 情景四 · 配置与素材下发",
+    "output": "CCNR-RP-情景四-配置与素材下发.html",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1160,
+      520
+    ],
+    "views": [
+      {
+        "id": "authoring",
+        "label": "定义从哪里来",
+        "focus": [
+          "editor",
+          "panel",
+          "files",
+          "db"
+        ],
+        "note": "管理员可编辑配置文件，也可用 Web 管理面板直接读写数据库。"
+      },
+      {
+        "id": "authority",
+        "label": "服务端成为权威",
+        "focus": [
+          "files",
+          "db",
+          "config",
+          "authority"
+        ],
+        "note": "文件与数据库是同一个 ConfigStore 的两个后端，由开关切换。"
+      },
+      {
+        "id": "delivery",
+        "label": "下发到客户端",
+        "focus": [
+          "authority",
+          "manifest",
+          "client",
+          "cache"
+        ],
+        "note": "配置变更广播；素材按哈希增量下载并进本地缓存。"
+      }
+    ]
+  },
+  "stages": [
+    {
+      "label": "编辑"
+    },
+    {
+      "label": "存储"
+    },
+    {
+      "label": "装载"
+    },
+    {
+      "label": "权威运行时"
+    },
+    {
+      "label": "客户端"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "editor",
+      "type": "external",
+      "label": "管理员",
+      "sublabel": "编辑配置",
+      "stage": 0,
+      "row": 0,
+      "tag": "OP≥2"
+    },
+    {
+      "id": "panel",
+      "type": "frontend",
+      "label": "Web 管理面板",
+      "sublabel": "FastAPI 推送",
+      "stage": 0,
+      "row": 2,
+      "tag": "版本护栏"
+    },
+    {
+      "id": "files",
+      "type": "database",
+      "label": "配置文件",
+      "sublabel": "config JSON",
+      "stage": 1,
+      "row": 0,
+      "tag": "原子写 + .bak"
+    },
+    {
+      "id": "db",
+      "type": "database",
+      "label": "SQLite / MySQL",
+      "sublabel": "文档 · 素材",
+      "stage": 1,
+      "row": 2,
+      "tag": "多配置档"
+    },
+    {
+      "id": "config",
+      "type": "backend",
+      "label": "ConfigStore",
+      "sublabel": "按开关选后端",
+      "stage": 2,
+      "row": 1,
+      "tag": "唯一入口"
+    },
+    {
+      "id": "authority",
+      "type": "backend",
+      "label": "服务端权威",
+      "sublabel": "阶段 · 事件",
+      "stage": 3,
+      "row": 0,
+      "tag": "服务端为准"
+    },
+    {
+      "id": "manifest",
+      "type": "backend",
+      "label": "AssetLibrary",
+      "sublabel": "清单 + sha256",
+      "stage": 3,
+      "row": 2,
+      "tag": "32KB 分片"
+    },
+    {
+      "id": "client",
+      "type": "frontend",
+      "label": "客户端表现层",
+      "sublabel": "界面 / HUD",
+      "stage": 4,
+      "row": 1
+    },
+    {
+      "id": "cache",
+      "type": "database",
+      "label": "客户端素材缓存",
+      "sublabel": "哈希增量下载",
+      "stage": 4,
+      "row": 2,
+      "tag": "无需分发"
+    }
+  ],
+  "flows": [
+    {
+      "from": "editor",
+      "to": "files",
+      "label": "保存 JSON",
+      "classification": "原子写 + .bak",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "from": "editor",
+      "to": "panel",
+      "label": "浏览器操作",
+      "classification": "管理员入口",
+      "variant": "default",
+      "route": "vertical-channel"
+    },
+    {
+      "from": "panel",
+      "to": "db",
+      "label": "SQLAlchemy 读写",
+      "classification": "实时落库",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "from": "files",
+      "to": "config",
+      "label": "装载",
+      "classification": "关闭数据库",
+      "variant": "emphasis"
+    },
+    {
+      "from": "db",
+      "to": "config",
+      "label": "读取配置",
+      "classification": "启用数据库",
+      "variant": "emphasis"
+    },
+    {
+      "from": "config",
+      "to": "authority",
+      "label": "启动装载 / 热重载",
+      "classification": "配置档热切换",
+      "variant": "emphasis"
+    },
+    {
+      "from": "db",
+      "to": "manifest",
+      "label": "素材 BLOB",
+      "classification": "assets 表",
+      "variant": "default",
+      "route": "straight"
+    },
+    {
+      "from": "authority",
+      "to": "client",
+      "label": "广播配置变更",
+      "classification": "broadcastConfigAll",
+      "variant": "emphasis"
+    },
+    {
+      "from": "manifest",
+      "to": "client",
+      "label": "AssetManifestS2C",
+      "classification": "清单 + sha256",
+      "variant": "emphasis",
+      "route": "vertical-channel",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "from": "manifest",
+      "to": "cache",
+      "label": "AssetPartS2C",
+      "classification": "32KB 分片",
+      "variant": "dashed",
+      "route": "vertical-channel"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "两个入口，一份数据",
+      "items": [
+        "配置文件与 Web 管理面板都能改，落到同一套文件 / 表结构",
+        "Web 端只管数据，不替代服务端的运行时权威决策"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "后端可切换",
+      "items": [
+        "未启用数据库：JSON 原子写，损坏保留 .bak",
+        "启用后：配置文档、用户档案、调参、素材改存库",
+        "支持多命名配置档，切换后热重载全部管理器"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "素材中央下发",
+      "items": [
+        "阵营出场音乐与徽章图标由服务端控制，客户端按哈希增量下载",
+        "素材未同步完成前，服务端拒绝部署并回 ErrorS2C"
+      ]
+    }
+  ]
+}

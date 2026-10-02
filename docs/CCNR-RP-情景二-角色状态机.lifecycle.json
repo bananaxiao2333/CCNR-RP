@@ -1,0 +1,185 @@
+{
+  "schema_version": 1,
+  "diagram_type": "lifecycle",
+  "meta": {
+    "title": "CCNR-RP 情景二 · 角色状态机",
+    "output": "CCNR-RP-情景二-角色状态机.html",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "main-rail",
+        "label": "状态主轨",
+        "focus": [
+          "observing",
+          "alive",
+          "dead",
+          "cooldown",
+          "revived"
+        ],
+        "note": "阳间待命 → 在场存活 → 阴间 → 冷却锁定 → 复活回到待命。"
+      },
+      {
+        "id": "death-entries",
+        "label": "死亡与判死",
+        "focus": [
+          "alive",
+          "dead"
+        ],
+        "note": "正常死亡与掉线判死是两条独立路径，但都收敛到同一个权威状态。"
+      },
+      {
+        "id": "conscript-identity",
+        "label": "征召身份出口",
+        "focus": [
+          "dead",
+          "temp",
+          "skip"
+        ],
+        "note": "结算时按当前状态判别：临时征召不写用户库，异常则拒绝部署。"
+      }
+    ],
+    "viewBox": [
+      1360,
+      660
+    ]
+  },
+  "lanes": [
+    {
+      "id": "main",
+      "label": "角色状态主轨"
+    },
+    {
+      "id": "identity",
+      "label": "身份与异常出口"
+    },
+    {
+      "id": "terminal",
+      "label": "拒绝出口"
+    }
+  ],
+  "states": [
+    {
+      "id": "observing",
+      "type": "start",
+      "label": "OBSERVING",
+      "sublabel": "阳间待命（默认状态）",
+      "lane": "main",
+      "col": 0,
+      "step": "01",
+      "tag": "默认"
+    },
+    {
+      "id": "alive",
+      "type": "active",
+      "label": "ALIVE",
+      "sublabel": "在场可操作",
+      "lane": "main",
+      "col": 1,
+      "step": "02",
+      "tag": "部署进入"
+    },
+    {
+      "id": "dead",
+      "type": "failure",
+      "label": "DEAD",
+      "sublabel": "阴间：遗体 / 等待复活",
+      "lane": "main",
+      "col": 2,
+      "step": "03",
+      "tag": "死亡 / 判死"
+    },
+    {
+      "id": "cooldown",
+      "type": "waiting",
+      "label": "冷却锁定",
+      "sublabel": "cooldown_until 未到",
+      "lane": "main",
+      "col": 3,
+      "step": "04",
+      "tag": "等待"
+    },
+    {
+      "id": "revived",
+      "type": "success",
+      "label": "复活",
+      "sublabel": "回到 OBSERVING 待命",
+      "lane": "main",
+      "col": 4,
+      "step": "05",
+      "tag": "冷却到期"
+    },
+    {
+      "id": "temp",
+      "type": "active",
+      "label": "TEMP 征召身份",
+      "sublabel": "不写用户库，仅推身份",
+      "lane": "identity",
+      "col": 2,
+      "tag": "临时",
+      "width": 150
+    },
+    {
+      "id": "skip",
+      "type": "failure",
+      "label": "SKIP 拒绝部署",
+      "sublabel": "状态异常 / 双身份冲突",
+      "lane": "terminal",
+      "col": 0,
+      "tag": "异常"
+    }
+  ],
+  "transitions": [
+    {
+      "from": "revived",
+      "to": "observing",
+      "label": "循环回阳间待命",
+      "variant": "dashed",
+      "route": "top-channel"
+    },
+    {
+      "from": "dead",
+      "to": "temp",
+      "label": "结算：死亡 / 观察 → 临时征召",
+      "variant": "dashed",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 55
+    },
+    {
+      "from": "temp",
+      "to": "skip",
+      "label": "双身份 / 状态异常",
+      "variant": "security",
+      "route": "bottom-channel"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "三种进入方式，一个守卫",
+      "items": [
+        "自部署：K 面板选择职业，需该职业 selfDeploy",
+        "征召部署：波次邀请接受后结算，人满即提前部署",
+        "管理员刷人：统一走 deploy()，可用 LIMIT_SKIP 跳过人数上限"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "判死必须幂等",
+      "items": [
+        "掉线判死有事件与轮询两条路径，重复触发只处理一次",
+        "死亡背包处置自洽：keepInventory、死亡瞬间旁观、离线判死三条路径都不会爆出背包"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "征召身份按结算时刻判别",
+      "items": [
+        "观察 / 死亡 → TEMP 临时征召：不写用户库，仅推征召身份",
+        "存活 → 正式转职部署：状态置 ALIVE，不处死",
+        "已有征召在场 → SKIP：回 ErrorS2C 拒绝并清理征召登记"
+      ]
+    }
+  ]
+}
