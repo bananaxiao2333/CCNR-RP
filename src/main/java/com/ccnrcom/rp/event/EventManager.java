@@ -216,9 +216,7 @@ public final class EventManager {
             data.clearRecentEvents();
         }
         com.ccnrcom.rp.sync.DataReports.event(
-                com.ccnrcom.rp.data.grpc.v1.EventKind.EVENT_KIND_EVENTS_CLEARED,
-                "清空事件（重开一局）：" + out.size() + " 个进行中事件已收束",
-                b -> {
+                com.ccnrcom.rp.sync.EventKinds.EVENTS_CLEARED, "清空事件（重开一局）：" + out.size() + " 个进行中事件已收束", b -> {
                     JsonArray arr = new JsonArray();
                     out.forEach(arr::add);
                     JsonObject pay = new JsonObject();
@@ -359,7 +357,7 @@ public final class EventManager {
             final String started = tr.started();
             final String ended = tr.ended();
             com.ccnrcom.rp.sync.DataReports.event(
-                    com.ccnrcom.rp.data.grpc.v1.EventKind.EVENT_KIND_PHASE_ADVANCED,
+                    com.ccnrcom.rp.sync.EventKinds.PHASE_ADVANCED,
                     "阶段推进：" + (ended == null || ended.isBlank() ? "(首幕)" : ended) + " → " + started,
                     b -> {
                         b.setPhaseId(started);
@@ -413,7 +411,7 @@ public final class EventManager {
         noteStart(def);
         LOGGER.info("[CCNR-RP] 事件开始: {} ", def.id());
         com.ccnrcom.rp.sync.DataReports.event(
-                com.ccnrcom.rp.data.grpc.v1.EventKind.EVENT_KIND_CONFIG_EVENT_TRIGGERED,
+                com.ccnrcom.rp.sync.EventKinds.CONFIG_EVENT_TRIGGERED,
                 "事件触发：" + displayNameOf(def),
                 b -> b.setDefinitionId(def.id()).setPhaseId(clock.phaseId()));
         // 开局事件：空窗期触发 → 重新开局（清幕作用域规则、回第 0 幕、置运行中、重发首幕信号）
@@ -589,10 +587,16 @@ public final class EventManager {
         resetToPhase(script == null ? "" : script.resetToPhase());
         broadcastMatchState(); // 复位待启：面板要立刻显示"空窗期 + 第 0 幕"
         com.ccnrcom.rp.sync.DataReports.event(
-                com.ccnrcom.rp.data.grpc.v1.EventKind.EVENT_KIND_ROUND_ENDED,
+                com.ccnrcom.rp.sync.EventKinds.ROUND_ENDED,
                 "对局收束：" + (reason == null || reason.isBlank() ? "无理由" : reason),
-                b -> b.setPayloadJson("{\"reason\":\"" + (reason == null ? "" : reason) + "\",\"resetToPhase\":\""
-                        + (script == null ? "" : script.resetToPhase()) + "\"}"));
+                b -> {
+                    // **必须用 JsonObject 构造，不要字符串拼接**：reason 来自 /rp end 的管理员输入，
+                    // 里面一个引号就能让落库的 payload 变成非法 JSON（docs/19 §8.1）。
+                    JsonObject pay = new JsonObject();
+                    pay.addProperty("reason", reason == null ? "" : reason);
+                    pay.addProperty("resetToPhase", script == null ? "" : script.resetToPhase());
+                    b.setPayloadJson(pay.toString());
+                });
         LOGGER.info("[CCNR-RP] 结局触发（{}）", reason == null || reason.isBlank() ? "无理由" : reason);
         return true;
     }
@@ -689,7 +693,7 @@ public final class EventManager {
         events.set(index, def.withState(EventState.SETTLED));
         LOGGER.info("[CCNR-RP] 事件结束: {} ", def.id());
         com.ccnrcom.rp.sync.DataReports.event(
-                com.ccnrcom.rp.data.grpc.v1.EventKind.EVENT_KIND_EVENT_ENDED,
+                com.ccnrcom.rp.sync.EventKinds.EVENT_ENDED,
                 "事件结束：" + displayNameOf(def),
                 b -> b.setDefinitionId(def.id()).setPhaseId(clock.phaseId()));
         List<ServerPlayer> targets = onlinePlayers();
@@ -701,8 +705,7 @@ public final class EventManager {
     public void gameOver() {
         AnimationHooks.gameEnd(onlinePlayers());
         // 与 ROUND_ENDED 刻意分开：/rp gameover 只播动画，不结算也不结束对局（见 CCNR-Data docs/04 §2.2）
-        com.ccnrcom.rp.sync.DataReports.event(
-                com.ccnrcom.rp.data.grpc.v1.EventKind.EVENT_KIND_GAME_OVER, "游戏结束（仅播放结束动画）");
+        com.ccnrcom.rp.sync.DataReports.event(com.ccnrcom.rp.sync.EventKinds.GAME_OVER, "游戏结束（仅播放结束动画）");
     }
 
     private int deadCount() {

@@ -13,6 +13,7 @@ import com.ccnrcom.rp.data.grpc.v1.RecordEventRequest;
 import com.ccnrcom.rp.data.grpc.v1.RecordEventResponse;
 import com.ccnrcom.rp.data.grpc.v1.RecordSettlementRequest;
 import com.ccnrcom.rp.data.grpc.v1.RecordSettlementResponse;
+import com.ccnrcom.rp.data.grpc.v1.SettlementLine;
 import com.google.gson.JsonObject;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.MessageLite;
@@ -245,31 +246,125 @@ public final class DataLink {
                 : n.toLowerCase(java.util.Locale.ROOT);
     }
 
+    /** 事件种类的短名（字符串形态：{@code character_kill} → {@code character-kill}）。 */
+    private static String shortKind(String kind) {
+        return kind.replace('_', '-').toLowerCase(java.util.Locale.ROOT);
+    }
+
+    /**
+     * 字符串种类 → protobuf 枚举。
+     *
+     * <p>**只在本类内发生**：把通信类型收敛在一处，调用点就永远不必解析 protobuf 类
+     * （这是 2.27.0 崩溃的修复要点，见 {@link EventKinds} 的类注释）。
+     *
+     * <p>认不出来时退回 {@code EVENT_KIND_UNSPECIFIED} 并记一条 WARN，而不是抛异常：
+     * 上报是旁路，标错一个种类不该影响击杀/部署/阶段推进。真出现 WARN 说明
+     * {@code EventKinds} 与 proto 漂移了，应当修常量而不是忽略日志。
+     */
+    private static EventKind toEventKind(String kind) {
+        String k = kind == null ? "" : kind.trim();
+        if (k.isEmpty() || EVENT_KINDS_BY_SHORT_NAME.isEmpty()) {
+            return EventKind.EVENT_KIND_UNSPECIFIED;
+        }
+        EventKind found = EVENT_KINDS_BY_SHORT_NAME.get(k.toLowerCase(java.util.Locale.ROOT));
+        if (found == null) {
+            LOGGER.warn("[CCNR-RP] 未知的事件种类 {}（EventKinds 与 proto 可能已漂移），按 UNSPECIFIED 上报", k);
+            return EventKind.EVENT_KIND_UNSPECIFIED;
+        }
+        return found;
+    }
+
+    /** 短名 → 枚举的查表（由 {@link #buildEventKindIndex()} 在类初始化时建立一次）。 */
+    private static final java.util.Map<String, EventKind> EVENT_KINDS_BY_SHORT_NAME = buildEventKindIndex();
+
+    private static java.util.Map<String, EventKind> buildEventKindIndex() {
+        java.util.Map<String, EventKind> out = new java.util.HashMap<>();
+        for (EventKind kind : EventKind.values()) {
+            out.put(shortKind(kind), kind);
+        }
+        return java.util.Map.copyOf(out);
+    }
+
+    /** 把 {@link EventPayload} 的 setter 适配到真正的 protobuf builder（只在本包内可见）。 */
+    private static final class PayloadAdapter implements EventPayload {
+        private final RecordEventRequest.Builder builder;
+
+        private PayloadAdapter(RecordEventRequest.Builder builder) {
+            this.builder = builder;
+        }
+
+        @Override
+        public EventPayload setDefinitionId(String value) {
+            builder.setDefinitionId(nz(value));
+            return this;
+        }
+
+        @Override
+        public EventPayload setPhaseId(String value) {
+            builder.setPhaseId(nz(value));
+            return this;
+        }
+
+        @Override
+        public EventPayload setPreviousPhaseId(String value) {
+            builder.setPreviousPhaseId(nz(value));
+            return this;
+        }
+
+        @Override
+        public EventPayload setActorUuid(String value) {
+            builder.setActorUuid(nz(value));
+            return this;
+        }
+
+        @Override
+        public EventPayload setTargetUuid(String value) {
+            builder.setTargetUuid(nz(value));
+            return this;
+        }
+
+        @Override
+        public EventPayload setPayloadJson(String value) {
+            builder.setPayloadJson(nz(value));
+            return this;
+        }
+
+        private static String nz(String v) {
+            return v == null ? "" : v;
+        }
+    }
+
     // ------------------------------------------------------------------ 上报
 
     /**
      * 上报一条对局事件。
      *
-     * @param kind    {@code EventKind}
-     * @param detail  由调用方填好的 actor/target/definitionId/payload（它才知道玩家名等信息）
+     * <p><b>参数一律不带 protobuf 类型</b>（{@code kind} 是 {@link EventKinds} 里的字符串，
+     * {@code fill} 收到的是 {@link EventPayload}）。这不是风格偏好：签名里出现生成类型会让
+     * 每个调用点都必须解析 protobuf 类，普通 jar 就会在第一次上报时崩在 tick 循环里。
+     *
+     * @param kind    见 {@link EventKinds}
      * @param summary 面板事件流里显示的一行文字；也是「服务端权威之外」的唯一展示来源
+     * @param fill    由调用方填好的 actor/target/definitionId/payload（它才知道玩家名等信息）
      */
-    public void recordEvent(EventKind kind, String summary, Consumer<RecordEventRequest.Builder> fill) {
+    public void recordEvent(String kind, String summary, Consumer<EventPayload> fill) {
         long now = System.currentTimeMillis();
-        // 事件流先记：面板要能在数据服务不可达时照常显示当局事件（可见性不该依赖连通性）
-        pushRecent(kind.name(), summary, now);
+        EventKind enumKind = toEventKind(kind);
+        // 事件流先记：面板要能在数据服务不可达时照常显示当局事件（可见性不该依赖连通性）。
+        // 记的是**枚举名**（EVENT_KIND_X）——/rp data events 与 PM 的事件页签都按它显示短标签。
+        pushRecent(enumKind.name(), summary, now);
         if (!enabled) {
             return;
         }
         RecordEventRequest.Builder b = RecordEventRequest.newBuilder();
         if (fill != null) {
-            fill.accept(b);
+            fill.accept(new PayloadAdapter(b));
         }
-        RecordEventRequest req = b.setKind(kind)
+        RecordEventRequest req = b.setKind(enumKind)
                 .setServerId(serverId) // 连接配置只有本类知道，统一在这里盖章
                 .setMatchId(matchId)
                 .setOccurredAt(timestamp(now))
-                .setRequestId(nextRequestId("event-" + shortKind(kind)))
+                .setRequestId(nextRequestId("event-" + shortKind(enumKind)))
                 .build();
         if (stub == null) {
             enqueue(M_EVENT, req);
@@ -279,7 +374,7 @@ public final class DataLink {
     }
 
     /** 便捷重载：没有附加字段的事件（阶段推进 / 清空 / 对局收束…）。 */
-    public void recordEvent(EventKind kind, String summary) {
+    public void recordEvent(String kind, String summary) {
         recordEvent(kind, summary, null);
     }
 
@@ -289,38 +384,58 @@ public final class DataLink {
      * <p>回填是本方法存在的全部理由：界面上的等级只能来自 {@code RecordSettlementResponse} 的回显
      * 或 {@link #fetchPlayer}。失败时该玩家会被 {@link RemoteProfiles#forget}，界面随即不显示等级。
      *
-     * @param uuid  被结算的玩家（回填的键）
-     * @param onAck 确认回调（主线程）；失败时收到 null
+     * @param draft 纯数据草稿（**不带 protobuf**，见 {@link SettlementDraft}）
+     * @param onAck 确认回调（主线程）；失败时也会被调一次（不再传响应对象——调用点从不读它）
      */
-    public void recordSettlement(RecordSettlementRequest req, String uuid, Consumer<RecordSettlementResponse> onAck) {
-        // serverId / matchId 由本类统一盖章：调用方拿不到 serverId（那是连接配置），
+    public void recordSettlement(SettlementDraft draft, Runnable onAck) {
+        if (draft == null) {
+            return;
+        }
+        String uuid = draft.playerUuid();
+        // serverId / matchId / requestId 由本类统一盖章：调用方拿不到 serverId（那是连接配置），
         // 让它去猜等于给「两个地方各写一份、将来只改一处」留口子。
-        // 另起局部变量而不是改写入参：下面的匿名类要捕获它（入参被重新赋值后不再是 effectively final）。
-        RecordSettlementRequest sealed = req.toBuilder()
-                .setServerId(serverId)
-                .setMatchId(matchId)
-                .setRequestId(nextRequestId("settle"))
+        RecordSettlementRequest.Builder b = RecordSettlementRequest.newBuilder()
+                .setPlayerUuid(uuid)
+                .setUsername(draft.username())
+                .setXpBefore(draft.xpBefore())
+                .setXpAfter(draft.xpAfter())
+                .setLevelBefore(draft.levelBefore())
+                .setLevelAfter(draft.levelAfter())
+                .setGain(draft.gain())
+                .setSettledAt(timestamp(System.currentTimeMillis()))
                 // reason 空串会被数据服务拒（INVALID_ARGUMENT）。兜底成 unspecified 而不是让它丢掉：
                 // 模组漏填一个标注不该导致这局的经验**完全不入账**。「不知道原因」是合法信息。
-                .setReason(req.getReason().isBlank() ? "unspecified" : req.getReason())
+                .setReason(draft.reason().isBlank() ? "unspecified" : draft.reason());
+        for (SettlementDraft.Line line : draft.changes()) {
+            b.addLines(SettlementLine.newBuilder()
+                    .setRuleId(line.ruleId())
+                    .setTitle(line.title())
+                    .setValue(line.value()));
+        }
+        RecordSettlementRequest sealed = b.setServerId(serverId)
+                .setMatchId(matchId)
+                .setRequestId(nextRequestId("settle"))
                 .build();
         if (!enabled) {
-            if (onAck != null) {
-                onAck.accept(null);
-            }
+            ack(onAck);
             return;
         }
         if (stub == null) {
             enqueue(M_SETTLEMENT, sealed);
             profiles.forget(uuid, "通道不可用");
-            if (onAck != null) {
-                onAck.accept(null);
-            }
+            ack(onAck);
             return;
         }
         // 先按「未知」清一次：在确认回来之前，界面不该继续显示上一笔的等级
         profiles.forget(uuid);
         deliverSettlement(sealed, onAck, null);
+    }
+
+    /** 确认回调的统一收口（null 安全）。 */
+    private static void ack(Runnable onAck) {
+        if (onAck != null) {
+            onAck.run();
+        }
     }
 
     /**
@@ -329,9 +444,10 @@ public final class DataLink {
      * <p>{@code NOT_FOUND}（数据侧没有这个玩家）**不算故障**：它意味着「从来没有确认过的数」，
      * 结果与故障一致（不显示），但不会打错误日志误导排查。
      *
-     * @param onOk 成功回调（主线程），参数是数据服务返回的档案
+     * @param onOk 成功回调（主线程）。**不带档案对象**：调用点只用它触发一次「刷新等级显示」，
+     *             权威值已经由本方法回填进 {@link RemoteProfiles}，再传一份出去只会多一个数据源。
      */
-    public void fetchPlayer(String uuid, Consumer<PlayerData> onOk) {
+    public void fetchPlayer(String uuid, Runnable onOk) {
         if (!enabled || uuid == null || uuid.isBlank()) {
             profiles.forget(uuid);
             return;
@@ -351,7 +467,7 @@ public final class DataLink {
                 PlayerData p = value.getPlayer();
                 profiles.put(uuid, p.getExperience(), p.getLevel());
                 if (onOk != null) {
-                    onOk.accept(p);
+                    onOk.run();
                 }
             }
 
@@ -425,11 +541,10 @@ public final class DataLink {
      * 用响应里的 {@code xp_after}/{@code level_after}（服务端回显的权威值）而不是请求里的值：
      * 万一服务端做了钳制，界面要跟它一致。
      *
-     * @param onAck  业务回调（主线程）；重放时为 null
+     * @param onAck  业务回调（主线程，不带响应对象——调用点从不读它）；重放时为 null
      * @param onDone 成功后回调（重放用来出队）；首次发送传 null
      */
-    private void deliverSettlement(
-            RecordSettlementRequest req, Consumer<RecordSettlementResponse> onAck, Runnable onDone) {
+    private void deliverSettlement(RecordSettlementRequest req, Runnable onAck, Runnable onDone) {
         stub.recordSettlement(req, new StreamObserver<RecordSettlementResponse>() {
             @Override
             public void onNext(RecordSettlementResponse r) {
@@ -443,9 +558,7 @@ public final class DataLink {
                             req.getXpBefore(),
                             r.getStoredXpBefore());
                 }
-                if (onAck != null) {
-                    onAck.accept(r);
-                }
+                ack(onAck);
             }
 
             @Override
@@ -453,9 +566,7 @@ public final class DataLink {
                 finishPermanentFailure(M_SETTLEMENT, req, t, onDone);
                 profiles.forget(
                         req.getPlayerUuid(), Status.fromThrowable(t).getCode().name());
-                if (onAck != null) {
-                    onAck.accept(null);
-                }
+                ack(onAck);
             }
 
             @Override

@@ -257,9 +257,11 @@ public class CCNRRPMod {
             if (experience != null) {
                 experience.pushUserXp(p3.getUUID().toString());
             }
-            data.fetchPlayer(
+            // 走 DataReports 而不是 data.fetchPlayer：后者签名里带着生成的 protobuf 类型，
+            // 会让本类（必然加载）也引用可选依赖（见 sync.DataReports 的类注释）。
+            com.ccnrcom.rp.sync.DataReports.fetchPlayer(
                     p3.getUUID().toString(),
-                    pd -> experience.pushUserXp(p3.getUUID().toString()));
+                    () -> experience.pushUserXp(p3.getUUID().toString()));
         }
         // 补发离线期间的结算通知（死亡/断联结算结果）+ 经验规则集（管理面板展示）
         if (experience != null && event.getEntity() instanceof net.minecraft.server.level.ServerPlayer p2) {

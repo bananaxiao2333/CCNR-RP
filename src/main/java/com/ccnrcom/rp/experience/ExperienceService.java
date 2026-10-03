@@ -6,7 +6,6 @@ package com.ccnrcom.rp.experience;
 
 import com.ccnrcom.rp.CCNRRPMod;
 import com.ccnrcom.rp.config.CCNRRPConfig;
-import com.ccnrcom.rp.data.grpc.v1.EventKind;
 import com.ccnrcom.rp.experience.ExprParser.Expr;
 import com.ccnrcom.rp.experience.XpChangeList.XpChange;
 import com.ccnrcom.rp.network.RpChannels;
@@ -261,7 +260,7 @@ public final class ExperienceService {
             users.save();
         }
         DataReports.event(
-                EventKind.EVENT_KIND_CHARACTER_KILL,
+                com.ccnrcom.rp.sync.EventKinds.CHARACTER_KILL,
                 params.get("playerName") + " 击杀了 " + params.get("victimName"),
                 b -> b.setActorUuid(killerUuid).setTargetUuid(vu).setPayloadJson(JsonUtil.GSON.toJson(params)));
     }
@@ -294,7 +293,7 @@ public final class ExperienceService {
             users.save();
         }
         DataReports.event(
-                EventKind.EVENT_KIND_CHARACTER_DEATH,
+                com.ccnrcom.rp.sync.EventKinds.CHARACTER_DEATH,
                 params.get("playerName") + " 阵亡（" + params.get("reason") + "）",
                 b -> b.setTargetUuid(uuid).setPayloadJson(JsonUtil.GSON.toJson(params)));
     }
@@ -449,29 +448,24 @@ public final class ExperienceService {
             int levelAfter,
             long gain,
             List<XpChange> changes) {
-        com.ccnrcom.rp.sync.DataLink data = CCNRRPMod.data;
-        if (data == null) {
-            return;
-        }
-        long now = System.currentTimeMillis();
-        com.ccnrcom.rp.data.grpc.v1.RecordSettlementRequest.Builder b =
-                com.ccnrcom.rp.data.grpc.v1.RecordSettlementRequest.newBuilder()
-                        .setPlayerUuid(playerUuid)
-                        .setReason(reason == null ? REASON_UNSPECIFIED : reason)
-                        .setXpBefore(xpBefore)
-                        .setXpAfter(xpAfter)
-                        .setLevelBefore(levelBefore)
-                        .setLevelAfter(levelAfter)
-                        .setGain(gain)
-                        .setSettledAt(timestampOf(now))
-                        .setUsername(playerName(playerUuid));
+        // 只填**纯数据**草稿：protobuf 消息由 sync.DataLink 内部构造（serverId/matchId/requestId
+        // 也在那里盖章）。本类必然会被加载，因此签名里一个通信类型都不能有 ——
+        // 曾经的 RecordSettlementRequest.Builder 就让普通 jar 一走到结算就崩（见 sync.DataReports）。
+        java.util.List<com.ccnrcom.rp.sync.SettlementDraft.Line> lines = new java.util.ArrayList<>(changes.size());
         for (XpChange c : changes) {
-            b.addLines(com.ccnrcom.rp.data.grpc.v1.SettlementLine.newBuilder()
-                    .setRuleId(c.ruleId() == null ? "" : c.ruleId())
-                    .setTitle(c.title() == null ? "" : c.title())
-                    .setValue(c.value()));
+            lines.add(new com.ccnrcom.rp.sync.SettlementDraft.Line(c.ruleId(), c.title(), c.value()));
         }
-        data.recordSettlement(b.build(), playerUuid, ack -> {
+        com.ccnrcom.rp.sync.SettlementDraft draft = new com.ccnrcom.rp.sync.SettlementDraft(
+                playerUuid,
+                playerName(playerUuid),
+                reason == null ? REASON_UNSPECIFIED : reason,
+                xpBefore,
+                xpAfter,
+                levelBefore,
+                levelAfter,
+                gain,
+                lines);
+        com.ccnrcom.rp.sync.DataReports.settlement(draft, () -> {
             // 主线程回调：确认后立刻刷新界面，让「等级刚变成多少」与「账上确认的值」是同一个
             pushUserXp(playerUuid);
         });
@@ -488,9 +482,7 @@ public final class ExperienceService {
             return;
         }
         long xp = CCNRRPMod.users.userXp(playerUuid);
-        com.ccnrcom.rp.sync.DataLink data = CCNRRPMod.data;
-        com.ccnrcom.rp.sync.RemoteProfiles.Snapshot snap =
-                data == null ? null : data.profiles().get(playerUuid);
+        com.ccnrcom.rp.sync.RemoteProfiles.Snapshot snap = com.ccnrcom.rp.sync.DataReports.confirmedProfile(playerUuid);
         if (snap == null) {
             RpChannels.sendTo(owner, new RpPackets.UserXpS2C(xp, 0, false, 0f));
             return;
@@ -512,14 +504,6 @@ public final class ExperienceService {
             return 0f;
         }
         return (float) Math.max(0.0, Math.min(1.0, (double) (snap.xp() - cur) / (next - cur)));
-    }
-
-    /** 毫秒 → protobuf Timestamp（手写，见 sync.DataLink#timestamp 的说明）。 */
-    private static com.google.protobuf.Timestamp timestampOf(long epochMillis) {
-        return com.google.protobuf.Timestamp.newBuilder()
-                .setSeconds(Math.floorDiv(epochMillis, 1000L))
-                .setNanos((int) Math.floorMod(epochMillis, 1000L) * 1_000_000)
-                .build();
     }
 
     /** 死亡/断联/退役落定：结算该用户；在线看 HUD 结算动画，离线挂起上线补发。 */
@@ -622,7 +606,7 @@ public final class ExperienceService {
         evac.put("xp", xp);
         evac.put("count", count);
         DataReports.event(
-                EventKind.EVENT_KIND_EVACUATION,
+                com.ccnrcom.rp.sync.EventKinds.EVACUATION,
                 "疏散结算：" + count + " 人（+" + xp + "「" + safeTitle + "」）",
                 b -> b.setPayloadJson(JsonUtil.GSON.toJson(evac)));
         return count;

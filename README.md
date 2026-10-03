@@ -19,7 +19,7 @@ CCNR 服务器 RolePlay 模组：围绕 **量子科学设施（CCNR 机构）** 
 
 ## 功能模块
 
-当前版本（`2.26.14`）已实现 **P0–P9 全流程闭环**：事件 → 刷新波/招募 → 部署 → 判死 → 冷却 → 复活 → 结算。
+当前版本（`2.27.1`）已实现 **P0–P9 全流程闭环**：事件 → 刷新波/招募 → 部署 → 判死 → 冷却 → 复活 → 结算。
 
 | 系统 | 说明 | 设计文档 |
 | --- | --- | --- |
@@ -58,13 +58,18 @@ CCNR 服务器 RolePlay 模组：围绕 **量子科学设施（CCNR 机构）** 
 
 ## 安装（客户端 + 服务端）
 
-1. 使用 Forge `47.2.0+`（Minecraft **1.20.1**）启动器（如 HMCL / 官方启动器），把 `ccnr_rp-2.27.0-all.jar`（**含内嵌 gRPC 运行时，接入数据服务要用这个**）或 `ccnr_rp-2.27.0.jar` 放入 `mods` 目录。
+1. 使用 Forge `47.2.0+`（Minecraft **1.20.1**）启动器（如 HMCL / 官方启动器），把 `ccnr_rp-2.27.1-all.jar`（**含内嵌 gRPC 运行时，接入数据服务要用这个**）或 `ccnr_rp-2.27.1.jar` 放入 `mods` 目录。
 2. 首次启动自动生成默认配置：`config/ccnr_rp/` 下的 `factions.json` / `phases.json` / `events.json` / `animations.json` / `spawn_waves.json` / `variables.json`（含精简样板：3 个样例阵营、4 个样例职业、3 个样例变量）。
 3. 按 `K`（可在按键设置里改键，类别 **CCNR-RP → 角色管理界面**）打开角色管理终端。
 4. 连远程服务器时，**服务器与客户端都要装同一版本**，阵营/职业/阶段/事件等以**服务器**配置为准。
 
 > **依赖**：`corpse` 为可选依赖（`mandatory=false`），缺失时自动使用原生死亡降级。
 > 需要数据服务时用 `-all.jar`（内含 `META-INF/jarjar/` 的 grpc + protobuf）；普通 jar 不含它们。
+>
+> **2.27.0 的普通 jar 会让服务器起不来，请直接删掉换 2.27.1**：那一版的普通 jar
+> 一走到上报调用就抛 `NoClassDefFoundError: com/google/protobuf/ProtocolMessageEnum`，
+> 崩在服务端 tick 循环里（约开局 3 秒）。根因与修法见 [docs/19](docs/19-数据服务.md) §4.5。
+> 2.27.1 起普通 jar 也能安全运行 —— 没有数据服务时只是不上报、不显示等级，玩法完全不受影响。
 
 ## 数据服务（CCNR-Data）
 
@@ -131,7 +136,7 @@ export GRADLE_USER_HOME=/Users/bananaxiao/Documents/MirageV/mod/CCNR-Com/.gradle
 ./gradlew runServer / runClient
 ```
 
-产物：`build/libs/ccnr_rp-2.26.14.jar`。工程规范见 [docs/01](docs/01-工程规范.md)，开发注意见 [AGENTS.md](AGENTS.md)。
+产物：`build/libs/ccnr_rp-2.27.1.jar`。工程规范见 [docs/01](docs/01-工程规范.md)，开发注意见 [AGENTS.md](AGENTS.md)。
 
 ## 持续集成
 

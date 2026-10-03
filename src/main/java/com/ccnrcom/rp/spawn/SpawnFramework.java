@@ -131,9 +131,7 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
         }
         Wave wave = w.get();
         com.ccnrcom.rp.sync.DataReports.event(
-                com.ccnrcom.rp.data.grpc.v1.EventKind.EVENT_KIND_SPAWN_WAVE_TRIGGERED,
-                "刷新波触发：" + waveId,
-                b -> b.setDefinitionId(waveId));
+                com.ccnrcom.rp.sync.EventKinds.SPAWN_WAVE_TRIGGERED, "刷新波触发：" + waveId, b -> b.setDefinitionId(waveId));
         boolean typed = (wave.professionIds() != null && !wave.professionIds().isEmpty())
                 || (wave.factionIds() != null && !wave.factionIds().isEmpty());
         if (typed) {
@@ -926,12 +924,17 @@ public final class SpawnFramework implements com.ccnrcom.rp.spawn.RecruitManager
             CCNRRPMod.users.setPendingXp(uuid, java.util.List.of());
             CCNRRPMod.users.save();
             com.ccnrcom.rp.sync.DataReports.event(
-                    com.ccnrcom.rp.data.grpc.v1.EventKind.EVENT_KIND_CHARACTER_DEPLOYED,
+                    com.ccnrcom.rp.sync.EventKinds.CHARACTER_DEPLOYED,
                     player.getName().getString() + " 部署为 " + displayName,
-                    b -> b.setActorUuid(uuid)
-                            .setTargetUuid(uuid)
-                            .setDefinitionId(professionId)
-                            .setPayloadJson("{\"factionId\":\"" + factionId + "\"}"));
+                    b -> {
+                        // JsonObject 构造而不是拼接：factionId 来自配置，拼接会在带引号时写出非法 JSON
+                        com.google.gson.JsonObject pay = new com.google.gson.JsonObject();
+                        pay.addProperty("factionId", factionId == null ? "" : factionId);
+                        b.setActorUuid(uuid)
+                                .setTargetUuid(uuid)
+                                .setDefinitionId(professionId)
+                                .setPayloadJson(pay.toString());
+                    });
             if (CCNRRPMod.characters != null) {
                 CCNRRPMod.characters.sendList(player);
             }

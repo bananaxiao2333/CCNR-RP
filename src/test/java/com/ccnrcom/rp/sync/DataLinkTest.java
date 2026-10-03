@@ -11,7 +11,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.ccnrcom.rp.data.grpc.v1.ApplyExperienceResponse;
-import com.ccnrcom.rp.data.grpc.v1.EventKind;
 import com.ccnrcom.rp.data.grpc.v1.GetPlayerRequest;
 import com.ccnrcom.rp.data.grpc.v1.GetPlayerResponse;
 import com.ccnrcom.rp.data.grpc.v1.ModDataServiceGrpc;
@@ -187,17 +186,24 @@ class DataLinkTest {
         return new DataLink(dir, true, target, "test-server", 2000, 16, 8, Runnable::run);
     }
 
-    private static RecordSettlementRequest settlement(String uuid, long before, long after, long level) {
-        return RecordSettlementRequest.newBuilder()
-                .setRequestId("m/" + uuid + "/1")
-                .setPlayerUuid(uuid)
-                .setReason("death")
-                .setXpBefore(before)
-                .setXpAfter(after)
-                .setLevelBefore(0)
-                .setLevelAfter(level)
-                .setGain(after - before)
-                .build();
+    /**
+     * 造一份结算草稿。
+     *
+     * <p>刻意**不再自己 build protobuf 消息**：那正是 2.27.0 崩掉服务器 tick 循环的写法
+     * （调用方签名里带生成类型 → 普通 jar 必然 NoClassDefFoundError）。
+     * 现在 serverId/matchId/requestId 都由 {@link DataLink} 盖章，调用方只给纯数据。
+     */
+    private static SettlementDraft settlement(String uuid, long before, long after, long level) {
+        return new SettlementDraft(
+                uuid,
+                "玩家",
+                "death",
+                before,
+                after,
+                (int) Math.max(0, level - 1),
+                (int) level,
+                after - before,
+                java.util.List.of(new SettlementDraft.Line("kill", "击杀奖金", after - before)));
     }
 
     // ------------------------------------------------------------------ 状态码分类
@@ -222,7 +228,7 @@ class DataLinkTest {
         String uuid = "11111111-1111-1111-1111-111111111111";
         assertFalse(link.profiles().known(uuid), "结算之前不该有任何可显示的等级");
 
-        link.recordSettlement(settlement(uuid, 500, 800, 2), uuid, null);
+        link.recordSettlement(settlement(uuid, 500, 800, 2), null);
         await("结算确认回落", () -> link.profiles().known(uuid));
 
         assertTrue(link.profiles().known(uuid), "确认后等级才可显示");
@@ -236,7 +242,7 @@ class DataLinkTest {
         link.profiles().put(uuid, 100, 5); // 先有一个已确认的值
         fake.settlementFailure = Status.UNAVAILABLE;
 
-        link.recordSettlement(settlement(uuid, 100, 200, 6), uuid, null);
+        link.recordSettlement(settlement(uuid, 100, 200, 6), null);
         await("失败回调入队", () -> link.pendingCount() == 1);
 
         assertFalse(link.profiles().known(uuid), "上报没成功就不能再显示那个值");
@@ -246,7 +252,7 @@ class DataLinkTest {
     @Test
     void invalidArgumentIsNotQueued() {
         fake.settlementFailure = Status.INVALID_ARGUMENT;
-        link.recordSettlement(settlement("33333333-3333-3333-3333-333333333333", 0, 1, 1), "x", null);
+        link.recordSettlement(settlement("33333333-3333-3333-3333-333333333333", 0, 1, 1), null);
         await("拒绝回调", () -> link.statusPayload().get("sentFail").getAsLong() == 1);
         assertEquals(0, link.pendingCount(), "不可重试的拒绝不该堆在队列里");
     }
@@ -281,7 +287,7 @@ class DataLinkTest {
     void queuedRequestIsReplayedAndConfirmsLevel() {
         String uuid = "66666666-6666-6666-6666-666666666666";
         fake.settlementFailure = Status.UNAVAILABLE;
-        link.recordSettlement(settlement(uuid, 500, 900, 4), uuid, null);
+        link.recordSettlement(settlement(uuid, 500, 900, 4), null);
         await("首次失败入队", () -> link.pendingCount() == 1);
 
         fake.settlementFailure = null;
@@ -297,7 +303,7 @@ class DataLinkTest {
     void outboxSurvivesRestart() {
         String uuid = "77777777-7777-7777-7777-777777777777";
         fake.settlementFailure = Status.UNAVAILABLE;
-        link.recordSettlement(settlement(uuid, 500, 900, 4), uuid, null);
+        link.recordSettlement(settlement(uuid, 500, 900, 4), null);
         await("首次失败入队", () -> link.pendingCount() == 1);
         link.stop();
 
@@ -344,7 +350,7 @@ class DataLinkTest {
     @Test
     void eventFeedIsRecordedEvenWhenReportingIsDown() {
         fake.eventFailsUnavailable = true;
-        link.recordEvent(EventKind.EVENT_KIND_CHARACTER_KILL, "A 击杀了 B", b -> b.setActorUuid("a"));
+        link.recordEvent(EventKinds.CHARACTER_KILL, "A 击杀了 B", b -> b.setActorUuid("a"));
         await("事件失败入队", () -> link.pendingCount() == 1);
         assertEquals(1, link.recentEvents().size(), "面板可见性不该依赖数据服务的连通性");
         assertEquals("A 击杀了 B", link.recentEvents().get(0).get("text").getAsString());
@@ -354,7 +360,7 @@ class DataLinkTest {
     @Test
     void eventFeedIsCapped() {
         for (int i = 0; i < 20; i++) {
-            link.recordEvent(EventKind.EVENT_KIND_PHASE_ADVANCED, "p" + i);
+            link.recordEvent(EventKinds.PHASE_ADVANCED, "p" + i);
         }
         assertEquals(8, link.recentEvents().size(), "上限来自构造参数（recentCap）");
         assertEquals("p19", link.recentEvents().get(7).get("text").getAsString());
@@ -363,7 +369,7 @@ class DataLinkTest {
     @Test
     void newMatchRotatesTheIdAndClearsTheFeed() {
         String first = link.matchId();
-        link.recordEvent(EventKind.EVENT_KIND_GAME_OVER, "x");
+        link.recordEvent(EventKinds.GAME_OVER, "x");
         link.newMatch();
         assertNotNull(link.matchId());
         assertFalse(first.equals(link.matchId()));
@@ -378,7 +384,7 @@ class DataLinkTest {
         DataLink off = new DataLink(dir, false, "127.0.0.1:1", "off", 500, 4, 4, Runnable::run);
         off.start();
         String uuid = "88888888-8888-8888-8888-888888888888";
-        off.recordSettlement(settlement(uuid, 0, 1, 1), uuid, null);
+        off.recordSettlement(settlement(uuid, 0, 1, 1), null);
         assertEquals(DataLink.State.DISABLED, off.state());
         assertEquals(0, off.pendingCount(), "关闭 = 完全不上报，也不该攒队列");
         assertFalse(off.profiles().known(uuid));

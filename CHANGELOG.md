@@ -1,5 +1,49 @@
 # Changelog
 
+## 2.27.1（修 2.27.0 的普通 jar 崩服：可选依赖类型不许进必然加载的签名）
+
+- **事故（玩家实机报告）**：装 **普通 jar**（`ccnr_rp-2.27.0.jar`，不含嵌套的 grpc/protobuf）时，
+  服务器启动约 3 秒后崩在服务端 tick 循环里，整局直接没了：
+
+  ```
+  java.lang.NoClassDefFoundError: com/google/protobuf/ProtocolMessageEnum
+      at com.ccnrcom.rp.event.EventManager.evaluateAll(EventManager.java:361)
+      at com.ccnrcom.rp.event.EventManager.onServerTick(EventManager.java:329)
+  ```
+
+- **根因**：不是「忘了判空」——探测一直是对的，日志明确打了
+  `[CCNR-RP] 未找到 gRPC 运行时：数据服务不可用`。错在**上报 API 的签名里带着生成类型**：
+  `DataReports.event(EventKind, String, ...)`。调用点写的「先看 `data == null` 就跳过」，
+  但 JVM 要**执行这次调用**，必须先解析参数类型 `EventKind`，而它继承 `ProtocolMessageEnum` ——
+  于是**类解析发生在短路之前**，`NoClassDefFoundError` 直接掀掉 tick 循环。
+  这同时说明 2.27.0 的一句承诺（「上报是旁路，数据服务不可达不得影响主流程」）在**普通 jar 上根本不成立**。
+- **修法**：把通信类型收敛进**唯一一个类**，其余代码只见字符串与接口：
+  - `sync/EventKinds`：事件种类的 `static final String` 常量（编译期内联，跨类加载器安全）；
+  - `sync/EventPayload`：`setDefinitionId/setPhaseId/setPreviousPhaseId/setActorUuid/setTargetUuid/setPayloadJson(String)`；
+  - `sync/SettlementDraft`：结算草稿 record（含 `Line`），调用方不再自己 `build` protobuf 消息；
+  - `sync/DataLink` 成为**唯一**允许 `import com.ccnrcom.rp.data.grpc.v1.*` / `io.grpc.*` 的类，
+    而它只在 `Class.forName("io.grpc.ManagedChannelBuilder")` 探测**通过之后**才被构造；
+  - 6 处事件上报（`EventManager`）、3 处（`ExperienceService`）、1 处（`CharacterService`）、
+    2 处（`SpawnFramework`）、`DataReports` 与 `CCNRRPMod` 全部改走新接口。
+- **两条门禁（`sync/ProtoIsolationTest`，随 `-PrunTests` 跑，不需要起服务器）**：
+  1. 扫 `build/classes/java/main` 的**常量池字节**，除 `sync/DataLink*` 与生成包 `data/grpc/v1/` 外，
+     任何类出现 `com/ccnrcom/rp/data/grpc/v1` 或 `io/grpc` 即失败；
+  2. 用**过滤掉 protobuf/grpc/perfmark 的类路径** + `parent=null`（bootstrap）构造隔离类加载器，
+     在里面**真的调一次** `DataReports.event/settlement`（崩溃现场那次调用的同形状）。
+     ② 自带反自欺断言：先确认隔离加载器里**找不到** `ProtocolMessageEnum`，否则它会在有 protobuf 的环境里永远通过。
+     两条都做过反证：① 把 `DataLink` 从白名单删掉即变红。
+  - 实测（修前 → 修后）：非生成类里引用 `data/grpc/v1` 的从 10 个降到只剩 `sync/DataLink`；
+    引用 `io/grpc` 的只剩 `sync/DataLink`。
+- **顺带修掉 `end(String)` 的载荷字符串拼接**：`"{\"reason\":\"" + reason + "\"}"` 在理由带引号时
+  会写出非法 JSON 落库（`/rp end <理由>` 是管理员手输的）。改为 `JsonObject.addProperty(...)`；
+  `spawn/SpawnFramework.deploy()` 的 `factionId` 载荷同类收口。（docs/19 §8.1，从「已知缺陷」转入「已修」）
+- **文档**：新增 docs/19 §4.5（根因、边界、两条门禁的反证方式、如何失效）；
+  AGENTS.md「数据服务」新增第 4 条硬纪律；README 安装段显式警告「2.27.0 的普通 jar 会让服务器起不来，请换 2.27.1」。
+- **验证**：全仓 295 项测试通过（含两条新门禁），`spotlessCheck` 与 `-Xlint:all` 绿。
+  **未做**：无实机验证（按本仓库纪律不启 MC 服务器）；门禁是静态的，能证明「签名里没有通信类型」，
+  不能证明「数据服务侧行为」，后者仍以 2.27.0 的无网络 E2E 为准。
+- **升级建议**：装普通 jar 的用户**直接换 2.27.1**。
+
 ## 2.27.0（接入 CCNR-Data 数据服务：事件/结算入库 + 等级显示改由数据服务确认）
 
 - **需求**：「模组里显示的数据从服务器拉；没连上就不显示」「事件、玩家结算都发给数据服务器」。
@@ -54,6 +98,10 @@
   不可达时入队且不显示 → 队列跨重启存活 → 重放成功后恢复显示。
 - **未做（下轮）**：CCNR-PM 的对局管理面板（经本模组的反射中继，不引入第二份 gRPC 客户端）；
   `WatchChanges` 订阅（当前无消费方）；客户端 `MatchStatusPanel` 的事件流呈现（事件已由 `/rp data events` 可见）。
+
+> **⚠ 2.27.0 的普通 jar 不能用**：它会崩在服务端 tick 循环里（`NoClassDefFoundError: ProtocolMessageEnum`）。
+> 见 2.27.1 条目与 docs/19 §4.5。本节「上报是旁路、数据服务不可达不影响主流程」的结论
+> **只在 `-all.jar` 上成立**。
 
 ## 2.26.14（部署模式全局开关：部署后冒险模式，防拆图）
 

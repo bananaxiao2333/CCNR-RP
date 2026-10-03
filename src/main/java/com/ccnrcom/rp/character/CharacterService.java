@@ -229,7 +229,7 @@ public final class CharacterService {
         // 部署落位的汇聚点之一（另一处在 SpawnFramework.deploy()）：走 onDeployPosition 的自部署经过这里。
         // 只有两处，所以没有为它再造一个「统一部署入口」——那会把对方的部署流程抄一份（见 CCNR-PM 的同类教训）。
         com.ccnrcom.rp.sync.DataReports.event(
-                com.ccnrcom.rp.data.grpc.v1.EventKind.EVENT_KIND_CHARACTER_DEPLOYED,
+                com.ccnrcom.rp.sync.EventKinds.CHARACTER_DEPLOYED,
                 player.getName().getString() + " 部署为 " + com.ccnrcom.rp.faction.FactionProfessions.idsSafeName(def),
                 b -> b.setActorUuid(uuid).setTargetUuid(uuid).setDefinitionId(professionId));
     }
@@ -430,7 +430,7 @@ public final class CharacterService {
                 CCNRRPMod.users.level(uuid),
                 // 等级门控仍然用**本地**曲线算（服务端是规则的权威端，见 CCNR-Data docs/04 §3.4）；
                 // 这个标志只影响**显示**：数据服务没确认过时界面不显示等级。
-                CCNRRPMod.data != null && CCNRRPMod.data.profiles().known(uuid),
+                com.ccnrcom.rp.sync.DataReports.profileKnown(uuid),
                 CCNRRPMod.users.anySupportRevive(uuid),
                 CCNRRPMod.users.status(uuid).name().toLowerCase(java.util.Locale.ROOT),
                 CCNRRPMod.users.professionId(uuid),
